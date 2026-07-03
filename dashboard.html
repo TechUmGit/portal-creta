@@ -365,7 +365,8 @@
 
   function fmtBRL(valor) {
     if (valor == null) return 'R$ —';
-    return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+    const M = valor / 1_000_000;
+    return 'R$ ' + M.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' M';
   }
 
   function fmtData(iso) {

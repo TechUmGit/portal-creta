@@ -473,7 +473,7 @@ async def posicao(
 
     sql = f"""
         WITH ultima_data AS (
-            SELECT MAX(Data) AS max_data
+            SELECT MAX(DATE(Data)) AS max_data
             FROM {TABLE_POSICAO}
         )
         SELECT
@@ -482,7 +482,7 @@ async def posicao(
             ud.max_data                     AS data_referencia
         FROM {TABLE_POSICAO} p
         CROSS JOIN ultima_data ud
-        WHERE p.Data = ud.max_data
+        WHERE DATE(p.Data) = ud.max_data
         GROUP BY ud.max_data
     """
 

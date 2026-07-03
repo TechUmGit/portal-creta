@@ -29,14 +29,15 @@ log = logging.getLogger("api-creta")
 # de service account. Em dev local, use: firebase_admin.initialize_app() que
 # detecta o ADC (Application Default Credentials).
 if not firebase_admin._apps:
-    firebase_admin.initialize_app()
+    firebase_admin.initialize_app(options={"projectId": "creta-btg-bd3a8"})
 
 # ── BigQuery client ───────────────────────────────────────────────────────────
 # Project ID e dataset — configuráveis via variável de ambiente
-GCP_PROJECT = os.getenv("GCP_PROJECT", "creta-btg")
+GCP_PROJECT    = os.getenv("GCP_PROJECT", "creta-btg")
 bq = bigquery.Client(project=GCP_PROJECT)
-DATASET     = os.getenv("BQ_DATASET",  "dados_crus")
-TABLE       = f"`{GCP_PROJECT}.{DATASET}.receitas_para_repasse`"
+DATASET        = os.getenv("BQ_DATASET",  "dados_crus")
+TABLE          = f"`{GCP_PROJECT}.{DATASET}.receitas_para_repasse`"
+TABLE_POSICAO  = f"`{GCP_PROJECT}.{DATASET}.posicao_das_contas`"
 
 # ── Cache simples em memória ──────────────────────────────────────────────────
 # Evita consultar o BigQuery a cada requisição.
@@ -453,6 +454,54 @@ async def evolucao_cliente(
         result.append(row)
 
     return {"evolucao": result, "categorias": [dict(r) for r in rows_cat]}
+
+
+@app.get("/api/posicao")
+async def posicao(
+    authorization: Optional[str] = Header(default=None),
+):
+    """
+    Retorna AUC total e contagem de contas ativas para a data mais recente
+    da tabela posicao_das_contas.
+    """
+    await verificar_token(authorization)  # exige login; sem filtro por assessor (tabela não tem coluna Assessor)
+
+    cache_key = "posicao:snapshot"
+    cached = cache_get(cache_key)
+    if cached:
+        return cached
+
+    sql = f"""
+        WITH ultima_data AS (
+            SELECT MAX(Data) AS max_data
+            FROM {TABLE_POSICAO}
+        )
+        SELECT
+            ROUND(SUM(p.ValorBruto), 2)    AS auc_total,
+            COUNT(DISTINCT p.Conta)         AS contas_ativas,
+            ud.max_data                     AS data_referencia
+        FROM {TABLE_POSICAO} p
+        CROSS JOIN ultima_data ud
+        WHERE p.Data = ud.max_data
+        GROUP BY ud.max_data
+    """
+
+    log.info("BQ posicao: buscando snapshot mais recente")
+    rows = list(bq.query(sql).result())
+
+    if not rows:
+        resultado = {"auc_total": 0, "contas_ativas": 0, "data_referencia": None}
+    else:
+        row = rows[0]
+        data_ref = row["data_referencia"]
+        resultado = {
+            "auc_total":       float(row["auc_total"]),
+            "contas_ativas":   int(row["contas_ativas"]),
+            "data_referencia": data_ref.date().isoformat() if hasattr(data_ref, "date") else str(data_ref),
+        }
+
+    cache_set(cache_key, resultado)
+    return resultado
 
 
 @app.delete("/api/cache")

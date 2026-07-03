@@ -224,8 +224,8 @@
       <div class="kpi">
         <div class="kpi-icon" style="background:#eef3ff">📊</div>
         <div class="kpi-label">AuC Total</div>
-        <div class="kpi-value">R$ —</div>
-        <div class="kpi-sub">Patrimônio sob custódia</div>
+        <div class="kpi-value" id="kpiAuc">R$ —</div>
+        <div class="kpi-sub" id="kpiAucSub">Patrimônio sob custódia</div>
       </div>
       <div class="kpi">
         <div class="kpi-icon" style="background:#f0fdf4">💰</div>
@@ -236,8 +236,8 @@
       <div class="kpi">
         <div class="kpi-icon" style="background:#fff7ed">👥</div>
         <div class="kpi-label">Contas Ativas</div>
-        <div class="kpi-value">—</div>
-        <div class="kpi-sub">Clientes na carteira</div>
+        <div class="kpi-value" id="kpiContas">—</div>
+        <div class="kpi-sub" id="kpiContasSub">Clientes na carteira</div>
       </div>
       <div class="kpi">
         <div class="kpi-icon" style="background:#fdf4ff">📑</div>
@@ -309,6 +309,8 @@
 </div><!-- /app -->
 
 <script>
+  const API_URL = 'https://api-creta-978599698367.us-central1.run.app';
+
   const firebaseConfig = {
     apiKey:            "AIzaSyDLJrg7Cmaq6DDlDdcLfe4kH9hUukMVuE0",
     authDomain:        "creta-btg-bd3a8.firebaseapp.com",
@@ -350,7 +352,47 @@
       document.getElementById('userName').textContent   = name;
       document.getElementById('userAvatar').textContent = firstName.slice(0,2).toUpperCase();
     }
+
+    // Carrega KPIs da página inicial
+    carregarPosicao();
   });
+
+  async function getIdToken() {
+    const user = auth.currentUser;
+    if (!user) return null;
+    return user.getIdToken();
+  }
+
+  function fmtBRL(valor) {
+    if (valor == null) return 'R$ —';
+    return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+  }
+
+  function fmtData(iso) {
+    if (!iso) return '';
+    const [y, m, d] = iso.split('-');
+    return `Posição de ${d}/${m}/${y}`;
+  }
+
+  async function carregarPosicao() {
+    try {
+      const token = await getIdToken();
+      const resp  = await fetch(API_URL + '/api/posicao', {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      if (!resp.ok) throw new Error('Status ' + resp.status);
+      const data = await resp.json();
+
+      document.getElementById('kpiAuc').textContent    = fmtBRL(data.auc_total);
+      document.getElementById('kpiAucSub').textContent = fmtData(data.data_referencia);
+      document.getElementById('kpiContas').textContent = data.contas_ativas != null
+        ? data.contas_ativas.toLocaleString('pt-BR')
+        : '—';
+      document.getElementById('kpiContasSub').textContent = fmtData(data.data_referencia);
+    } catch(e) {
+      console.error('Erro ao carregar posição:', e);
+    }
+  }
 
   async function logout() {
     await auth.signOut();

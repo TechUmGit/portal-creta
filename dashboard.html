@@ -109,6 +109,28 @@
 
     .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 99; }
 
+    /* ── Sugestões de Aplicação ── */
+    .insight-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 40px; }
+    .insight-card { background: #fff; border-radius: 12px; border: 1px solid #e8ebf2; overflow: hidden; }
+    .insight-head { padding: 18px 20px 14px; border-bottom: 1px solid #f0f3f8; display: flex; align-items: flex-start; gap: 14px; }
+    .insight-icon { width: 42px; height: 42px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+    .insight-title { font-size: 13px; font-weight: 700; color: #0c1a35; margin-bottom: 3px; }
+    .insight-sub   { font-size: 12px; color: #9ca3af; }
+    .insight-tag   { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 8px; border-radius: 4px; margin-bottom: 6px; }
+    .tag-green  { background: #dcfce7; color: #15803d; }
+    .tag-amber  { background: #fef3c7; color: #92400e; }
+    .insight-body { padding: 0; }
+    .insight-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .insight-table th { padding: 9px 16px; text-align: left; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #9ca3af; background: #f8fafc; }
+    .insight-table td { padding: 10px 16px; color: #374151; border-top: 1px solid #f4f6fb; }
+    .insight-table tr:hover td { background: #f8fafc; }
+    .insight-table td:last-child { font-size: 12px; color: #6b7280; }
+    .it-cliente  { font-weight: 500; color: #111827; }
+    .it-value    { font-weight: 600; color: #0c1a35; white-space: nowrap; }
+    .it-sugest   { color: #0bb5d5 !important; font-weight: 500; }
+    .pct-badge   { display: inline-block; padding: 1px 7px; border-radius: 4px; font-size: 11px; font-weight: 700; background: #fee2e2; color: #991b1b; }
+    @media (max-width: 900px) { .insight-grid { grid-template-columns: 1fr; } }
+
     @media (max-width: 1100px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
     @media (max-width: 900px)  { .sidebar-overlay.open { display: block; } .search-bar { display: none; } .hero { padding: 32px 24px 32px; } .content { padding: 28px 24px; } .banner { flex-wrap: wrap; } .banner-btn { width: 100%; text-align: center; margin-left: 0; } }
     @media (max-width: 600px)  { .topbar { padding: 0 16px; } .kpi-grid { grid-template-columns: 1fr; } .modules-grid { grid-template-columns: 1fr; } .hero { padding: 28px 18px 28px; } .content { padding: 24px 18px; } .hero-name { font-size: 24px; } .user-name { display: none; } .user-role { display: none; } }
@@ -311,16 +333,97 @@
         </div>
         <div class="module-footer"><span class="badge-soon">Em breve</span><span class="module-arrow">→</span></div>
       </div>
-      <div class="module-card">
-        <div class="module-top">
-          <div class="module-icon" style="background:#fefce8">💡</div>
+    </div>
+
+    <!-- ── Sugestões de Aplicação ── -->
+    <div class="section-head" style="margin-top:8px">
+      <div class="section-title">Sugestões de Aplicação</div>
+      <span style="font-size:11px;color:#9ca3af">Dados demonstrativos · atualizado hoje</span>
+    </div>
+    <div class="insight-grid">
+
+      <!-- Card 1: Caixa Livre -->
+      <div class="insight-card">
+        <div class="insight-head">
+          <div class="insight-icon" style="background:#f0fdf4">💰</div>
           <div>
-            <div class="module-title">Sugestões de Aplicação</div>
-            <div class="module-desc">Oportunidades identificadas para a sua carteira: clientes com caixa livre para alocar, perfis moderados com excesso em renda fixa e reequilíbrios sugeridos por IA.</div>
+            <div class="insight-tag tag-green">Caixa Livre</div>
+            <div class="insight-title">Clientes com liquidez disponível</div>
+            <div class="insight-sub">3 contas com saldo em conta-corrente sem alocação</div>
           </div>
         </div>
-        <div class="module-footer"><span class="badge-soon">Em breve</span><span class="module-arrow">→</span></div>
+        <div class="insight-body">
+          <table class="insight-table">
+            <thead>
+              <tr><th>Cliente</th><th>Disponível</th><th>Sugestão de Alocação</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="it-cliente">João da Silva</td>
+                <td class="it-value">R$ 45.000</td>
+                <td class="it-sugest">Fundo BTG Pactual RF Simples</td>
+              </tr>
+              <tr>
+                <td class="it-cliente">Maria Fernanda Pereira</td>
+                <td class="it-value">R$ 120.000</td>
+                <td class="it-sugest">CDB BTG 110% CDI — 1 ano</td>
+              </tr>
+              <tr>
+                <td class="it-cliente">Paulo Mendes</td>
+                <td class="it-value">R$ 28.000</td>
+                <td class="it-sugest">Tesouro Selic 2029</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
+
+      <!-- Card 2: Reequilíbrio -->
+      <div class="insight-card">
+        <div class="insight-head">
+          <div class="insight-icon" style="background:#fefce8">⚖️</div>
+          <div>
+            <div class="insight-tag tag-amber">Reequilíbrio</div>
+            <div class="insight-title">Perfil Moderado com excesso em RF</div>
+            <div class="insight-sub">5 contas com mais de 85% concentradas em Renda Fixa</div>
+          </div>
+        </div>
+        <div class="insight-body">
+          <table class="insight-table">
+            <thead>
+              <tr><th>Cliente</th><th>% em RF</th><th>Oportunidade</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="it-cliente">Ana Paula Rodrigues</td>
+                <td><span class="pct-badge">96%</span></td>
+                <td class="it-sugest">Multimercado + FIIs</td>
+              </tr>
+              <tr>
+                <td class="it-cliente">Carlos Lima</td>
+                <td><span class="pct-badge">91%</span></td>
+                <td class="it-sugest">Fundo de Ações BTG</td>
+              </tr>
+              <tr>
+                <td class="it-cliente">Roberto Alves Costa</td>
+                <td><span class="pct-badge">88%</span></td>
+                <td class="it-sugest">Renda Variável 15–20%</td>
+              </tr>
+              <tr>
+                <td class="it-cliente">Fernanda Gomes</td>
+                <td><span class="pct-badge">87%</span></td>
+                <td class="it-sugest">COE + Multimercado</td>
+              </tr>
+              <tr>
+                <td class="it-cliente">Luciana Martins</td>
+                <td><span class="pct-badge">85%</span></td>
+                <td class="it-sugest">Previdência PGBL RV</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
     </div>
   </div>
 </main>

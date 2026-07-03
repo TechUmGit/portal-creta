@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Creta Capital — Posições</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; font-family: 'Inter', -apple-system, sans-serif; -webkit-font-smoothing: antialiased; background: #f0f3f8; }
+
+    .loading-screen { position: fixed; inset: 0; background: #f0f3f8; display: flex; align-items: center; justify-content: center; z-index: 999; }
+    .spinner { width: 26px; height: 26px; border: 3px solid rgba(11,181,213,0.2); border-top-color: #0bb5d5; border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* TOPBAR */
+    .topbar { height: 60px; background: #fff; border-bottom: 1px solid #e8ebf2; display: flex; align-items: center; padding: 0 24px; gap: 16px; position: fixed; top: 0; left: 0; right: 0; z-index: 200; }
+    .topbar-logo { font-size: 20px; font-weight: 900; letter-spacing: -0.03em; color: #0c1a35; white-space: nowrap; text-decoration: none; flex-shrink: 0; }
+    .topbar-logo span { color: #0bb5d5; }
+    .topbar-logo small { font-size: 9px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(0,0,0,0.3); display: block; line-height: 1; margin-top: 1px; }
+    .topbar-divider { width: 1px; height: 28px; background: #e2e6ef; margin: 0 4px; flex-shrink: 0; }
+    .search-bar { flex: 1; max-width: 480px; display: flex; align-items: center; gap: 10px; background: #f4f6fb; border: 1px solid #e8ebf2; border-radius: 8px; padding: 0 14px; height: 38px; }
+    .search-bar svg { color: #a0aec0; flex-shrink: 0; }
+    .search-bar input { flex: 1; border: none; background: none; outline: none; font-size: 14px; color: #555; font-family: inherit; }
+    .search-bar input::placeholder { color: #a0aec0; }
+    .topbar-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+    .icon-btn { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: none; border: none; cursor: pointer; color: #6b7280; transition: background 0.15s; }
+    .icon-btn:hover { background: #f4f6fb; }
+    .user-chip { display: flex; align-items: center; gap: 10px; padding: 4px 10px 4px 4px; border-radius: 8px; cursor: pointer; background: none; border: none; font-family: inherit; transition: background 0.15s; position: relative; }
+    .user-chip:hover { background: #f4f6fb; }
+    .avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #0c1a35, #1a3a6c); color: #fff; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .user-name { font-size: 13px; font-weight: 600; color: #1a202c; white-space: nowrap; }
+    .user-role { font-size: 11px; color: #9ca3af; }
+    .user-info { text-align: left; }
+    .user-dropdown { display: none; position: absolute; top: calc(100% + 8px); right: 0; background: #fff; border: 1px solid #e8ebf2; border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.12); min-width: 200px; padding: 6px; z-index: 300; }
+    .user-chip.open .user-dropdown { display: block; }
+    .user-email-dd { padding: 10px 12px 8px; font-size: 12px; color: #9ca3af; border-bottom: 1px solid #f0f3f8; margin-bottom: 4px; }
+    .dd-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 6px; font-size: 13px; color: #374151; cursor: pointer; transition: background 0.12s; text-decoration: none; }
+    .dd-item:hover { background: #f4f6fb; }
+    .dd-item.danger { color: #dc2626; }
+    .dd-item.danger:hover { background: #fff5f5; }
+    .dd-sep { height: 1px; background: #f0f3f8; margin: 4px 0; }
+
+    /* SIDEBAR */
+    .sidebar { position: fixed; top: 60px; left: 0; bottom: 0; width: 240px; background: #fff; border-right: 1px solid #e8ebf2; display: flex; flex-direction: column; overflow-y: auto; z-index: 100; transform: translateX(-100%); transition: transform 0.25s cubic-bezier(0.25,0,0.25,1); }
+    .sidebar.open { transform: translateX(0); }
+    .sidebar-section { padding: 20px 12px 8px; }
+    .sidebar-label { font-size: 9.5px; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; color: #9ca3af; padding: 0 10px; margin-bottom: 6px; }
+    .nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px; font-size: 13.5px; font-weight: 500; color: #4b5563; cursor: pointer; transition: all 0.15s; text-decoration: none; position: relative; }
+    .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; opacity: 0.7; }
+    .nav-item:hover { background: #f4f6fb; color: #0c1a35; }
+    .nav-item:hover svg { opacity: 1; }
+    .nav-item.active { background: #eef3ff; color: #0c1a35; font-weight: 600; }
+    .nav-item.active svg { opacity: 1; color: #0bb5d5; }
+    .nav-item.active::before { content: ''; position: absolute; left: 0; top: 6px; bottom: 6px; width: 3px; background: #0bb5d5; border-radius: 0 3px 3px 0; }
+    .sidebar-footer { margin-top: auto; padding: 16px 12px; border-top: 1px solid #f0f3f8; }
+    .sidebar-footer .nav-item { color: #9ca3af; font-size: 13px; }
+    .sidebar-footer .nav-item:hover { color: #dc2626; }
+    .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 99; }
+
+    /* MAIN */
+    .main { margin-left: 0; padding-top: 60px; min-height: 100vh; }
+
+    /* HERO */
+    .hero { background: linear-gradient(135deg, #091525 0%, #0c2040 60%, #0f2e5c 100%); padding: 36px 44px; position: relative; overflow: hidden; }
+    .hero::after { content: ''; position: absolute; width: 420px; height: 420px; border-radius: 50%; border: 1px solid rgba(11,181,213,0.12); right: -80px; top: -100px; pointer-events: none; }
+    .hero-label { font-size: 10px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: rgba(255,255,255,0.3); margin-bottom: 10px; }
+    .hero-name { font-size: 26px; font-weight: 700; color: #fff; letter-spacing: -0.03em; margin-bottom: 6px; position: relative; z-index: 1; }
+    .hero-sub  { font-size: 13px; color: rgba(255,255,255,0.45); line-height: 1.6; position: relative; z-index: 1; }
+    .hero-date { display: none; margin-top: 14px; font-size: 11px; color: rgba(255,255,255,0.4); background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; padding: 4px 12px; width: fit-content; }
+
+    /* CONTENT */
+    .content { padding: 32px 44px; }
+
+    /* FILTERS */
+    .filter-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 28px; }
+    .filter-input { height: 38px; min-width: 240px; border: 1px solid #e2e6ef; border-radius: 8px; background: #fff; padding: 0 14px; font-size: 13px; font-family: inherit; color: #374151; outline: none; }
+    .filter-select { height: 38px; min-width: 160px; border: 1px solid #e2e6ef; border-radius: 8px; background: #fff; padding: 0 12px; font-size: 13px; font-family: inherit; color: #374151; outline: none; cursor: pointer; }
+    .filter-input:focus, .filter-select:focus { border-color: #0bb5d5; box-shadow: 0 0 0 3px rgba(11,181,213,0.1); }
+    .btn-clear { height: 38px; padding: 0 16px; border: 1px solid #e2e6ef; border-radius: 8px; background: #fff; font-size: 13px; font-family: inherit; color: #6b7280; cursor: pointer; transition: all 0.15s; }
+    .btn-clear:hover { background: #f4f6fb; }
+
+    /* KPI */
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; margin-bottom: 28px; }
+    .kpi { background: #fff; border-radius: 12px; padding: 22px; border: 1px solid #e8ebf2; transition: box-shadow 0.2s, transform 0.15s; }
+    .kpi:hover { box-shadow: 0 6px 24px rgba(12,26,53,0.08); transform: translateY(-2px); }
+    .kpi-label { font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: #9ca3af; margin-bottom: 10px; }
+    .kpi-value { font-size: 24px; font-weight: 700; color: #0c1a35; letter-spacing: -0.03em; margin-bottom: 2px; }
+    .kpi-sub   { font-size: 12px; color: #9ca3af; }
+    .kpi-icon  { float: right; width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 17px; }
+
+    /* CHART + CLASSE */
+    .two-col { display: grid; grid-template-columns: 360px 1fr; gap: 20px; margin-bottom: 28px; }
+    .card { background: #fff; border-radius: 12px; border: 1px solid #e8ebf2; padding: 24px; }
+    .card-title { font-size: 13px; font-weight: 700; color: #0c1a35; margin-bottom: 20px; }
+    .chart-wrap { position: relative; max-width: 240px; margin: 0 auto; }
+    .classe-list { display: flex; flex-direction: column; }
+    .classe-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid #f4f6fb; }
+    .classe-row:last-child { border-bottom: none; }
+    .classe-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+    .classe-nome { font-size: 13px; color: #374151; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .classe-auc  { font-size: 13px; font-weight: 600; color: #0c1a35; white-space: nowrap; }
+    .classe-pct  { font-size: 11px; color: #9ca3af; width: 44px; text-align: right; flex-shrink: 0; }
+
+    /* TABLE */
+    .table-card { background: #fff; border-radius: 12px; border: 1px solid #e8ebf2; overflow: hidden; }
+    .table-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 24px; border-bottom: 1px solid #f0f3f8; }
+    .table-title { font-size: 13px; font-weight: 700; color: #0c1a35; }
+    .table-count { font-size: 12px; color: #9ca3af; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead th { position: sticky; top: 0; background: #f8fafc; padding: 11px 16px; text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #6b7280; white-space: nowrap; cursor: pointer; user-select: none; }
+    thead th:hover { background: #f0f3f8; color: #374151; }
+    thead th.sorted { color: #0bb5d5; }
+    thead th.num { text-align: right; }
+    tbody td { padding: 11px 16px; color: #374151; white-space: nowrap; border-bottom: 1px solid #f4f6fb; }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover td { background: #f8fafc; }
+    tbody td.num { text-align: right; }
+    .td-conta   { font-family: monospace; font-size: 12px; color: #9ca3af; }
+    .td-cliente { font-weight: 500; color: #111827; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+    .td-auc     { font-weight: 600; color: #0c1a35; }
+    .perfil-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.02em; }
+    .p-conservador { background: #dbeafe; color: #1e40af; }
+    .p-moderado    { background: #fef3c7; color: #92400e; }
+    .p-arrojado    { background: #fee2e2; color: #991b1b; }
+    .p-sofisticado { background: #f3e8ff; color: #6b21a8; }
+    .p-default     { background: #f3f4f6; color: #6b7280; }
+    .empty-state   { padding: 60px; text-align: center; color: #9ca3af; font-size: 14px; }
+    .loading-kpi   { color: #9ca3af; animation: pulse 1.2s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+    @media (max-width: 1100px) { .two-col { grid-template-columns: 1fr; } .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 900px)  { .sidebar-overlay.open { display: block; } .search-bar { display: none; } .hero { padding: 28px 24px; } .content { padding: 24px 20px; } }
+    @media (max-width: 600px)  { .topbar { padding: 0 16px; } .kpi-grid { grid-template-columns: 1fr; } .user-name, .user-role { display: none; } .filter-input { min-width: 100%; } }
+  </style>
+</head>
+<body>
+
+<div class="loading-screen" id="loadingScreen"><div class="spinner"></div></div>
+
+<div id="app" style="display:none">
+
+<!-- TOPBAR -->
+<nav class="topbar">
+  <button class="icon-btn" onclick="toggleSidebar()">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+    </svg>
+  </button>
+  <a href="dashboard.html" class="topbar-logo">CR<span>E</span>TA<small>Capital · BTG Pactual</small></a>
+  <div class="topbar-divider"></div>
+  <div class="search-bar">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input type="text" placeholder="Busque por conta, produto, assessor...">
+  </div>
+  <div class="topbar-actions">
+    <div class="topbar-divider"></div>
+    <button class="user-chip" id="userChip" onclick="toggleDropdown()">
+      <div class="avatar" id="userAvatar">?</div>
+      <div class="user-info">
+        <div class="user-name" id="userName">Carregando...</div>
+        <div class="user-role">Assessor BTG</div>
+      </div>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:#9ca3af;margin-left:2px"><polyline points="6 9 12 15 18 9"/></svg>
+      <div class="user-dropdown">
+        <div class="user-email-dd" id="userEmailDd">—</div>
+        <a class="dd-item" href="profile.html">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          Meu perfil
+        </a>
+        <div class="dd-sep"></div>
+        <div class="dd-item danger" onclick="logout()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Sair
+        </div>
+      </div>
+    </button>
+  </div>
+</nav>
+
+<!-- SIDEBAR -->
+<div class="sidebar-overlay" id="overlay" onclick="closeSidebar()"></div>
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-section">
+    <div class="sidebar-label">Início</div>
+    <a class="nav-item" href="dashboard.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      Visão Geral
+    </a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-label">Dados</div>
+    <a class="nav-item active" href="posicoes.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      Posições
+    </a>
+    <a class="nav-item" href="receitas.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+      Receitas e Repasses
+    </a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-label">Análise</div>
+    <a class="nav-item" href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      Relatórios
+    </a>
+  </div>
+  <div class="sidebar-footer">
+    <div class="nav-item" onclick="logout()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      Sair
+    </div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+  <div class="hero">
+    <div class="hero-label">Portal do Assessor · BTG Pactual</div>
+    <div class="hero-name">Posições Consolidadas</div>
+    <div class="hero-sub">Patrimônio sob custódia por conta, classe e perfil de suitability.</div>
+    <div class="hero-date" id="heroDate"></div>
+  </div>
+
+  <div class="content">
+
+    <!-- Filtros -->
+    <div class="filter-bar">
+      <input class="filter-input" type="text" id="searchInput" placeholder="🔍 Buscar conta ou cliente...">
+      <select class="filter-select" id="filtroAssessor" style="display:none">
+        <option value="">Todos os assessores</option>
+      </select>
+      <select class="filter-select" id="filtroPerfil">
+        <option value="">Todos os perfis</option>
+      </select>
+      <select class="filter-select" id="filtroClasse">
+        <option value="">Todas as classes</option>
+      </select>
+      <button class="btn-clear" onclick="limparFiltros()">Limpar filtros</button>
+    </div>
+
+    <!-- KPIs -->
+    <div class="kpi-grid">
+      <div class="kpi">
+        <div class="kpi-icon" style="background:#eef3ff">📊</div>
+        <div class="kpi-label">AuC Total</div>
+        <div class="kpi-value loading-kpi" id="kpiAuc">—</div>
+        <div class="kpi-sub">Patrimônio sob custódia</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-icon" style="background:#fff7ed">👥</div>
+        <div class="kpi-label">Contas</div>
+        <div class="kpi-value loading-kpi" id="kpiContas">—</div>
+        <div class="kpi-sub">Clientes na carteira</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-icon" style="background:#f0fdf4">💰</div>
+        <div class="kpi-label">AuC Médio</div>
+        <div class="kpi-value loading-kpi" id="kpiMedio">—</div>
+        <div class="kpi-sub">Por conta</div>
+      </div>
+    </div>
+
+    <!-- Gráfico + legenda -->
+    <div class="two-col">
+      <div class="card">
+        <div class="card-title">AuC por Classe</div>
+        <div class="chart-wrap"><canvas id="donutChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Detalhamento por Classe</div>
+        <div class="classe-list" id="classeList"></div>
+      </div>
+    </div>
+
+    <!-- Tabela -->
+    <div class="table-card">
+      <div class="table-header">
+        <div class="table-title">Posições por Conta</div>
+        <div class="table-count" id="tableCount"></div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead id="tableHead"></thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</main>
+</div><!-- /app -->
+
+<script>
+  const API_URL = 'https://api-creta-978599698367.us-central1.run.app';
+  const ADMIN_EMAILS = new Set(['fillipemsousa@gmail.com','manu.lombardi@cretainvestimentos.com.br']);
+
+  const CORES = [
+    '#0c2040','#0bb5d5','#1a4a80','#2dd4bf','#3b82f6',
+    '#6366f1','#8b5cf6','#0ea5e9','#f59e0b','#64748b'
+  ];
+
+  const firebaseConfig = {
+    apiKey:            "AIzaSyDLJrg7Cmaq6DDlDdcLfe4kH9hUukMVuE0",
+    authDomain:        "creta-btg-bd3a8.firebaseapp.com",
+    projectId:         "creta-btg-bd3a8",
+    storageBucket:     "creta-btg-bd3a8.firebasestorage.app",
+    messagingSenderId: "609636823379",
+    appId:             "1:609636823379:web:fbf9de8c2960d7392c31a6"
+  };
+  if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db   = firebase.firestore();
+
+  // ── Estado ────────────────────────────────────────────────────────────────
+  let dadosRaw   = null;
+  let contasMap  = {};
+  let classesList = [];
+  let ehAdmin    = false;
+  let donutChart = null;
+  let sortCol    = 'total';
+  let sortDir    = -1;
+
+  // ── Auth ──────────────────────────────────────────────────────────────────
+  auth.onAuthStateChanged(async function(user) {
+    document.getElementById('loadingScreen').style.display = 'none';
+    if (!user) { window.location.replace('index.html'); return; }
+    document.getElementById('app').style.display = 'block';
+
+    const email = user.email || '';
+    document.getElementById('userEmailDd').textContent = email;
+
+    try {
+      const snap = await db.collection('users').doc(user.uid).get();
+      const data = snap.exists ? snap.data() : {};
+      const name      = data.displayName || user.displayName || email.split('@')[0];
+      const firstName = name.trim().split(/[\s.]/)[0];
+      const initials  = name.trim().split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase();
+      document.getElementById('userName').textContent   = name;
+      document.getElementById('userAvatar').textContent = initials;
+      ehAdmin = data.role === 'admin' || ADMIN_EMAILS.has(email);
+    } catch(e) {
+      const name = user.displayName || email.split('@')[0];
+      document.getElementById('userName').textContent   = name;
+      document.getElementById('userAvatar').textContent = name.slice(0,2).toUpperCase();
+      ehAdmin = ADMIN_EMAILS.has(email);
+    }
+
+    if (ehAdmin) document.getElementById('filtroAssessor').style.display = 'block';
+
+    carregarDados();
+  });
+
+  async function getIdToken() {
+    return auth.currentUser ? auth.currentUser.getIdToken() : null;
+  }
+
+  // ── Carregar dados da API ─────────────────────────────────────────────────
+  async function carregarDados() {
+    try {
+      const token = await getIdToken();
+      const resp  = await fetch(API_URL + '/api/posicoes', {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      if (!resp.ok) throw new Error('Status ' + resp.status);
+      dadosRaw = await resp.json();
+      processarDados();
+      renderizar();
+    } catch(e) {
+      console.error('Erro ao carregar posições:', e);
+      document.getElementById('kpiAuc').textContent    = 'Erro';
+      document.getElementById('kpiContas').textContent = 'Erro';
+      document.getElementById('kpiMedio').textContent  = 'Erro';
+      ['kpiAuc','kpiContas','kpiMedio'].forEach(id =>
+        document.getElementById(id).classList.remove('loading-kpi'));
+    }
+  }
+
+  // ── Processar dados brutos ────────────────────────────────────────────────
+  function processarDados() {
+    contasMap  = {};
+    const porClasse = {};
+
+    for (const row of dadosRaw.por_conta_classe) {
+      const key = row.Conta;
+      if (!contasMap[key]) {
+        contasMap[key] = {
+          conta:    row.Conta,
+          cliente:  row.cliente  || '',
+          assessor: row.assessor || '',
+          perfil:   row.perfil   || 'Sem perfil',
+          classes:  {},
+          total:    0
+        };
+      }
+      const cl  = row.Classe || 'Outros';
+      const auc = row.auc    || 0;
+      contasMap[key].classes[cl] = (contasMap[key].classes[cl] || 0) + auc;
+      contasMap[key].total += auc;
+      porClasse[cl] = (porClasse[cl] || 0) + auc;
+    }
+
+    classesList = Object.keys(porClasse).sort((a,b) => porClasse[b] - porClasse[a]);
+
+    // Filtros dinâmicos
+    const assessores = [...new Set(Object.values(contasMap).map(c => c.assessor).filter(Boolean))].sort();
+    const perfis     = [...new Set(Object.values(contasMap).map(c => c.perfil).filter(Boolean))].sort();
+    populateSelect('filtroAssessor', assessores, 'Todos os assessores');
+    populateSelect('filtroPerfil',   perfis,     'Todos os perfis');
+    populateSelect('filtroClasse',   classesList,'Todas as classes');
+
+    // Data de referência
+    if (dadosRaw.data_referencia) {
+      const [y,m,d] = dadosRaw.data_referencia.split('-');
+      const el = document.getElementById('heroDate');
+      el.textContent     = `Posição de ${d}/${m}/${y}`;
+      el.style.display   = 'block';
+    }
+  }
+
+  function populateSelect(id, values, placeholder) {
+    const sel = document.getElementById(id);
+    while (sel.options.length > 1) sel.remove(1);
+    values.forEach(v => sel.add(new Option(v, v)));
+  }
+
+  // ── Filtros ───────────────────────────────────────────────────────────────
+  function getContasFiltradas() {
+    const search   = document.getElementById('searchInput').value.trim().toLowerCase();
+    const assessor = document.getElementById('filtroAssessor').value;
+    const perfil   = document.getElementById('filtroPerfil').value;
+    const classe   = document.getElementById('filtroClasse').value;
+
+    return Object.values(contasMap).filter(c => {
+      if (search   && !c.conta.toLowerCase().includes(search) && !c.cliente.toLowerCase().includes(search)) return false;
+      if (assessor && c.assessor !== assessor) return false;
+      if (perfil   && c.perfil   !== perfil)   return false;
+      if (classe   && !c.classes[classe])       return false;
+      return true;
+    });
+  }
+
+  function limparFiltros() {
+    ['searchInput','filtroAssessor','filtroPerfil','filtroClasse']
+      .forEach(id => { document.getElementById(id).value = ''; });
+    renderizar();
+  }
+
+  // ── Renderização principal ────────────────────────────────────────────────
+  function renderizar() {
+    const contas = getContasFiltradas();
+
+    // Sort
+    contas.sort((a,b) => {
+      let va, vb;
+      if (sortCol === 'total')            { va = a.total;                   vb = b.total; }
+      else if (sortCol.startsWith('cl_')) { const cl = sortCol.slice(3); va = a.classes[cl]||0; vb = b.classes[cl]||0; }
+      else                                { va = a[sortCol]||'';            vb = b[sortCol]||''; }
+      return typeof va === 'string' ? sortDir * va.localeCompare(vb) : sortDir * (va - vb);
+    });
+
+    // KPIs
+    const totalAuc = contas.reduce((s,c) => s + c.total, 0);
+    const nContas  = contas.length;
+    ['kpiAuc','kpiContas','kpiMedio'].forEach(id => document.getElementById(id).classList.remove('loading-kpi'));
+    document.getElementById('kpiAuc').textContent    = fmtM(totalAuc);
+    document.getElementById('kpiContas').textContent = nContas.toLocaleString('pt-BR');
+    document.getElementById('kpiMedio').textContent  = nContas ? fmtM(totalAuc / nContas) : '—';
+    document.getElementById('tableCount').textContent = nContas.toLocaleString('pt-BR') + ' contas';
+
+    // Totais por classe (filtrado)
+    const classeTotals = {};
+    contas.forEach(c => Object.entries(c.classes).forEach(([cl,v]) => {
+      classeTotals[cl] = (classeTotals[cl]||0) + v;
+    }));
+    const classes = classesList.filter(cl => classeTotals[cl]);
+
+    renderDonut(classes, classeTotals, totalAuc);
+    renderClasseList(classes, classeTotals, totalAuc);
+    renderTabela(contas, classes);
+  }
+
+  // ── Donut ─────────────────────────────────────────────────────────────────
+  function renderDonut(classes, totals, total) {
+    const ctx = document.getElementById('donutChart').getContext('2d');
+    if (donutChart) donutChart.destroy();
+    donutChart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: classes,
+        datasets: [{
+          data: classes.map(cl => totals[cl]||0),
+          backgroundColor: classes.map((_,i) => CORES[i % CORES.length]),
+          borderWidth: 2,
+          borderColor: '#fff',
+          hoverOffset: 6,
+        }]
+      },
+      options: {
+        responsive: true,
+        cutout: '70%',
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => ' ' + fmtM(ctx.raw) + '  (' + (total ? ((ctx.raw/total)*100).toFixed(1) : '0') + '%)'
+            }
+          }
+        }
+      }
+    });
+  }
+
+  // ── Legenda de classes ────────────────────────────────────────────────────
+  function renderClasseList(classes, totals, total) {
+    document.getElementById('classeList').innerHTML = classes.map((cl, i) => {
+      const auc = totals[cl]||0;
+      const pct = total ? ((auc/total)*100).toFixed(1) : '0.0';
+      return `<div class="classe-row">
+        <span class="classe-dot" style="background:${CORES[i%CORES.length]}"></span>
+        <span class="classe-nome">${cl}</span>
+        <span class="classe-auc">${fmtM(auc)}</span>
+        <span class="classe-pct">${pct}%</span>
+      </div>`;
+    }).join('');
+  }
+
+  // ── Tabela ────────────────────────────────────────────────────────────────
+  function renderTabela(contas, classes) {
+    const cols = [
+      { key:'conta',    label:'Conta' },
+      { key:'cliente',  label:'Cliente' },
+      ...(ehAdmin ? [{ key:'assessor', label:'Assessor' }] : []),
+      { key:'perfil',   label:'Perfil' },
+      { key:'total',    label:'AuC Total', num:true },
+      ...classes.map(cl => ({ key:'cl_'+cl, label:cl, num:true }))
+    ];
+
+    // Cabeçalho
+    document.getElementById('tableHead').innerHTML = '<tr>' +
+      cols.map(c => {
+        const sorted = sortCol === c.key;
+        return `<th class="${c.num?'num':''}${sorted?' sorted':''}" onclick="setSort('${c.key}')">
+          ${c.label}${sorted ? (sortDir>0?' ↑':' ↓') : ''}
+        </th>`;
+      }).join('') + '</tr>';
+
+    // Corpo
+    const tbody = document.getElementById('tableBody');
+    if (!contas.length) {
+      tbody.innerHTML = `<tr><td colspan="${cols.length}" class="empty-state">Nenhuma conta encontrada para os filtros selecionados.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = contas.map(c =>
+      '<tr>' +
+      `<td class="td-conta">${c.conta}</td>` +
+      `<td class="td-cliente">${c.cliente || '—'}</td>` +
+      (ehAdmin ? `<td>${c.assessor || '—'}</td>` : '') +
+      `<td><span class="perfil-badge ${perfilClass(c.perfil)}">${c.perfil}</span></td>` +
+      `<td class="num td-auc">${fmtM(c.total)}</td>` +
+      classes.map(cl => `<td class="num">${c.classes[cl] ? fmtM(c.classes[cl]) : '—'}</td>`).join('') +
+      '</tr>'
+    ).join('');
+  }
+
+  function setSort(col) {
+    sortDir = sortCol === col ? -sortDir : -1;
+    sortCol = col;
+    renderizar();
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  function fmtM(v) {
+    if (v == null || isNaN(v)) return '—';
+    const M = v / 1e6;
+    if (Math.abs(M) >= 1)
+      return 'R$ ' + M.toLocaleString('pt-BR', {minimumFractionDigits:1, maximumFractionDigits:1}) + ' M';
+    const K = v / 1e3;
+    return 'R$ ' + K.toLocaleString('pt-BR', {minimumFractionDigits:0, maximumFractionDigits:0}) + ' K';
+  }
+
+  function perfilClass(p) {
+    const l = (p||'').toLowerCase();
+    if (l.includes('conserv'))              return 'p-conservador';
+    if (l.includes('moder'))               return 'p-moderado';
+    if (l.includes('arroj')||l.includes('agressi')) return 'p-arrojado';
+    if (l.includes('sofist'))              return 'p-sofisticado';
+    return 'p-default';
+  }
+
+  // ── Eventos ───────────────────────────────────────────────────────────────
+  document.getElementById('searchInput').addEventListener('input', renderizar);
+  ['filtroAssessor','filtroPerfil','filtroClasse'].forEach(id =>
+    document.getElementById(id).addEventListener('change', renderizar));
+
+  function logout()         { auth.signOut().then(() => window.location.replace('index.html')); }
+  function toggleSidebar()  { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('overlay').classList.toggle('open'); }
+  function closeSidebar()   { document.getElementById('sidebar').classList.remove('open'); document.getElementById('overlay').classList.remove('open'); }
+  function toggleDropdown() { document.getElementById('userChip').classList.toggle('open'); }
+  document.addEventListener('click', e => {
+    const chip = document.getElementById('userChip');
+    if (chip && !chip.contains(e.target)) chip.classList.remove('open');
+  });
+</script>
+</body>
+</html>

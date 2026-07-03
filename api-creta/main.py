@@ -37,7 +37,8 @@ GCP_PROJECT    = os.getenv("GCP_PROJECT", "creta-btg")
 bq = bigquery.Client(project=GCP_PROJECT)
 DATASET        = os.getenv("BQ_DATASET",  "dados_crus")
 TABLE          = f"`{GCP_PROJECT}.{DATASET}.receitas_para_repasse`"
-TABLE_POSICAO  = f"`{GCP_PROJECT}.{DATASET}.posicao_das_contas`"
+TABLE_POSICAO    = f"`{GCP_PROJECT}.{DATASET}.posicao_das_contas`"
+TABLE_SUITABILITY = f"`{GCP_PROJECT}.{DATASET}.suitability_contas`"
 
 # ── Cache simples em memória ──────────────────────────────────────────────────
 # Evita consultar o BigQuery a cada requisição.
@@ -454,6 +455,114 @@ async def evolucao_cliente(
         result.append(row)
 
     return {"evolucao": result, "categorias": [dict(r) for r in rows_cat]}
+
+
+@app.get("/api/posicoes")
+async def posicoes_endpoint(
+    authorization: Optional[str] = Header(default=None),
+):
+    """
+    Retorna posições consolidadas por conta e classe, unindo:
+      - posicao_das_contas   (data mais recente)
+      - receitas_para_repasse (nome do cliente + assessor)
+      - suitability_contas   (perfil de suitability mais recente)
+
+    Admins veem todas as contas; assessores veem apenas suas próprias.
+    """
+    token_data    = await verificar_token(authorization)
+    role          = token_data.get("role", "assessor")
+    assessor_name = token_data.get("assessor_name")
+    is_admin      = role == "admin"
+    forced_assessor = None if is_admin else assessor_name
+
+    cache_key = f"posicoes:{forced_assessor or 'all'}"
+    cached = cache_get(cache_key)
+    if cached:
+        return cached
+
+    qp = []
+    assessor_filter = ""
+    join_type = "LEFT"
+    if forced_assessor:
+        assessor_filter = "AND TRIM(Assessor_Manual) = @assessor"
+        qp.append(ScalarQueryParameter("assessor", "STRING", forced_assessor.strip()))
+        join_type = "INNER"  # só contas do assessor aparecem
+
+    sql = f"""
+        WITH ultima_data AS (
+            SELECT MAX(DATE(Data)) AS max_data
+            FROM {TABLE_POSICAO}
+        ),
+        posicao_base AS (
+            SELECT
+                TRIM(p.Conta)  AS Conta,
+                p.Classe,
+                ROUND(SUM(p.ValorBruto), 2) AS auc
+            FROM {TABLE_POSICAO} p
+            JOIN ultima_data ON DATE(p.Data) = ultima_data.max_data
+            GROUP BY TRIM(p.Conta), p.Classe
+        ),
+        clientes AS (
+            SELECT
+                TRIM(CAST(Conta AS STRING)) AS Conta,
+                MAX(Cliente)        AS cliente,
+                MAX(Assessor_Manual) AS assessor
+            FROM {TABLE}
+            WHERE Cliente IS NOT NULL AND Cliente != ''
+            {assessor_filter}
+            GROUP BY TRIM(CAST(Conta AS STRING))
+        ),
+        suit AS (
+            SELECT Conta, Perfil
+            FROM {TABLE_SUITABILITY}
+            QUALIFY ROW_NUMBER() OVER (PARTITION BY Conta ORDER BY DataExtracao DESC) = 1
+        )
+        SELECT
+            p.Conta,
+            COALESCE(c.cliente,  '')           AS cliente,
+            COALESCE(c.assessor, '')           AS assessor,
+            COALESCE(suit.Perfil, 'Sem perfil') AS perfil,
+            p.Classe,
+            p.auc,
+            ud.max_data AS data_referencia
+        FROM posicao_base p
+        CROSS JOIN ultima_data ud
+        {join_type} JOIN clientes c  ON p.Conta = c.Conta
+        LEFT  JOIN suit             ON p.Conta = suit.Conta
+        ORDER BY COALESCE(c.cliente, p.Conta), p.Classe
+    """
+
+    log.info(f"BQ posicoes: assessor={forced_assessor or 'todos'}")
+    if qp:
+        rows_raw = list(bq.query(sql, job_config=QueryJobConfig(query_parameters=qp)).result())
+    else:
+        rows_raw = list(bq.query(sql).result())
+
+    rows_list: list[dict] = []
+    data_ref: Optional[str] = None
+    por_classe: dict = {}
+
+    for row in rows_raw:
+        d = dict(row)
+        dr = d.pop("data_referencia", None)
+        if data_ref is None and dr is not None:
+            data_ref = dr.isoformat() if hasattr(dr, "isoformat") else str(dr)
+        classe = d.get("Classe") or "Outros"
+        por_classe[classe] = round(por_classe.get(classe, 0) + (d.get("auc") or 0), 2)
+        rows_list.append(d)
+
+    por_classe_list = [
+        {"classe": k, "auc": v}
+        for k, v in sorted(por_classe.items(), key=lambda x: -x[1])
+    ]
+
+    resultado = {
+        "data_referencia":   data_ref,
+        "por_conta_classe":  rows_list,
+        "por_classe":        por_classe_list,
+    }
+    cache_set(cache_key, resultado)
+    return resultado
 
 
 @app.get("/api/posicao")

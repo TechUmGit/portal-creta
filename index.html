@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Creta Capital — Acesso</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+  <!-- Firebase 10 compat (CDN — sem build step) -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; font-family: 'Inter', -apple-system, sans-serif; -webkit-font-smoothing: antialiased; }
+
+    .loading-screen {
+      position: fixed; inset: 0; background: #fff;
+      display: flex; align-items: center; justify-content: center; z-index: 999;
+    }
+    .spinner {
+      width: 26px; height: 26px;
+      border: 3px solid rgba(11,181,213,0.2);
+      border-top-color: #0bb5d5; border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .layout { display: flex; min-height: 100vh; }
+
+    .left {
+      width: 48%;
+      background: linear-gradient(158deg, #06101f 0%, #091629 55%, #0e2244 100%);
+      display: flex; flex-direction: column; justify-content: space-between;
+      padding: 52px 56px; position: relative; overflow: hidden;
+    }
+    .left::before {
+      content: ''; position: absolute; width: 520px; height: 520px;
+      border-radius: 50%; border: 1px solid rgba(255,255,255,0.04);
+      top: -160px; right: -160px; pointer-events: none;
+    }
+    .left::after {
+      content: ''; position: absolute; width: 340px; height: 340px;
+      border-radius: 50%; border: 1px solid rgba(255,255,255,0.03);
+      bottom: -80px; left: -80px; pointer-events: none;
+    }
+
+    .left-badge {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.2em;
+      text-transform: uppercase; color: rgba(255,255,255,0.28); margin-bottom: 20px;
+    }
+    .logo-dark .logo-name { font-size: 34px; font-weight: 900; letter-spacing: -0.03em; color: #fff; line-height: 1; }
+    .logo-dark .logo-name span { color: #0bb5d5; }
+    .logo-dark .logo-sub { font-size: 10px; font-weight: 500; letter-spacing: 0.22em; text-transform: uppercase; color: rgba(255,255,255,0.3); margin-top: 7px; padding-left: 2px; }
+    .logo-dark .logo-btg { margin-top: 5px; font-size: 10px; letter-spacing: 0.08em; color: rgba(255,255,255,0.2); }
+    .logo-dark .logo-btg strong { color: rgba(255,255,255,0.45); font-weight: 700; }
+
+    .left-mid { position: relative; z-index: 1; }
+    .left-headline { font-size: 33px; font-weight: 300; color: rgba(255,255,255,0.8); line-height: 1.38; letter-spacing: -0.03em; margin-bottom: 18px; }
+    .left-headline strong { font-weight: 700; color: #fff; }
+    .left-sub { font-size: 14px; color: rgba(255,255,255,0.28); line-height: 1.8; }
+    .left-foot { font-size: 11px; color: rgba(255,255,255,0.14); z-index: 1; position: relative; }
+
+    .right { width: 52%; background: #fff; display: flex; align-items: center; justify-content: center; padding: 52px 48px; }
+    .form-box { width: 100%; max-width: 390px; }
+
+    .logo-mobile { display: none; margin-bottom: 40px; }
+    .logo-mobile .logo-name { font-size: 28px; font-weight: 900; letter-spacing: -0.03em; color: #0c1a35; line-height: 1; }
+    .logo-mobile .logo-name span { color: #0bb5d5; }
+    .logo-mobile .logo-sub { font-size: 9.5px; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; color: rgba(12,26,53,0.4); margin-top: 6px; padding-left: 2px; }
+    .logo-mobile .logo-btg { margin-top: 4px; font-size: 10px; color: rgba(0,0,0,0.3); letter-spacing: 0.06em; }
+    .logo-mobile .logo-btg strong { color: rgba(0,0,0,0.55); font-weight: 700; }
+
+    .form-title { font-size: 25px; font-weight: 400; color: #0a1628; letter-spacing: -0.02em; margin-bottom: 6px; }
+    .form-sub   { font-size: 14px; color: #9ca3af; margin-bottom: 44px; line-height: 1.6; }
+
+    .field { position: relative; margin-bottom: 30px; }
+    .field input {
+      width: 100%; height: 56px; border: none; border-bottom: 1.5px solid #dde0e8;
+      padding: 22px 42px 6px 0; font-size: 15px; font-family: inherit; color: #111;
+      background: transparent; outline: none; transition: border-color 0.2s;
+      -webkit-appearance: none; border-radius: 0;
+    }
+    .field input:focus { border-bottom-color: #0c1a35; }
+    .field input.err  { border-bottom-color: #e53e3e; }
+    .field label { position: absolute; left: 0; top: 20px; font-size: 15px; color: #aab; pointer-events: none; transition: all 0.2s cubic-bezier(0.25,0,0.25,1); }
+    .field input:focus + label,
+    .field input:not(:placeholder-shown) + label { top: 5px; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #0c1a35; }
+    .field input.err:not(:placeholder-shown) + label,
+    .field input.err:focus + label { color: #e53e3e; }
+    .field::after { content: ''; position: absolute; bottom: 0; left: 0; width: 0; height: 1.5px; background: #0c1a35; transition: width 0.25s cubic-bezier(0.25,0,0.25,1); }
+    .field:focus-within::after { width: 100%; }
+    .field.field-err::after { background: #e53e3e; width: 100%; }
+
+    .eye { position: absolute; right: 0; top: 50%; transform: translateY(-50%); cursor: pointer; color: #bbb; display: flex; padding: 6px; transition: color 0.15s; background: none; border: none; }
+    .eye:hover { color: #555; }
+
+    .row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 34px; }
+    .remember { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #555; cursor: pointer; user-select: none; }
+    .remember input { width: 15px; height: 15px; accent-color: #0c1a35; cursor: pointer; }
+    .link-btn { font-size: 13px; color: #0c1a35; background: none; border: none; border-bottom: 1px solid transparent; cursor: pointer; font-family: inherit; padding: 0; transition: border-color 0.15s; }
+    .link-btn:hover { border-bottom-color: #0c1a35; }
+
+    .btn {
+      width: 100%; height: 52px; background: #0c1a35; color: #fff;
+      border: none; border-radius: 4px; font-size: 15px; font-weight: 500;
+      font-family: inherit; cursor: pointer; letter-spacing: 0.02em;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      transition: background 0.15s, transform 0.1s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn:hover:not(:disabled) { background: #1a3a5c; }
+    .btn:active:not(:disabled) { transform: scale(0.985); }
+    .btn:disabled { background: #c8cdd6; cursor: not-allowed; }
+
+    .spin-sm { width: 16px; height: 16px; flex-shrink: 0; border: 2px solid rgba(255,255,255,0.35); border-top-color: #fff; border-radius: 50%; animation: spin 0.65s linear infinite; }
+
+    .msg { margin-top: 16px; padding: 12px 14px; border-radius: 4px; font-size: 13px; line-height: 1.5; }
+    .msg.err { background: #fff5f5; border: 1px solid #fca5a5; color: #b91c1c; }
+    .msg.ok  { background: #f0fdf4; border: 1px solid #86efac; color: #15803d; }
+
+    .forgot-box { display: none; }
+    .forgot-box.active { display: block; }
+    .login-box.hidden { display: none; }
+
+    .back { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: #0c1a35; cursor: pointer; background: none; border: none; border-bottom: 1px solid transparent; font-family: inherit; padding: 0; margin-bottom: 28px; transition: border-color 0.15s; }
+    .back:hover { border-bottom-color: #0c1a35; }
+
+    @media (max-width: 1024px) { .left { display: none; } .right { width: 100%; padding: 60px 48px; } .logo-mobile { display: block; } }
+    @media (max-width: 600px)  { .right { padding: 44px 24px; align-items: flex-start; } .form-title { font-size: 22px; } .form-sub { margin-bottom: 36px; } .row { margin-bottom: 28px; } .btn { height: 48px; } }
+    @media (max-width: 380px)  { .right { padding: 36px 18px; } }
+  </style>
+</head>
+<body>
+
+<div class="loading-screen" id="loadingScreen">
+  <div class="spinner"></div>
+</div>
+
+<div class="layout" id="app" style="display:none">
+
+  <div class="left">
+    <div style="position:relative;z-index:1">
+      <div class="left-badge">Portal do Assessor</div>
+      <div class="logo-dark">
+        <div class="logo-name">CR<span>E</span>TA</div>
+        <div class="logo-sub">Capital</div>
+        <div class="logo-btg"><strong>BTG</strong> Pactual</div>
+      </div>
+    </div>
+    <div class="left-mid">
+      <h1 class="left-headline">Inteligência<br><strong>financeira ao</strong><br>seu alcance.</h1>
+      <p class="left-sub">Gerencie posições, receitas e repasses<br>com dados em tempo real do BTG Pactual.</p>
+    </div>
+    <div class="left-foot">© 2025 Creta Capital AI. Todos os direitos reservados.</div>
+  </div>
+
+  <div class="right">
+    <div class="form-box">
+
+      <div class="logo-mobile">
+        <div class="logo-name">CR<span>E</span>TA</div>
+        <div class="logo-sub">Capital</div>
+        <div class="logo-btg"><strong>BTG</strong> Pactual</div>
+      </div>
+
+      <!-- Login -->
+      <div class="login-box" id="loginBox">
+        <h2 class="form-title">Boas-vindas</h2>
+        <p class="form-sub">Preencha suas credenciais para acessar o portal.</p>
+
+        <form id="loginForm" novalidate>
+          <div class="field" id="emailField">
+            <input type="email" id="email" placeholder=" " autocomplete="email" required>
+            <label for="email">E-mail</label>
+          </div>
+
+          <div class="field" id="passField">
+            <input type="password" id="password" placeholder=" " autocomplete="current-password" required>
+            <label for="password">Senha</label>
+            <button class="eye" type="button" onclick="togglePass()">
+              <svg id="eyeIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+              </svg>
+            </button>
+          </div>
+
+          <div class="row">
+            <label class="remember">
+              <input type="checkbox" id="remember"> Lembrar acesso
+            </label>
+            <button type="button" class="link-btn" onclick="showForgot()">Esqueci minha senha</button>
+          </div>
+
+          <div id="loginError"></div>
+
+          <button type="submit" class="btn" id="loginBtn" style="margin-top:16px">Acessar</button>
+        </form>
+      </div>
+
+      <!-- Recuperar senha -->
+      <div class="forgot-box" id="forgotBox">
+        <button class="back" onclick="showLogin()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+          Voltar para login
+        </button>
+        <h2 class="form-title">Recuperar senha</h2>
+        <p class="form-sub">Informe seu e-mail e enviaremos um link para redefinição.</p>
+        <div class="field">
+          <input type="email" id="forgotEmail" placeholder=" " autocomplete="email">
+          <label for="forgotEmail">E-mail</label>
+        </div>
+        <div id="forgotMsg"></div>
+        <button class="btn" id="forgotBtn" style="margin-top:28px" onclick="sendReset()">
+          Enviar link de recuperação
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  const firebaseConfig = {
+    apiKey:            "AIzaSyDLJrg7Cmaq6DDlDdcLfe4kH9hUukMVuE0",
+    authDomain:        "creta-btg-bd3a8.firebaseapp.com",
+    projectId:         "creta-btg-bd3a8",
+    storageBucket:     "creta-btg-bd3a8.firebasestorage.app",
+    messagingSenderId: "609636823379",
+    appId:             "1:609636823379:web:fbf9de8c2960d7392c31a6",
+    measurementId:     "G-WQSQD9CMJF"
+  };
+  if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+
+  /* Se já estiver logado, vai direto pro dashboard */
+  auth.onAuthStateChanged(function(user) {
+    document.getElementById('loadingScreen').style.display = 'none';
+    if (user) {
+      window.location.replace('dashboard.html');
+    } else {
+      document.getElementById('app').style.display = 'flex';
+    }
+  });
+
+  const erros = {
+    'auth/user-not-found':         'E-mail não cadastrado.',
+    'auth/wrong-password':         'Senha incorreta.',
+    'auth/invalid-email':          'E-mail inválido.',
+    'auth/invalid-credential':     'E-mail ou senha incorretos.',
+    'auth/too-many-requests':      'Muitas tentativas. Aguarde alguns minutos.',
+    'auth/user-disabled':          'Esta conta foi desativada.',
+    'auth/network-request-failed': 'Sem conexão. Verifique sua internet.',
+  };
+
+  document.getElementById('loginForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const email    = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+    const remember = document.getElementById('remember').checked;
+    const btn      = document.getElementById('loginBtn');
+    const errEl    = document.getElementById('loginError');
+
+    errEl.innerHTML = '';
+    document.getElementById('emailField').classList.remove('field-err');
+    document.getElementById('passField').classList.remove('field-err');
+    document.getElementById('email').classList.remove('err');
+    document.getElementById('password').classList.remove('err');
+
+    if (!email || !password) {
+      errEl.innerHTML = '<div class="msg err">Preencha e-mail e senha.</div>';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spin-sm"></span> Entrando...';
+
+    try {
+      const persistence = remember
+        ? firebase.auth.Auth.Persistence.LOCAL
+        : firebase.auth.Auth.Persistence.SESSION;
+      await auth.setPersistence(persistence);
+      await auth.signInWithEmailAndPassword(email, password);
+      // onAuthStateChanged cuida do redirect
+    } catch (err) {
+      const msg = erros[err.code] || 'Erro ao entrar (' + err.code + ').';
+      errEl.innerHTML = '<div class="msg err">' + msg + '</div>';
+      document.getElementById('emailField').classList.add('field-err');
+      document.getElementById('passField').classList.add('field-err');
+      document.getElementById('email').classList.add('err');
+      document.getElementById('password').classList.add('err');
+      btn.disabled = false;
+      btn.innerHTML = 'Acessar';
+    }
+  });
+
+  async function sendReset() {
+    const email = document.getElementById('forgotEmail').value.trim();
+    const msgEl = document.getElementById('forgotMsg');
+    const btn   = document.getElementById('forgotBtn');
+    msgEl.innerHTML = '';
+    if (!email) { msgEl.innerHTML = '<div class="msg err">Informe um e-mail.</div>'; return; }
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spin-sm"></span> Enviando...';
+    try {
+      await auth.sendPasswordResetEmail(email);
+      msgEl.innerHTML = '<div class="msg ok">✓ Link enviado! Verifique sua caixa de entrada (e o spam).</div>';
+    } catch (err) {
+      msgEl.innerHTML = '<div class="msg err">' + (erros[err.code] || 'Erro ao enviar.') + '</div>';
+    }
+    btn.disabled = false;
+    btn.innerHTML = 'Enviar link de recuperação';
+  }
+
+  function showForgot() {
+    document.getElementById('loginBox').classList.add('hidden');
+    document.getElementById('forgotBox').classList.add('active');
+  }
+  function showLogin() {
+    document.getElementById('loginBox').classList.remove('hidden');
+    document.getElementById('forgotBox').classList.remove('active');
+    document.getElementById('forgotMsg').innerHTML = '';
+    document.getElementById('forgotEmail').value = '';
+  }
+  function togglePass() {
+    const inp  = document.getElementById('password');
+    const show = inp.type === 'password';
+    inp.type = show ? 'text' : 'password';
+    document.getElementById('eyeIcon').innerHTML = show
+      ? '<path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/>'
+      : '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
+  }
+
+  ['email','password'].forEach(function(id) {
+    document.getElementById(id).addEventListener('input', function() {
+      document.getElementById('loginError').innerHTML = '';
+      this.classList.remove('err');
+      document.getElementById('emailField').classList.remove('field-err');
+      document.getElementById('passField').classList.remove('field-err');
+    });
+  });
+</script>
+</body>
+</html>

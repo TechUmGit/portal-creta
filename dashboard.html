@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Creta Capital — Portal do Assessor</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; font-family: 'Inter', -apple-system, sans-serif; -webkit-font-smoothing: antialiased; background: #f0f3f8; }
+
+    .loading-screen { position: fixed; inset: 0; background: #f0f3f8; display: flex; align-items: center; justify-content: center; z-index: 999; }
+    .spinner { width: 26px; height: 26px; border: 3px solid rgba(11,181,213,0.2); border-top-color: #0bb5d5; border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* TOPBAR */
+    .topbar { height: 60px; background: #fff; border-bottom: 1px solid #e8ebf2; display: flex; align-items: center; padding: 0 24px; gap: 16px; position: fixed; top: 0; left: 0; right: 0; z-index: 200; }
+    .topbar-logo { font-size: 20px; font-weight: 900; letter-spacing: -0.03em; color: #0c1a35; white-space: nowrap; text-decoration: none; flex-shrink: 0; }
+    .topbar-logo span { color: #0bb5d5; }
+    .topbar-logo small { font-size: 9px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(0,0,0,0.3); display: block; line-height: 1; margin-top: 1px; }
+    .topbar-divider { width: 1px; height: 28px; background: #e2e6ef; margin: 0 4px; flex-shrink: 0; }
+    .search-bar { flex: 1; max-width: 480px; display: flex; align-items: center; gap: 10px; background: #f4f6fb; border: 1px solid #e8ebf2; border-radius: 8px; padding: 0 14px; height: 38px; }
+    .search-bar svg { color: #a0aec0; flex-shrink: 0; }
+    .search-bar input { flex: 1; border: none; background: none; outline: none; font-size: 14px; color: #555; font-family: inherit; }
+    .search-bar input::placeholder { color: #a0aec0; }
+    .topbar-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+    .icon-btn { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: none; border: none; cursor: pointer; color: #6b7280; position: relative; transition: background 0.15s; }
+    .icon-btn:hover { background: #f4f6fb; }
+    .notif-badge { position: absolute; top: 4px; right: 4px; width: 16px; height: 16px; border-radius: 50%; background: #ef4444; color: #fff; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+    .user-chip { display: flex; align-items: center; gap: 10px; padding: 4px 10px 4px 4px; border-radius: 8px; cursor: pointer; background: none; border: none; font-family: inherit; transition: background 0.15s; position: relative; }
+    .user-chip:hover { background: #f4f6fb; }
+    .avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #0c1a35, #1a3a6c); color: #fff; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .user-name { font-size: 13px; font-weight: 600; color: #1a202c; white-space: nowrap; }
+    .user-role { font-size: 11px; color: #9ca3af; }
+    .user-info { text-align: left; }
+    .user-dropdown { display: none; position: absolute; top: calc(100% + 8px); right: 0; background: #fff; border: 1px solid #e8ebf2; border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.12); min-width: 200px; padding: 6px; z-index: 300; }
+    .user-chip.open .user-dropdown { display: block; }
+    .user-email-dd { padding: 10px 12px 8px; font-size: 12px; color: #9ca3af; border-bottom: 1px solid #f0f3f8; margin-bottom: 4px; }
+    .dd-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 6px; font-size: 13px; color: #374151; cursor: pointer; transition: background 0.12s; }
+    .dd-item:hover { background: #f4f6fb; }
+    .dd-item.danger { color: #dc2626; }
+    .dd-item.danger:hover { background: #fff5f5; }
+    .dd-sep { height: 1px; background: #f0f3f8; margin: 4px 0; }
+
+    /* SIDEBAR */
+    .sidebar { position: fixed; top: 60px; left: 0; bottom: 0; width: 240px; background: #fff; border-right: 1px solid #e8ebf2; display: flex; flex-direction: column; overflow-y: auto; z-index: 100; transform: translateX(-100%); transition: transform 0.25s cubic-bezier(0.25,0,0.25,1); }
+    .sidebar.open { transform: translateX(0); }
+    .sidebar-section { padding: 20px 12px 8px; }
+    .sidebar-label { font-size: 9.5px; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; color: #9ca3af; padding: 0 10px; margin-bottom: 6px; }
+    .nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px; font-size: 13.5px; font-weight: 500; color: #4b5563; cursor: pointer; transition: all 0.15s; text-decoration: none; position: relative; }
+    .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; opacity: 0.7; }
+    .nav-item:hover { background: #f4f6fb; color: #0c1a35; }
+    .nav-item:hover svg { opacity: 1; }
+    .nav-item.active { background: #eef3ff; color: #0c1a35; font-weight: 600; }
+    .nav-item.active svg { opacity: 1; color: #0bb5d5; }
+    .nav-item.active::before { content: ''; position: absolute; left: 0; top: 6px; bottom: 6px; width: 3px; background: #0bb5d5; border-radius: 0 3px 3px 0; }
+    .nav-badge { margin-left: auto; font-size: 10px; font-weight: 700; background: #0bb5d5; color: #fff; padding: 2px 7px; border-radius: 20px; }
+    .sidebar-footer { margin-top: auto; padding: 16px 12px; border-top: 1px solid #f0f3f8; }
+    .sidebar-footer .nav-item { color: #9ca3af; font-size: 13px; }
+    .sidebar-footer .nav-item:hover { color: #dc2626; }
+
+    /* MAIN */
+    .main { margin-left: 0; padding-top: 60px; min-height: 100vh; }
+
+    /* HERO */
+    .hero { background: linear-gradient(135deg, #091525 0%, #0c2040 60%, #0f2e5c 100%); padding: 40px 44px 40px; position: relative; overflow: hidden; }
+    .hero::after { content: ''; position: absolute; width: 420px; height: 420px; border-radius: 50%; border: 1px solid rgba(11,181,213,0.12); right: -80px; top: -100px; pointer-events: none; }
+    .hero-label { font-size: 10px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: rgba(255,255,255,0.3); margin-bottom: 10px; }
+    .hero-name { font-size: 30px; font-weight: 700; color: #fff; letter-spacing: -0.03em; margin-bottom: 6px; position: relative; z-index: 1; }
+    .hero-sub  { font-size: 14px; color: rgba(255,255,255,0.45); line-height: 1.6; position: relative; z-index: 1; }
+
+    /* CONTENT */
+    .content { padding: 36px 44px; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; margin-bottom: 36px; }
+    .kpi { background: #fff; border-radius: 12px; padding: 24px; border: 1px solid #e8ebf2; transition: box-shadow 0.2s, transform 0.15s; }
+    .kpi:hover { box-shadow: 0 6px 24px rgba(12,26,53,0.08); transform: translateY(-2px); }
+    .kpi-label { font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: #9ca3af; margin-bottom: 12px; }
+    .kpi-value { font-size: 26px; font-weight: 700; color: #0c1a35; letter-spacing: -0.03em; margin-bottom: 4px; }
+    .kpi-sub   { font-size: 12px; color: #9ca3af; }
+    .kpi-icon  { float: right; width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+
+    .section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+    .section-title { font-size: 15px; font-weight: 700; color: #0c1a35; }
+
+    .modules-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; margin-bottom: 40px; }
+    .module-card { background: #fff; border-radius: 12px; border: 1px solid #e8ebf2; overflow: hidden; transition: box-shadow 0.2s, transform 0.15s; cursor: pointer; }
+    .module-card:hover { box-shadow: 0 8px 28px rgba(12,26,53,0.09); transform: translateY(-2px); }
+    .module-top { padding: 24px 24px 20px; display: flex; align-items: flex-start; gap: 16px; }
+    .module-icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; flex-shrink: 0; }
+    .module-title { font-size: 14px; font-weight: 700; color: #111827; margin-bottom: 6px; }
+    .module-desc  { font-size: 13px; color: #9ca3af; line-height: 1.6; }
+    .module-footer { padding: 12px 24px; border-top: 1px solid #f0f3f8; display: flex; align-items: center; justify-content: space-between; }
+    .badge-soon  { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #92400e; background: #fef3c7; padding: 3px 9px; border-radius: 4px; }
+    .badge-new   { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #1e40af; background: #dbeafe; padding: 3px 9px; border-radius: 4px; }
+    .module-arrow { color: #d1d5db; font-size: 16px; }
+
+    .banner { background: linear-gradient(120deg, #0c2040, #0bb5d5 200%); border-radius: 14px; padding: 28px 32px; display: flex; align-items: center; gap: 28px; margin-bottom: 40px; overflow: hidden; position: relative; }
+    .banner::after { content: ''; position: absolute; width: 240px; height: 240px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.1); right: -40px; top: -80px; pointer-events: none; }
+    .banner-icon  { font-size: 48px; flex-shrink: 0; }
+    .banner-title { font-size: 17px; font-weight: 700; color: #fff; margin-bottom: 6px; }
+    .banner-sub   { font-size: 13px; color: rgba(255,255,255,0.6); line-height: 1.6; }
+    .banner-btn   { margin-left: auto; flex-shrink: 0; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.25); color: #fff; padding: 10px 20px; border-radius: 8px; font-size: 13px; font-weight: 600; font-family: inherit; cursor: pointer; white-space: nowrap; transition: background 0.15s; }
+    .banner-btn:hover { background: rgba(255,255,255,0.25); }
+
+    .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 99; }
+
+    @media (max-width: 1100px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 900px)  { .sidebar-overlay.open { display: block; } .search-bar { display: none; } .hero { padding: 32px 24px 32px; } .content { padding: 28px 24px; } .banner { flex-wrap: wrap; } .banner-btn { width: 100%; text-align: center; margin-left: 0; } }
+    @media (max-width: 600px)  { .topbar { padding: 0 16px; } .kpi-grid { grid-template-columns: 1fr; } .modules-grid { grid-template-columns: 1fr; } .hero { padding: 28px 18px 28px; } .content { padding: 24px 18px; } .hero-name { font-size: 24px; } .user-name { display: none; } .user-role { display: none; } }
+  </style>
+</head>
+<body>
+
+<div class="loading-screen" id="loadingScreen">
+  <div class="spinner"></div>
+</div>
+
+<div id="app" style="display:none">
+
+<!-- TOPBAR -->
+<nav class="topbar">
+  <button class="icon-btn" id="hamBtn" onclick="toggleSidebar()">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+    </svg>
+  </button>
+
+  <a href="#" class="topbar-logo">
+    CR<span>E</span>TA
+    <small>Capital · BTG Pactual</small>
+  </a>
+
+  <div class="topbar-divider"></div>
+
+  <div class="search-bar">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input type="text" placeholder="Busque por conta, produto, assessor...">
+  </div>
+
+  <div class="topbar-actions">
+    <button class="icon-btn" title="Notificações">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+    </button>
+    <div class="topbar-divider"></div>
+    <button class="user-chip" id="userChip" onclick="toggleDropdown()">
+      <div class="avatar" id="userAvatar">?</div>
+      <div class="user-info">
+        <div class="user-name" id="userName">Carregando...</div>
+        <div class="user-role">Assessor BTG</div>
+      </div>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:#9ca3af;margin-left:2px"><polyline points="6 9 12 15 18 9"/></svg>
+      <div class="user-dropdown">
+        <div class="user-email-dd" id="userEmailDd">—</div>
+        <a class="dd-item" href="profile.html">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          Meu perfil
+        </a>
+        <div class="dd-sep"></div>
+        <div class="dd-item danger" onclick="logout()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Sair
+        </div>
+      </div>
+    </button>
+  </div>
+</nav>
+
+<!-- SIDEBAR -->
+<div class="sidebar-overlay" id="overlay" onclick="closeSidebar()"></div>
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-section">
+    <div class="sidebar-label">Início</div>
+    <a class="nav-item active" href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      Visão Geral
+    </a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-label">Dados</div>
+    <a class="nav-item" href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      Posições
+      <span class="nav-badge">Novo</span>
+    </a>
+    <a class="nav-item" href="receitas.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+      Receitas e Repasses
+    </a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-label">Análise</div>
+    <a class="nav-item" href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      Relatórios
+    </a>
+    <a class="nav-item" href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+      Produtos BTG
+    </a>
+  </div>
+  <div class="sidebar-footer">
+    <a class="nav-item" href="#" onclick="logout()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      Sair
+    </a>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+  <div class="hero">
+    <div class="hero-label">Portal do Assessor · BTG Pactual</div>
+    <div class="hero-name" id="heroName">Olá,</div>
+    <div class="hero-sub">Gerencie carteiras, receitas e posições dos seus clientes.</div>
+  </div>
+
+  <div class="content">
+    <div class="kpi-grid">
+      <div class="kpi">
+        <div class="kpi-icon" style="background:#eef3ff">📊</div>
+        <div class="kpi-label">AuC Total</div>
+        <div class="kpi-value">R$ —</div>
+        <div class="kpi-sub">Patrimônio sob custódia</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-icon" style="background:#f0fdf4">💰</div>
+        <div class="kpi-label">Receita do Mês</div>
+        <div class="kpi-value">R$ —</div>
+        <div class="kpi-sub">Período atual</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-icon" style="background:#fff7ed">👥</div>
+        <div class="kpi-label">Contas Ativas</div>
+        <div class="kpi-value">—</div>
+        <div class="kpi-sub">Clientes na carteira</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-icon" style="background:#fdf4ff">📑</div>
+        <div class="kpi-label">Repasse Estimado</div>
+        <div class="kpi-value">R$ —</div>
+        <div class="kpi-sub">Próximo repasse</div>
+      </div>
+    </div>
+
+    <div class="banner">
+      <div class="banner-icon">🚀</div>
+      <div>
+        <div class="banner-title">Dados em tempo real via BTG API</div>
+        <div class="banner-sub">Integração com o BTG Partner Developer Portal. Posições e receitas atualizadas automaticamente via webhook + BigQuery.</div>
+      </div>
+      <button class="banner-btn">Configurar integração</button>
+    </div>
+
+    <div class="section-head">
+      <div class="section-title">Módulos disponíveis</div>
+    </div>
+    <div class="modules-grid">
+      <div class="module-card">
+        <div class="module-top">
+          <div class="module-icon" style="background:#eef3ff">📊</div>
+          <div><div class="module-title">Posições Consolidadas</div><div class="module-desc">Visualize e filtre todas as posições de renda fixa, renda variável e fundos dos seus clientes BTG.</div></div>
+        </div>
+        <div class="module-footer"><span class="badge-new">Em desenvolvimento</span><span class="module-arrow">→</span></div>
+      </div>
+      <div class="module-card">
+        <div class="module-top">
+          <div class="module-icon" style="background:#f0fdf4">💰</div>
+          <div><div class="module-title">Receitas e Repasses</div><div class="module-desc">Acompanhe o faturamento mensal, receita por produto e histórico de repasses por assessor.</div></div>
+        </div>
+        <div class="module-footer"><span class="badge-new">Em desenvolvimento</span><span class="module-arrow">→</span></div>
+      </div>
+      <div class="module-card">
+        <div class="module-top">
+          <div class="module-icon" style="background:#fff7ed">📈</div>
+          <div><div class="module-title">Histórico de Posições</div><div class="module-desc">Analise a evolução patrimonial de cada conta por data e compare períodos anteriores.</div></div>
+        </div>
+        <div class="module-footer"><span class="badge-soon">Em breve</span><span class="module-arrow">→</span></div>
+      </div>
+      <div class="module-card">
+        <div class="module-top">
+          <div class="module-icon" style="background:#fdf4ff">📋</div>
+          <div><div class="module-title">Relatórios de Produtos</div><div class="module-desc">CRA/CRI, CDB, LCA/LCI, LF e títulos públicos do catálogo BTG Pactual.</div></div>
+        </div>
+        <div class="module-footer"><span class="badge-soon">Em breve</span><span class="module-arrow">→</span></div>
+      </div>
+      <div class="module-card">
+        <div class="module-top">
+          <div class="module-icon" style="background:#f0f9ff">🏦</div>
+          <div><div class="module-title">Catálogo de Produtos BTG</div><div class="module-desc">Explore as ofertas de produtos disponíveis para oferta aos seus clientes.</div></div>
+        </div>
+        <div class="module-footer"><span class="badge-soon">Em breve</span><span class="module-arrow">→</span></div>
+      </div>
+      <div class="module-card">
+        <div class="module-top">
+          <div class="module-icon" style="background:#fff5f5">⚙️</div>
+          <div><div class="module-title">Configurações</div><div class="module-desc">Gerencie acessos, tokens de integração BTG API e preferências do portal.</div></div>
+        </div>
+        <div class="module-footer"><span class="badge-soon">Em breve</span><span class="module-arrow">→</span></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+</div><!-- /app -->
+
+<script>
+  const firebaseConfig = {
+    apiKey:            "AIzaSyDLJrg7Cmaq6DDlDdcLfe4kH9hUukMVuE0",
+    authDomain:        "creta-btg-bd3a8.firebaseapp.com",
+    projectId:         "creta-btg-bd3a8",
+    storageBucket:     "creta-btg-bd3a8.firebasestorage.app",
+    messagingSenderId: "609636823379",
+    appId:             "1:609636823379:web:fbf9de8c2960d7392c31a6",
+    measurementId:     "G-WQSQD9CMJF"
+  };
+  if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db   = firebase.firestore();
+
+  /* Protege a rota e carrega perfil do Firestore */
+  auth.onAuthStateChanged(async function(user) {
+    document.getElementById('loadingScreen').style.display = 'none';
+    if (!user) { window.location.replace('index.html'); return; }
+    document.getElementById('app').style.display = 'block';
+
+    const email = user.email || '';
+    document.getElementById('userEmailDd').textContent = email;
+
+    // Tenta carregar nome e cargo do Firestore
+    try {
+      const snap      = await db.collection('users').doc(user.uid).get();
+      const data      = snap.exists ? snap.data() : {};
+      const name      = data.displayName || user.displayName || email.split('@')[0];
+      const firstName = name.trim().split(/[\s.]/)[0];
+      const initials  = name.trim().split(' ').map(function(w){ return w[0]; }).slice(0,2).join('').toUpperCase();
+
+      document.getElementById('heroName').textContent   = 'Olá, ' + firstName;
+      document.getElementById('userName').textContent   = name;
+      document.getElementById('userAvatar').textContent = initials;
+    } catch(e) {
+      // Fallback para dados do Auth se Firestore falhar
+      const name      = user.displayName || email.split('@')[0];
+      const firstName = name.split(/[\s.]/)[0];
+      document.getElementById('heroName').textContent   = 'Olá, ' + firstName;
+      document.getElementById('userName').textContent   = name;
+      document.getElementById('userAvatar').textContent = firstName.slice(0,2).toUpperCase();
+    }
+  });
+
+  async function logout() {
+    await auth.signOut();
+    window.location.replace('index.html');
+  }
+
+  function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('open');
+    document.getElementById('overlay').classList.toggle('open');
+  }
+  function closeSidebar() {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('overlay').classList.remove('open');
+  }
+  function toggleDropdown() {
+    document.getElementById('userChip').classList.toggle('open');
+  }
+  document.addEventListener('click', function(e) {
+    const chip = document.getElementById('userChip');
+    if (chip && !chip.contains(e.target)) chip.classList.remove('open');
+  });
+
+  document.querySelectorAll('.nav-item').forEach(function(el) {
+    el.addEventListener('click', function(e) {
+      if (!el.getAttribute('href') || el.getAttribute('href') === '#') {
+        e.preventDefault();
+        document.querySelectorAll('.nav-item').forEach(function(x) { x.classList.remove('active'); });
+        el.classList.add('active');
+        closeSidebar();
+      }
+    });
+  });
+</script>
+</body>
+</html>

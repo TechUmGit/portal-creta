@@ -1,0 +1,14 @@
+# Python
+api-creta/venv/
+api-creta/__pycache__/
+api-creta/*.pyc
+api-creta/.env
+
+# Credenciais — NUNCA commitar
+*.json
+!package.json
+service-account*.json
+credentials*.json
+
+# macOS
+.DS_Store

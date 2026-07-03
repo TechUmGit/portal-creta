@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Creta Capital — Meu Perfil</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; font-family: 'Inter', -apple-system, sans-serif; -webkit-font-smoothing: antialiased; background: #f0f3f8; }
+
+    .loading-screen { position: fixed; inset: 0; background: #f0f3f8; display: flex; align-items: center; justify-content: center; z-index: 999; }
+    .spinner { width: 26px; height: 26px; border: 3px solid rgba(11,181,213,0.2); border-top-color: #0bb5d5; border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* TOPBAR */
+    .topbar { height: 60px; background: #fff; border-bottom: 1px solid #e8ebf2; display: flex; align-items: center; padding: 0 24px; gap: 16px; position: fixed; top: 0; left: 0; right: 0; z-index: 200; }
+    .topbar-logo { font-size: 20px; font-weight: 900; letter-spacing: -0.03em; color: #0c1a35; white-space: nowrap; text-decoration: none; flex-shrink: 0; }
+    .topbar-logo span { color: #0bb5d5; }
+    .topbar-logo small { font-size: 9px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(0,0,0,0.3); display: block; line-height: 1; margin-top: 1px; }
+    .topbar-divider { width: 1px; height: 28px; background: #e2e6ef; margin: 0 4px; flex-shrink: 0; }
+    .topbar-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+    .icon-btn { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: none; border: none; cursor: pointer; color: #6b7280; transition: background 0.15s; }
+    .icon-btn:hover { background: #f4f6fb; }
+    .user-chip { display: flex; align-items: center; gap: 10px; padding: 4px 10px 4px 4px; border-radius: 8px; cursor: pointer; background: none; border: none; font-family: inherit; transition: background 0.15s; position: relative; }
+    .user-chip:hover { background: #f4f6fb; }
+    .avatar-sm { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #0c1a35, #1a3a6c); color: #fff; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .user-name-top { font-size: 13px; font-weight: 600; color: #1a202c; white-space: nowrap; }
+    .user-role-top { font-size: 11px; color: #9ca3af; }
+    .user-dropdown { display: none; position: absolute; top: calc(100% + 8px); right: 0; background: #fff; border: 1px solid #e8ebf2; border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.12); min-width: 200px; padding: 6px; z-index: 300; }
+    .user-chip.open .user-dropdown { display: block; }
+    .user-email-dd { padding: 10px 12px 8px; font-size: 12px; color: #9ca3af; border-bottom: 1px solid #f0f3f8; margin-bottom: 4px; }
+    .dd-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 6px; font-size: 13px; color: #374151; cursor: pointer; transition: background 0.12s; text-decoration: none; }
+    .dd-item:hover { background: #f4f6fb; }
+    .dd-item.active-page { color: #0c1a35; font-weight: 600; background: #eef3ff; }
+    .dd-item.danger { color: #dc2626; }
+    .dd-item.danger:hover { background: #fff5f5; }
+    .dd-sep { height: 1px; background: #f0f3f8; margin: 4px 0; }
+
+    /* SIDEBAR */
+    .sidebar { position: fixed; top: 60px; left: 0; bottom: 0; width: 240px; background: #fff; border-right: 1px solid #e8ebf2; display: flex; flex-direction: column; overflow-y: auto; z-index: 100; transform: translateX(-100%); transition: transform 0.25s cubic-bezier(0.25,0,0.25,1); }
+    .sidebar.open { transform: translateX(0); }
+    .sidebar-section { padding: 20px 12px 8px; }
+    .sidebar-label { font-size: 9.5px; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; color: #9ca3af; padding: 0 10px; margin-bottom: 6px; }
+    .nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px; font-size: 13.5px; font-weight: 500; color: #4b5563; cursor: pointer; transition: all 0.15s; text-decoration: none; position: relative; }
+    .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; opacity: 0.7; }
+    .nav-item:hover { background: #f4f6fb; color: #0c1a35; }
+    .nav-item:hover svg { opacity: 1; }
+    .nav-item.active { background: #eef3ff; color: #0c1a35; font-weight: 600; }
+    .nav-item.active svg { opacity: 1; color: #0bb5d5; }
+    .nav-item.active::before { content: ''; position: absolute; left: 0; top: 6px; bottom: 6px; width: 3px; background: #0bb5d5; border-radius: 0 3px 3px 0; }
+    .nav-badge { margin-left: auto; font-size: 10px; font-weight: 700; background: #0bb5d5; color: #fff; padding: 2px 7px; border-radius: 20px; }
+    .sidebar-footer { margin-top: auto; padding: 16px 12px; border-top: 1px solid #f0f3f8; }
+    .sidebar-footer .nav-item { color: #9ca3af; font-size: 13px; }
+    .sidebar-footer .nav-item:hover { color: #dc2626; }
+
+    .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 99; }
+
+    /* MAIN */
+    .main { margin-left: 0; padding-top: 60px; min-height: 100vh; }
+
+    /* PAGE CONTENT */
+    .page-header {
+      background: linear-gradient(135deg, #091525 0%, #0c2040 60%, #0f2e5c 100%);
+      padding: 36px 44px;
+      position: relative; overflow: hidden;
+    }
+    .page-header::after { content: ''; position: absolute; width: 380px; height: 380px; border-radius: 50%; border: 1px solid rgba(11,181,213,0.1); right: -60px; top: -80px; pointer-events: none; }
+    .page-header-label { font-size: 10px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: rgba(255,255,255,0.3); margin-bottom: 8px; }
+    .page-header-title { font-size: 26px; font-weight: 700; color: #fff; letter-spacing: -0.03em; position: relative; z-index: 1; }
+    .page-header-sub { font-size: 14px; color: rgba(255,255,255,0.4); margin-top: 4px; position: relative; z-index: 1; }
+
+    .content { padding: 36px 44px; max-width: 780px; }
+
+    /* PROFILE CARD */
+    .profile-card {
+      background: #fff; border-radius: 14px;
+      border: 1px solid #e8ebf2;
+      overflow: hidden;
+    }
+
+    .profile-card-top {
+      padding: 36px 36px 28px;
+      display: flex; align-items: center; gap: 24px;
+      border-bottom: 1px solid #f0f3f8;
+    }
+
+    .avatar-lg {
+      width: 80px; height: 80px; border-radius: 50%;
+      background: linear-gradient(135deg, #0c1a35, #1a3a6c);
+      color: #fff; font-size: 28px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; letter-spacing: -0.02em;
+    }
+
+    .profile-meta-name { font-size: 22px; font-weight: 700; color: #0c1a35; letter-spacing: -0.02em; margin-bottom: 4px; }
+    .profile-meta-email { font-size: 13px; color: #9ca3af; margin-bottom: 6px; }
+    .profile-meta-cargo { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #0bb5d5; }
+
+    /* FORM */
+    .profile-form { padding: 32px 36px; }
+
+    .form-section-label {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.12em;
+      text-transform: uppercase; color: #9ca3af;
+      margin-bottom: 20px; padding-bottom: 10px;
+      border-bottom: 1px solid #f0f3f8;
+    }
+
+    .fields-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 28px 32px;
+      margin-bottom: 36px;
+    }
+    .fields-grid.single { grid-template-columns: 1fr; }
+
+    .field { position: relative; }
+    .field label {
+      display: block; font-size: 10px; font-weight: 700;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: #9ca3af; margin-bottom: 8px;
+    }
+    .field input {
+      width: 100%; height: 48px;
+      border: 1.5px solid #e8ebf2; border-radius: 8px;
+      padding: 0 14px; font-size: 14px; font-family: inherit;
+      color: #111; background: #fff; outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .field input:focus { border-color: #0c1a35; box-shadow: 0 0 0 3px rgba(12,26,53,0.06); }
+    .field input:disabled { background: #f8f9fc; color: #9ca3af; cursor: not-allowed; }
+    .field input.readonly { background: #f8f9fc; color: #6b7280; cursor: default; }
+    .field-hint { font-size: 11px; color: #c0c4cc; margin-top: 6px; }
+
+    /* Botões */
+    .form-actions { display: flex; gap: 12px; align-items: center; }
+
+    .btn-save {
+      height: 46px; padding: 0 28px;
+      background: #0c1a35; color: #fff;
+      border: none; border-radius: 8px;
+      font-size: 14px; font-weight: 600; font-family: inherit;
+      cursor: pointer; display: flex; align-items: center; gap: 8px;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .btn-save:hover:not(:disabled) { background: #1a3a5c; }
+    .btn-save:active:not(:disabled) { transform: scale(0.98); }
+    .btn-save:disabled { background: #c8cdd6; cursor: not-allowed; }
+
+    .btn-cancel {
+      height: 46px; padding: 0 20px;
+      background: none; color: #6b7280;
+      border: 1.5px solid #e8ebf2; border-radius: 8px;
+      font-size: 14px; font-weight: 500; font-family: inherit;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .btn-cancel:hover { border-color: #c0c4cc; color: #374151; }
+
+    .spin-sm { width: 15px; height: 15px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.6s linear infinite; }
+
+    .msg { padding: 12px 14px; border-radius: 8px; font-size: 13px; line-height: 1.5; }
+    .msg.ok  { background: #f0fdf4; border: 1px solid #86efac; color: #15803d; }
+    .msg.err { background: #fff5f5; border: 1px solid #fca5a5; color: #b91c1c; }
+
+    @media (max-width: 900px) { .sidebar-overlay.open { display: block; } .content { padding: 28px 24px; } .page-header { padding: 28px 24px; } }
+    @media (max-width: 640px) { .fields-grid { grid-template-columns: 1fr; gap: 20px; } .profile-card-top { flex-direction: column; align-items: flex-start; gap: 16px; } .profile-form { padding: 24px 20px; } .profile-card-top { padding: 24px 20px; } .topbar { padding: 0 16px; } .user-name-top { display: none; } .user-role-top { display: none; } }
+  </style>
+</head>
+<body>
+
+<div class="loading-screen" id="loadingScreen">
+  <div class="spinner"></div>
+</div>
+
+<div id="app" style="display:none">
+
+<!-- TOPBAR -->
+<nav class="topbar">
+  <button class="icon-btn" onclick="toggleSidebar()">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+    </svg>
+  </button>
+  <a href="dashboard.html" class="topbar-logo">
+    CR<span>E</span>TA
+    <small>Capital · BTG Pactual</small>
+  </a>
+  <div class="topbar-divider"></div>
+  <div class="topbar-actions">
+    <button class="user-chip" id="userChip" onclick="toggleDropdown()">
+      <div class="avatar-sm" id="userAvatar">?</div>
+      <div>
+        <div class="user-name-top" id="userName">—</div>
+        <div class="user-role-top">Assessor BTG</div>
+      </div>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:#9ca3af;margin-left:6px"><polyline points="6 9 12 15 18 9"/></svg>
+      <div class="user-dropdown">
+        <div class="user-email-dd" id="userEmailDd">—</div>
+        <a class="dd-item active-page" href="profile.html">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          Meu perfil
+        </a>
+        <div class="dd-sep"></div>
+        <div class="dd-item danger" onclick="logout()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Sair
+        </div>
+      </div>
+    </button>
+  </div>
+</nav>
+
+<!-- SIDEBAR -->
+<div class="sidebar-overlay" id="overlay" onclick="closeSidebar()"></div>
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-section">
+    <div class="sidebar-label">Início</div>
+    <a class="nav-item" href="dashboard.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      Visão Geral
+    </a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-label">Dados</div>
+    <a class="nav-item" href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      Posições
+      <span class="nav-badge">Novo</span>
+    </a>
+    <a class="nav-item" href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+      Receitas e Repasses
+    </a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-label">Análise</div>
+    <a class="nav-item" href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      Relatórios
+    </a>
+    <a class="nav-item" href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+      Produtos BTG
+    </a>
+  </div>
+  <div class="sidebar-footer">
+    <div class="nav-item" onclick="logout()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      Sair
+    </div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+  <div class="page-header">
+    <div class="page-header-label">Conta</div>
+    <div class="page-header-title">Meu Perfil</div>
+    <div class="page-header-sub">Gerencie suas informações pessoais e de acesso.</div>
+  </div>
+
+  <div class="content">
+    <div class="profile-card">
+
+      <!-- Topo do card: avatar + resumo -->
+      <div class="profile-card-top">
+        <div class="avatar-lg" id="avatarLg">?</div>
+        <div>
+          <div class="profile-meta-name" id="metaName">—</div>
+          <div class="profile-meta-email" id="metaEmail">—</div>
+          <div class="profile-meta-cargo" id="metaCargo"></div>
+        </div>
+      </div>
+
+      <!-- Formulário -->
+      <div class="profile-form">
+        <div class="form-section-label">Informações pessoais</div>
+
+        <div class="fields-grid">
+          <div class="field">
+            <label for="fieldName">Nome completo</label>
+            <input type="text" id="fieldName" placeholder="Seu nome completo">
+          </div>
+          <div class="field">
+            <label for="fieldEmail">E-mail</label>
+            <input type="email" id="fieldEmail" class="readonly" readonly>
+            <div class="field-hint">E-mail vinculado à conta — não editável aqui.</div>
+          </div>
+          <div class="field">
+            <label for="fieldCargo">Cargo / Função</label>
+            <input type="text" id="fieldCargo" placeholder="Ex: Assessor BTG, Sócio">
+          </div>
+          <div class="field">
+            <label for="fieldTelefone">Telefone / WhatsApp</label>
+            <input type="tel" id="fieldTelefone" placeholder="(11) 99999-9999">
+          </div>
+        </div>
+
+        <div class="form-section-label" style="margin-top:8px">Dados BTG</div>
+
+        <div class="fields-grid" style="margin-bottom:32px">
+          <div class="field">
+            <label for="fieldCodigoBTG">Código do assessor BTG</label>
+            <input type="text" id="fieldCodigoBTG" placeholder="Ex: A12345">
+          </div>
+        </div>
+
+        <div id="formMsg" style="margin-bottom:16px"></div>
+
+        <div class="form-actions">
+          <button class="btn-save" id="saveBtn" onclick="saveProfile()">
+            Salvar alterações
+          </button>
+          <button class="btn-cancel" onclick="history.back()">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+</div>
+
+<script>
+  const firebaseConfig = {
+    apiKey:            "AIzaSyDLJrg7Cmaq6DDlDdcLfe4kH9hUukMVuE0",
+    authDomain:        "creta-btg-bd3a8.firebaseapp.com",
+    projectId:         "creta-btg-bd3a8",
+    storageBucket:     "creta-btg-bd3a8.firebasestorage.app",
+    messagingSenderId: "609636823379",
+    appId:             "1:609636823379:web:fbf9de8c2960d7392c31a6",
+    measurementId:     "G-WQSQD9CMJF"
+  };
+  if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db   = firebase.firestore();
+
+  let currentUser = null;
+
+  auth.onAuthStateChanged(async function(user) {
+    if (!user) { window.location.replace('index.html'); return; }
+    currentUser = user;
+
+    // Preenche topbar
+    const email    = user.email || '';
+    const initials = (user.displayName || email).slice(0,2).toUpperCase();
+    document.getElementById('userAvatar').textContent  = initials;
+    document.getElementById('avatarLg').textContent    = initials;
+    document.getElementById('userName').textContent    = user.displayName || email.split('@')[0];
+    document.getElementById('userEmailDd').textContent = email;
+    document.getElementById('metaEmail').textContent   = email;
+    document.getElementById('fieldEmail').value        = email;
+
+    await loadProfile();
+
+    document.getElementById('loadingScreen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+  });
+
+  async function loadProfile() {
+    if (!currentUser) return;
+    document.getElementById('formMsg').innerHTML = '';
+
+    try {
+      const snap = await db.collection('users').doc(currentUser.uid).get();
+      const data = snap.exists ? snap.data() : {};
+
+      const name     = data.displayName || currentUser.displayName || '';
+      const cargo    = data.cargo    || '';
+      const telefone = data.telefone || '';
+      const codigo   = data.codigoBTG || '';
+
+      document.getElementById('fieldName').value      = name;
+      document.getElementById('fieldCargo').value     = cargo;
+      document.getElementById('fieldTelefone').value  = telefone;
+      document.getElementById('fieldCodigoBTG').value = codigo;
+
+      // Atualiza resumo no topo do card
+      document.getElementById('metaName').textContent  = name || currentUser.email.split('@')[0];
+      document.getElementById('metaCargo').textContent = cargo;
+
+      // Atualiza avatar com iniciais do nome
+      const initials = name
+        ? name.trim().split(' ').map(function(w){ return w[0]; }).slice(0,2).join('').toUpperCase()
+        : currentUser.email.slice(0,2).toUpperCase();
+      document.getElementById('avatarLg').textContent   = initials;
+      document.getElementById('userAvatar').textContent = initials;
+      document.getElementById('userName').textContent   = name || currentUser.email.split('@')[0];
+
+    } catch(e) {
+      console.error('Erro ao carregar perfil:', e);
+    }
+  }
+
+  async function saveProfile() {
+    const btn    = document.getElementById('saveBtn');
+    const msgEl  = document.getElementById('formMsg');
+    const name   = document.getElementById('fieldName').value.trim();
+    const cargo  = document.getElementById('fieldCargo').value.trim();
+    const tel    = document.getElementById('fieldTelefone').value.trim();
+    const codigo = document.getElementById('fieldCodigoBTG').value.trim();
+
+    msgEl.innerHTML = '';
+    if (!name) {
+      msgEl.innerHTML = '<div class="msg err">O nome completo é obrigatório.</div>';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spin-sm"></span> Salvando...';
+
+    try {
+      // 1. Atualiza displayName no Firebase Auth
+      await currentUser.updateProfile({ displayName: name });
+
+      // 2. Salva campos extras no Firestore
+      await db.collection('users').doc(currentUser.uid).set({
+        displayName: name,
+        cargo:       cargo,
+        telefone:    tel,
+        codigoBTG:   codigo,
+        email:       currentUser.email,
+        updatedAt:   firebase.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+
+      // 3. Atualiza o resumo na tela sem recarregar
+      document.getElementById('metaName').textContent  = name;
+      document.getElementById('metaCargo').textContent = cargo;
+      document.getElementById('userName').textContent  = name;
+      const initials = name.trim().split(' ').map(function(w){ return w[0]; }).slice(0,2).join('').toUpperCase();
+      document.getElementById('avatarLg').textContent   = initials;
+      document.getElementById('userAvatar').textContent = initials;
+
+      msgEl.innerHTML = '<div class="msg ok">✓ Perfil atualizado com sucesso.</div>';
+      setTimeout(function(){ msgEl.innerHTML = ''; }, 3500);
+
+    } catch(e) {
+      console.error('Erro ao salvar:', e);
+      msgEl.innerHTML = '<div class="msg err">Erro ao salvar. Tente novamente.</div>';
+    }
+
+    btn.disabled = false;
+    btn.innerHTML = 'Salvar alterações';
+  }
+
+  async function logout() {
+    await auth.signOut();
+    window.location.replace('index.html');
+  }
+
+  function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('open');
+    document.getElementById('overlay').classList.toggle('open');
+  }
+  function closeSidebar() {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('overlay').classList.remove('open');
+  }
+  function toggleDropdown() {
+    document.getElementById('userChip').classList.toggle('open');
+  }
+  document.addEventListener('click', function(e) {
+    const chip = document.getElementById('userChip');
+    if (chip && !chip.contains(e.target)) chip.classList.remove('open');
+  });
+</script>
+</body>
+</html>

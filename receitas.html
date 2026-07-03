@@ -1,0 +1,1146 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Creta Capital — Receitas e Repasses</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; width: 100%; overflow-x: hidden; font-family: 'Inter', -apple-system, sans-serif; -webkit-font-smoothing: antialiased; background: #f0f3f8; }
+
+    .loading-screen { position: fixed; inset: 0; background: #f0f3f8; display: flex; align-items: center; justify-content: center; z-index: 999; }
+    .spinner { width: 26px; height: 26px; border: 3px solid rgba(11,181,213,0.2); border-top-color: #0bb5d5; border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── TOPBAR ── */
+    .topbar { height: 60px; background: #fff; border-bottom: 1px solid #e8ebf2; display: flex; align-items: center; padding: 0 24px; gap: 16px; position: fixed; top: 0; left: 0; right: 0; z-index: 200; }
+    .topbar-logo { font-size: 20px; font-weight: 900; letter-spacing: -0.03em; color: #0c1a35; white-space: nowrap; text-decoration: none; flex-shrink: 0; }
+    .topbar-logo span { color: #0bb5d5; }
+    .topbar-logo small { font-size: 9px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(0,0,0,0.3); display: block; line-height: 1; margin-top: 1px; }
+    .topbar-divider { width: 1px; height: 28px; background: #e2e6ef; margin: 0 4px; flex-shrink: 0; }
+    .search-bar { flex: 1; max-width: 480px; display: flex; align-items: center; gap: 10px; background: #f4f6fb; border: 1px solid #e8ebf2; border-radius: 8px; padding: 0 14px; height: 38px; }
+    .search-bar svg { color: #a0aec0; flex-shrink: 0; }
+    .search-bar input { flex: 1; border: none; background: none; outline: none; font-size: 14px; color: #555; font-family: inherit; }
+    .search-bar input::placeholder { color: #a0aec0; }
+    .topbar-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+    .icon-btn { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: none; border: none; cursor: pointer; color: #6b7280; transition: background 0.15s; }
+    .icon-btn:hover { background: #f4f6fb; }
+    .user-chip { display: flex; align-items: center; gap: 10px; padding: 4px 10px 4px 4px; border-radius: 8px; cursor: pointer; background: none; border: none; font-family: inherit; transition: background 0.15s; position: relative; }
+    .user-chip:hover { background: #f4f6fb; }
+    .avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #0c1a35, #1a3a6c); color: #fff; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .user-name { font-size: 13px; font-weight: 600; color: #1a202c; white-space: nowrap; }
+    .user-role { font-size: 11px; color: #9ca3af; }
+    .user-dropdown { display: none; position: absolute; top: calc(100% + 8px); right: 0; background: #fff; border: 1px solid #e8ebf2; border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.12); min-width: 200px; padding: 6px; z-index: 300; }
+    .user-chip.open .user-dropdown { display: block; }
+    .user-email-dd { padding: 10px 12px 8px; font-size: 12px; color: #9ca3af; border-bottom: 1px solid #f0f3f8; margin-bottom: 4px; }
+    .dd-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 6px; font-size: 13px; color: #374151; cursor: pointer; transition: background 0.12s; text-decoration: none; }
+    .dd-item:hover { background: #f4f6fb; }
+    .dd-item.danger { color: #dc2626; }
+    .dd-item.danger:hover { background: #fff5f5; }
+    .dd-sep { height: 1px; background: #f0f3f8; margin: 4px 0; }
+
+    /* ── SIDEBAR ── */
+    .sidebar { position: fixed; top: 60px; left: 0; bottom: 0; width: 240px; background: #fff; border-right: 1px solid #e8ebf2; display: flex; flex-direction: column; overflow-y: auto; z-index: 100; transform: translateX(-100%); transition: transform 0.25s cubic-bezier(0.25,0,0.25,1); }
+    .sidebar.open { transform: translateX(0); }
+    .sidebar-section { padding: 20px 12px 8px; }
+    .sidebar-label { font-size: 9.5px; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; color: #9ca3af; padding: 0 10px; margin-bottom: 6px; }
+    .nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px; font-size: 13.5px; font-weight: 500; color: #4b5563; cursor: pointer; transition: all 0.15s; text-decoration: none; position: relative; }
+    .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; opacity: 0.7; }
+    .nav-item:hover { background: #f4f6fb; color: #0c1a35; }
+    .nav-item:hover svg { opacity: 1; }
+    .nav-item.active { background: #eef3ff; color: #0c1a35; font-weight: 600; }
+    .nav-item.active svg { opacity: 1; color: #0bb5d5; }
+    .nav-item.active::before { content: ''; position: absolute; left: 0; top: 6px; bottom: 6px; width: 3px; background: #0bb5d5; border-radius: 0 3px 3px 0; }
+    .nav-badge { margin-left: auto; font-size: 10px; font-weight: 700; background: #0bb5d5; color: #fff; padding: 2px 7px; border-radius: 20px; }
+    .sidebar-footer { margin-top: auto; padding: 16px 12px; border-top: 1px solid #f0f3f8; }
+    .sidebar-footer .nav-item { color: #9ca3af; font-size: 13px; }
+    .sidebar-footer .nav-item:hover { color: #dc2626; }
+    .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 99; }
+
+    /* ── MAIN ── */
+    .main { margin-left: 0; padding-top: 60px; min-height: 100vh; }
+
+    .page-header { background: linear-gradient(135deg, #091525 0%, #0c2040 60%, #0f2e5c 100%); padding: 36px 44px; position: relative; overflow: hidden; }
+    .page-header::after { content: ''; position: absolute; width: 380px; height: 380px; border-radius: 50%; border: 1px solid rgba(11,181,213,0.1); right: -60px; top: -80px; pointer-events: none; }
+    .page-header-label { font-size: 10px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: rgba(255,255,255,0.3); margin-bottom: 8px; }
+    .page-header-title { font-size: 26px; font-weight: 700; color: #fff; letter-spacing: -0.03em; position: relative; z-index: 1; }
+    .page-header-sub { font-size: 14px; color: rgba(255,255,255,0.4); margin-top: 4px; position: relative; z-index: 1; }
+
+    /* Filtro de período */
+    .filter-bar { background: #fff; border-bottom: 1px solid #e8ebf2; padding: 14px 44px; display: flex; align-items: center; gap: 10px; }
+    .filter-label { font-size: 12px; font-weight: 600; color: #6b7280; }
+    .filter-btn { padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 500; border: 1.5px solid #e8ebf2; background: none; color: #6b7280; cursor: pointer; font-family: inherit; transition: all 0.15s; }
+    .filter-btn:hover { border-color: #0c1a35; color: #0c1a35; }
+    .filter-btn.active { background: #0c1a35; border-color: #0c1a35; color: #fff; }
+
+    /* ── CONTENT ── */
+    .content { padding: 32px 44px 48px; }
+
+    /* Cards de KPI rápido */
+    .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 28px; }
+    .kpi-card { background: #fff; border-radius: 12px; padding: 20px 24px; border: 1px solid #e8ebf2; }
+    .kpi-card-label { font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: #9ca3af; margin-bottom: 8px; }
+    .kpi-card-value { font-size: 24px; font-weight: 700; color: #0c1a35; letter-spacing: -0.03em; }
+    .kpi-card-sub { font-size: 12px; color: #9ca3af; margin-top: 4px; }
+
+    /* Seções de gráfico */
+    .section { margin-bottom: 28px; }
+    .section-title { font-size: 14px; font-weight: 700; color: #0c1a35; margin-bottom: 16px; letter-spacing: -0.01em; }
+
+    .chart-card { background: #fff; border-radius: 12px; border: 1px solid #e8ebf2; padding: 28px; }
+    .chart-card-title { font-size: 13px; font-weight: 700; color: #0c1a35; margin-bottom: 20px; }
+
+    /* Gráfico de barras — largura total */
+    .chart-full { position: relative; height: 280px; }
+
+    /* Dois gráficos lado a lado */
+    .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 28px; }
+    .chart-half { position: relative; height: 320px; }
+
+    /* Filtros secundários */
+    .filter-bar-2 { background: #fff; border-bottom: 1px solid #e8ebf2; padding: 10px 44px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+    .filter-group { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+    .filter-select { padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 500; border: 1.5px solid #e8ebf2; background: #fff; color: #374151; cursor: pointer; font-family: inherit; outline: none; min-width: 180px; flex: 1; }
+    .filter-select:focus { border-color: #0bb5d5; }
+    .btn-download { display: flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 7px; font-size: 12px; font-weight: 600; border: none; background: #0c1a35; color: #fff; cursor: pointer; font-family: inherit; white-space: nowrap; transition: background 0.15s; flex-shrink: 0; }
+    .btn-download:hover { background: #1a3a6c; }
+    .btn-download svg { flex-shrink: 0; }
+
+    /* Barra de filtros ativos */
+    .active-filters { background: #eef3ff; border-bottom: 1px solid #d4e0ff; padding: 8px 44px; display: none; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .active-filters.visible { display: flex; }
+    .filter-chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px 4px 12px; border-radius: 20px; background: #0c1a35; color: #fff; font-size: 11px; font-weight: 600; }
+    .filter-chip-x { background: none; border: none; color: rgba(255,255,255,0.65); cursor: pointer; padding: 0 0 0 2px; font-size: 15px; line-height: 1; font-weight: 400; }
+    .filter-chip-x:hover { color: #fff; }
+    .btn-limpar { margin-left: auto; padding: 4px 12px; border-radius: 20px; border: 1.5px solid #6b7280; background: none; color: #6b7280; font-size: 11px; font-weight: 600; cursor: pointer; font-family: inherit; transition: all 0.15s; white-space: nowrap; }
+    .btn-limpar:hover { border-color: #0c1a35; color: #0c1a35; }
+
+    /* Overlay de carregamento */
+    .data-overlay { position: fixed; inset: 0; background: rgba(240,243,248,0.82); z-index: 500; display: none; align-items: center; justify-content: center; backdrop-filter: blur(2px); flex-direction: column; gap: 12px; }
+    .data-overlay .spinner { width: 32px; height: 32px; border: 3px solid rgba(11,181,213,0.2); border-top-color: #0bb5d5; border-radius: 50%; animation: spin 0.7s linear infinite; }
+    .data-overlay-label { font-size: 13px; color: #9ca3af; font-weight: 500; }
+
+    /* ── TABELAS ── */
+    .table-card { background: #fff; border-radius: 12px; border: 1px solid #e8ebf2; overflow: hidden; margin-bottom: 28px; }
+    .table-header { padding: 20px 24px 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #f0f3f8; }
+    .table-title { font-size: 14px; font-weight: 700; color: #0c1a35; }
+    .table-total { font-size: 13px; font-weight: 600; color: #0c1a35; }
+    .table-total span { color: #9ca3af; font-weight: 400; margin-right: 4px; }
+
+    .data-table { width: 100%; border-collapse: collapse; }
+    .data-table th { padding: 10px 16px; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #9ca3af; background: #f8f9fc; text-align: left; border-bottom: 1px solid #e8ebf2; white-space: nowrap; }
+    .data-table th.right { text-align: right; }
+    .data-table td { padding: 12px 16px; font-size: 13px; color: #374151; border-bottom: 1px solid #f8f9fc; }
+    .data-table td.right { text-align: right; font-variant-numeric: tabular-nums; }
+    .data-table td.bold { font-weight: 600; color: #0c1a35; }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table tr:hover td { background: #fafbfd; }
+    .data-table td.negative { color: #dc2626; }
+
+    /* Placeholder vazio */
+    .empty-state { padding: 48px 24px; text-align: center; color: #c0c4cc; font-size: 13px; }
+    .empty-state svg { margin-bottom: 12px; opacity: 0.35; }
+
+    @media (max-width: 1100px) { .kpi-row { grid-template-columns: repeat(2,1fr); } }
+    @media (max-width: 900px) {
+      .chart-row { grid-template-columns: 1fr; }
+      .filter-bar { padding: 12px 20px; flex-wrap: wrap; gap: 6px; }
+      .filter-bar-2 { padding: 10px 20px; gap: 10px; }
+      .content { padding: 20px 20px 40px; }
+      .page-header { padding: 24px 20px; }
+      .sidebar-overlay.open { display: block; }
+      .search-bar { display: none; }
+    }
+    @media (max-width: 900px) { .active-filters { padding: 8px 20px; } }
+    @media (max-width: 700px) {
+      .kpi-row { grid-template-columns: repeat(2,1fr); gap: 10px; }
+      .content { padding: 14px 12px 32px; }
+      .page-header { padding: 18px 12px; }
+      .page-header-title { font-size: 20px; }
+      .page-header-sub { font-size: 13px; }
+      .filter-bar { padding: 10px 12px; gap: 5px; flex-wrap: wrap; }
+      .filter-bar-2 { padding: 8px 12px; gap: 8px; flex-direction: column; align-items: stretch; }
+      .filter-group { flex-direction: row; align-items: center; }
+      .filter-btn { padding: 5px 9px; font-size: 11px; }
+      .filter-select { width: 100%; min-width: unset; }
+      .chart-card { padding: 16px 12px; }
+      .chart-half { height: 280px; }
+      .table-header { padding: 12px 12px 10px; }
+      .data-table th, .data-table td { padding: 9px 10px; font-size: 12px; }
+      .topbar { padding: 0 12px; }
+      .user-name { display: none; }
+      .user-role { display: none; }
+    }
+    @media (max-width: 480px) {
+      .kpi-row { grid-template-columns: 1fr; }
+      .chart-half { height: 260px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="loading-screen" id="loadingScreen">
+  <div class="spinner"></div>
+</div>
+
+<!-- Overlay de carregamento de dados -->
+<div class="data-overlay" id="dataOverlay">
+  <div class="spinner"></div>
+  <div class="data-overlay-label">Carregando dados...</div>
+</div>
+
+<div id="app" style="display:none">
+
+<!-- TOPBAR -->
+<nav class="topbar">
+  <button class="icon-btn" onclick="toggleSidebar()">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+    </svg>
+  </button>
+  <a href="dashboard.html" class="topbar-logo">
+    CR<span>E</span>TA
+    <small>Capital · BTG Pactual</small>
+  </a>
+  <div class="topbar-divider"></div>
+  <div class="search-bar">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input type="text" placeholder="Busque por assessor, categoria...">
+  </div>
+  <div class="topbar-actions">
+    <div class="topbar-divider"></div>
+    <button class="user-chip" id="userChip" onclick="toggleDropdown()">
+      <div class="avatar" id="userAvatar">?</div>
+      <div>
+        <div class="user-name" id="userName">—</div>
+        <div class="user-role">Assessor BTG</div>
+      </div>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:#9ca3af;margin-left:2px"><polyline points="6 9 12 15 18 9"/></svg>
+      <div class="user-dropdown">
+        <div class="user-email-dd" id="userEmailDd">—</div>
+        <a class="dd-item" href="profile.html">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          Meu perfil
+        </a>
+        <div class="dd-sep"></div>
+        <div class="dd-item danger" onclick="logout()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Sair
+        </div>
+      </div>
+    </button>
+  </div>
+</nav>
+
+<!-- SIDEBAR -->
+<div class="sidebar-overlay" id="overlay" onclick="closeSidebar()"></div>
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-section">
+    <div class="sidebar-label">Início</div>
+    <a class="nav-item" href="dashboard.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      Visão Geral
+    </a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-label">Dados</div>
+    <a class="nav-item" href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      Posições
+      <span class="nav-badge">Novo</span>
+    </a>
+    <a class="nav-item active" href="receitas.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+      Receitas e Repasses
+    </a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-label">Análise</div>
+    <a class="nav-item" href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      Relatórios
+    </a>
+    <a class="nav-item" href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+      Produtos BTG
+    </a>
+  </div>
+  <div class="sidebar-footer">
+    <div class="nav-item" onclick="logout()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      Sair
+    </div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+
+  <div class="page-header">
+    <div class="page-header-label">Financeiro</div>
+    <div class="page-header-title">Receitas e Repasses</div>
+    <div class="page-header-sub">Comissões, repasses líquidos e distribuição por assessor e categoria.</div>
+  </div>
+
+  <!-- Filtros -->
+  <div class="filter-bar">
+    <span class="filter-label">Período:</span>
+    <button class="filter-btn" onclick="setFilter(this,'3m')">3 meses</button>
+    <button class="filter-btn" onclick="setFilter(this,'6m')">6 meses</button>
+    <button class="filter-btn active" onclick="setFilter(this,'12m')">12 meses</button>
+    <button class="filter-btn" onclick="setFilter(this,'ytd')">Este ano</button>
+    <button class="filter-btn" onclick="setFilter(this,'all')">Tudo</button>
+  </div>
+  <div class="filter-bar-2">
+    <div class="filter-group" id="grupoFiltroAssessor">
+      <span class="filter-label">Assessor:</span>
+      <select id="filtroAssessor" class="filter-select" onchange="aoMudarAssessor(this.value)">
+        <option value="todos">Todos os assessores</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Cliente:</span>
+      <select id="filtroCliente" class="filter-select" onchange="aoMudarCliente(this.value)">
+        <option value="todos">Todos os clientes</option>
+      </select>
+    </div>
+    <button class="btn-download" onclick="downloadRelatorio()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Baixar Relatório
+    </button>
+  </div>
+
+  <!-- Chips de filtros ativos -->
+  <div class="active-filters" id="activeFilters">
+    <span class="filter-chip" id="chipAssessor" style="display:none">
+      <span id="chipAssessorLabel"></span>
+      <button class="filter-chip-x" onclick="limparFiltro('assessor')" title="Remover">×</button>
+    </span>
+    <span class="filter-chip" id="chipCliente" style="display:none">
+      <span id="chipClienteLabel"></span>
+      <button class="filter-chip-x" onclick="limparFiltro('cliente')" title="Remover">×</button>
+    </span>
+    <button class="btn-limpar" onclick="limparTodosFiltros()">Limpar todos os filtros</button>
+  </div>
+
+  <div class="content">
+
+    <!-- KPIs rápidos -->
+    <div class="kpi-row">
+      <div class="kpi-card">
+        <div class="kpi-card-label">Comissão Bruta</div>
+        <div class="kpi-card-value" id="kpiComBruta">R$ —</div>
+        <div class="kpi-card-sub">Acumulada no período</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-card-label">Comissão Líquida</div>
+        <div class="kpi-card-value" id="kpiComLiq">R$ —</div>
+        <div class="kpi-card-sub">Após deduções</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-card-label">Repasse Líquido</div>
+        <div class="kpi-card-value" id="kpiRepLiq">R$ —</div>
+        <div class="kpi-card-sub">Total repassado</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-card-label">Repasse Escritório</div>
+        <div class="kpi-card-value" id="kpiRepEsc">R$ —</div>
+        <div class="kpi-card-sub">Para o escritório</div>
+      </div>
+    </div>
+
+    <!-- Evolução Mensal -->
+    <div class="section">
+      <div class="chart-card">
+        <div class="chart-card-title">Evolução Mensal — Comissão Bruta</div>
+        <div class="chart-full">
+          <canvas id="chartEvolucao"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Donuts: Comissão Bruta + Comissão Líquida -->
+    <div class="chart-row">
+      <div class="chart-card">
+        <div class="chart-card-title">Comissão Bruta Acumulada</div>
+        <div class="chart-half"><canvas id="chartComBruta"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-title">Comissão Total Líquida</div>
+        <div class="chart-half"><canvas id="chartComLiq"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Repasse Líquido + Repasse Escritório -->
+    <div class="chart-row">
+      <div class="chart-card">
+        <div class="chart-card-title">Repasse Total Líquido</div>
+        <div class="chart-half"><canvas id="chartRepLiq"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-title">Repasse Total Para o Escritório</div>
+        <div class="chart-half">
+          <canvas id="chartRepEsc"></canvas>
+        </div>
+        <div style="margin-top:12px; font-size:13px; color:#9ca3af">
+          Total: <strong id="totalRepEsc" style="color:#0c1a35">—</strong>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabela: por Categoria -->
+    <div class="table-card">
+      <div class="table-header">
+        <div class="table-title">Repasse Líquido por Categoria</div>
+        <div class="table-total"><span>Total:</span> <span id="totalCategoria">—</span></div>
+      </div>
+      <table class="data-table" id="tabelaCategoria">
+        <thead>
+          <tr>
+            <th>Categoria</th>
+            <th class="right">Comissão Bruta</th>
+            <th class="right">Comissão Líquida</th>
+            <th class="right">Repasse</th>
+          </tr>
+        </thead>
+        <tbody id="bodyCategoria">
+          <tr><td colspan="4"><div class="empty-state">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 3h18v18H3z" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+            <div>Conecte a fonte de dados para visualizar</div>
+          </div></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Tabela: por Cliente -->
+    <div class="table-card">
+      <div class="table-header">
+        <div class="table-title">Repasse Líquido por Cliente</div>
+        <div class="table-total"><span>Total:</span> <span id="totalCliente">—</span></div>
+      </div>
+      <table class="data-table" id="tabelaCliente">
+        <thead>
+          <tr>
+            <th>Assessor</th>
+            <th>Cliente</th>
+            <th class="right">Comissão Bruta</th>
+            <th class="right">Comissão Líquida</th>
+            <th class="right">Repasse</th>
+          </tr>
+        </thead>
+        <tbody id="bodyCliente">
+          <tr><td colspan="5"><div class="empty-state">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+            <div>Conecte a fonte de dados para visualizar</div>
+          </div></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Tabela: por Assessor -->
+    <div class="table-card">
+      <div class="table-header">
+        <div class="table-title">Repasse Líquido por Assessor</div>
+        <div class="table-total"><span>Total:</span> <span id="totalAssessor">—</span></div>
+      </div>
+      <table class="data-table" id="tabelaAssessor">
+        <thead>
+          <tr>
+            <th>Assessor</th>
+            <th class="right">Comissão Bruta</th>
+            <th class="right">Comissão Líquida</th>
+            <th class="right">Repasse</th>
+          </tr>
+        </thead>
+        <tbody id="bodyAssessor">
+          <tr><td colspan="4"><div class="empty-state">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <div>Conecte a fonte de dados para visualizar</div>
+          </div></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+</main>
+
+</div><!-- /app -->
+
+<script>
+  /* ── Firebase ── */
+  const firebaseConfig = {
+    apiKey:            "AIzaSyDLJrg7Cmaq6DDlDdcLfe4kH9hUukMVuE0",
+    authDomain:        "creta-btg-bd3a8.firebaseapp.com",
+    projectId:         "creta-btg-bd3a8",
+    storageBucket:     "creta-btg-bd3a8.firebasestorage.app",
+    messagingSenderId: "609636823379",
+    appId:             "1:609636823379:web:fbf9de8c2960d7392c31a6",
+    measurementId:     "G-WQSQD9CMJF"
+  };
+  if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db   = firebase.firestore();
+
+  /* ── Helper: normaliza string para comparação ── */
+  function norm(s) { return (s || '').trim(); }
+
+  /* ── Plugin: labels nas barras (apenas tipo 'bar') ── */
+  const barLabelPlugin = {
+    id: 'barLabel',
+    afterDatasetsDraw(chart) {
+      if (chart.config.type !== 'bar') return;
+      const { ctx } = chart;
+      chart.data.datasets.forEach(function(dataset, i) {
+        chart.getDatasetMeta(i).data.forEach(function(bar, j) {
+          const value = dataset.data[j];
+          if (value === null || value === undefined) return;
+          const text = fmt(value);
+          const isNeg = value < 0;
+          ctx.save();
+          ctx.font = '600 10px Inter, sans-serif';
+          ctx.fillStyle = isNeg ? '#dc2626' : '#374151';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = isNeg ? 'top' : 'bottom';
+          ctx.fillText(text, bar.x, isNeg ? bar.y + 4 : bar.y - 3);
+          ctx.restore();
+        });
+      });
+    }
+  };
+  Chart.register(barLabelPlugin);
+
+  /* ── Plugin: texto central nos donuts ── */
+  const centerTextPlugin = {
+    id: 'centerText',
+    afterDraw(chart) {
+      const opts = (chart.config.options.plugins || {}).centerText;
+      if (!opts || !opts.text) return;
+      const { ctx, chartArea } = chart;
+      if (!chartArea) return;
+      const cx = (chartArea.left + chartArea.right) / 2;
+      const cy = (chartArea.top  + chartArea.bottom) / 2;
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = 'bold 18px Inter, sans-serif';
+      ctx.fillStyle = '#0c1a35';
+      ctx.fillText(opts.text, cx, cy - 9);
+      ctx.font = '500 10px Inter, sans-serif';
+      ctx.fillStyle = '#9ca3af';
+      ctx.fillText('Total', cx, cy + 10);
+      ctx.restore();
+    }
+  };
+  Chart.register(centerTextPlugin);
+
+  /* ── Auth ── */
+  auth.onAuthStateChanged(async function(user) {
+    if (!user) { window.location.replace('index.html'); return; }
+
+    const email    = user.email || '';
+    const name     = user.displayName || email.split('@')[0];
+    const initials = name.trim().split(' ').map(function(w){ return w[0]; }).slice(0,2).join('').toUpperCase();
+    document.getElementById('userAvatar').textContent  = initials;
+    document.getElementById('userName').textContent    = name;
+    document.getElementById('userEmailDd').textContent = email;
+
+    /* ── Carregar perfil do Firestore ── */
+    const ADMIN_EMAILS = ['fillipemsousa@gmail.com', 'manu.lombardi@cretainvestimentos.com.br'];
+    try {
+      const doc = await db.collection('users').doc(user.uid).get();
+      if (doc.exists) {
+        perfilUsuario = doc.data();
+      } else {
+        // Fallback: admin por e-mail (contas antigas / dev)
+        perfilUsuario = {
+          role:          ADMIN_EMAILS.includes(email) ? 'admin' : 'assessor',
+          assessor_name: null,
+          displayName:   name,
+        };
+      }
+    } catch(e) {
+      console.warn('Perfil Firestore não encontrado:', e);
+      perfilUsuario = { role: ADMIN_EMAILS.includes(email) ? 'admin' : 'assessor', assessor_name: null };
+    }
+
+    const ehAdmin = perfilUsuario.role === 'admin';
+
+    /* Atualiza badge de papel */
+    document.querySelector('.user-role').textContent = ehAdmin ? 'Administrador' : 'Assessor BTG';
+
+    /* Assessores: força filtro pelo próprio nome e oculta dropdown de assessor */
+    if (!ehAdmin && perfilUsuario.assessor_name) {
+      assessorAtual = perfilUsuario.assessor_name;
+      const g = document.getElementById('grupoFiltroAssessor');
+      if (g) g.style.display = 'none';
+    }
+
+    document.getElementById('loadingScreen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    carregarDados(periodoAtual);
+  });
+
+  async function logout() { await auth.signOut(); window.location.replace('index.html'); }
+
+  /* ── Token JWT para autorizar chamadas à API ── */
+  async function getIdToken() {
+    const user = auth.currentUser;
+    if (!user) throw new Error('Não autenticado');
+    return user.getIdToken(); // Firebase renova automaticamente quando expirar
+  }
+
+  /* ── Estado ── */
+  let dadosCompletos       = null;
+  let assessorAtual        = 'todos';
+  let clienteAtual         = 'todos';
+  let periodoAtual         = '12m';
+  let charts               = {};
+  let perfilUsuario        = null;   // { role, assessor_name, displayName }
+  let evolucaoClienteAtual  = null;   // evolução mensal do cliente selecionado
+  let categoriaClienteAtual = null;   // categorias do cliente selecionado
+
+  /* ── Overlay ── */
+  function showOverlay() { document.getElementById('dataOverlay').style.display = 'flex'; }
+  function hideOverlay() { document.getElementById('dataOverlay').style.display = 'none'; }
+
+  /* ── URL da API ── */
+  const API_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? 'http://localhost:8000'
+    : 'https://SEU_CLOUD_RUN_URL';
+
+  /* ── Paleta ── */
+  const PALETTE = [
+    '#0c1a35','#0bb5d5','#1a3a6c','#2d5fa6','#4a7fc1',
+    '#6d9fd4','#8fbce3','#b0d3ef','#c8d8e8','#e8ecf4','#a8bfd0','#d4e4f0'
+  ];
+
+  /* ── Formatadores ── */
+  function fmt(v) {
+    if (v === null || v === undefined || isNaN(v)) return '—';
+    if (Math.abs(v) >= 1e6) return 'R$ ' + (v/1e6).toFixed(1) + 'm';
+    if (Math.abs(v) >= 1e3) return 'R$ ' + (v/1e3).toFixed(1) + 'k';
+    return 'R$ ' + v.toLocaleString('pt-BR', {minimumFractionDigits:2});
+  }
+  function fmtTable(v) {
+    if (v === null || v === undefined || isNaN(v)) return '—';
+    return v.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+  }
+
+  /* ── Filtro de assessor ── */
+  function preencherFiltroAssessor(assessores) {
+    const sel = document.getElementById('filtroAssessor');
+    const atual = sel.value || 'todos';
+    sel.innerHTML = '<option value="todos">Todos os assessores</option>';
+    assessores.forEach(function(a) {
+      const opt = document.createElement('option');
+      opt.value = a.assessor;
+      opt.textContent = a.assessor;
+      sel.appendChild(opt);
+    });
+    sel.value = (atual !== 'todos' && assessores.find(function(a){ return a.assessor === atual; })) ? atual : 'todos';
+  }
+
+  function aoMudarAssessor(val) {
+    assessorAtual = val;
+    clienteAtual  = 'todos';
+    document.getElementById('filtroCliente').value = 'todos';
+    if (dadosCompletos) renderizar(dadosCompletos);
+  }
+
+  function preencherFiltroCliente(clientes) {
+    const sel = document.getElementById('filtroCliente');
+    sel.innerHTML = '<option value="todos">Todos os clientes</option>';
+    const unicos = [...new Set(clientes.map(function(r){ return norm(r.cliente); }).filter(Boolean))].sort();
+    unicos.forEach(function(c) {
+      const opt = document.createElement('option');
+      opt.value = c;
+      opt.textContent = c;
+      sel.appendChild(opt);
+    });
+    // Restaura o valor selecionado após resetar o dropdown
+    sel.value = clienteAtual !== 'todos' && unicos.includes(clienteAtual) ? clienteAtual : 'todos';
+  }
+
+  async function aoMudarCliente(val) {
+    clienteAtual = val;
+    evolucaoClienteAtual  = null;
+    categoriaClienteAtual = null;
+
+    if (!dadosCompletos) return;
+
+    if (val !== 'todos') {
+      showOverlay();
+      try {
+        const token = await getIdToken();
+        const url   = API_URL + '/api/evolucao_cliente?periodo=' + periodoAtual
+                    + '&cliente=' + encodeURIComponent(val);
+        const res   = await fetch(url, { headers: { 'Authorization': 'Bearer ' + token } });
+        if (res.ok) {
+          const json = await res.json();
+          evolucaoClienteAtual  = json.evolucao   || [];
+          categoriaClienteAtual = json.categorias || [];
+        }
+      } catch(e) {
+        console.warn('Não foi possível buscar dados do cliente:', e);
+      }
+    }
+
+    renderizar(dadosCompletos);
+  }
+
+  /* ── Download relatório Excel ── */
+  async function downloadRelatorio() {
+    showOverlay();
+    try {
+      const token = await getIdToken();
+      let url = API_URL + '/api/detalhe?periodo=' + periodoAtual;
+      // Só admins passam assessor na URL; para assessores a API já filtra via token
+      const ehAdmin = perfilUsuario && perfilUsuario.role === 'admin';
+      if (ehAdmin && assessorAtual !== 'todos') url += '&assessor=' + encodeURIComponent(assessorAtual);
+
+      const res = await fetch(url, {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      if (!res.ok) throw new Error('API retornou ' + res.status);
+      const data = await res.json();
+      const rows = data.rows || [];
+
+      // Cabeçalhos em PT
+      const headers = {
+        Data_Receita: 'Data Receita', Conta: 'Conta', Cliente: 'Cliente',
+        Categoria: 'Categoria', Produto: 'Produto', Ativo: 'Ativo',
+        Tipo_Receita: 'Tipo Receita', Receita_Bruta: 'Receita Bruta',
+        Receita_Liquida: 'Receita Líquida', Comissao: 'Comissão',
+        Taxa_de_Repasse: 'Taxa de Repasse', Comissao_Liquida: 'Comissão Líquida',
+        Repasse_Total_liquido: 'Repasse Total Líquido'
+      };
+      const keys = Object.keys(headers);
+      const wsData = [Object.values(headers)].concat(
+        rows.map(function(r){ return keys.map(function(k){ return r[k] ?? ''; }); })
+      );
+
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      ws['!cols'] = [10,10,32,20,22,22,14,12,12,12,12,14,16].map(function(w){ return { wch: w }; });
+
+      const nomePeriodo = { '3m':'3meses','6m':'6meses','12m':'12meses','ytd':'AnoAtual','all':'Tudo' }[periodoAtual] || periodoAtual;
+      const nomeAss = assessorAtual !== 'todos' ? '_' + assessorAtual.split(' ')[0] : '';
+      XLSX.utils.book_append_sheet(wb, ws, 'Detalhe');
+      XLSX.writeFile(wb, 'Detalhamento' + nomeAss + '_' + nomePeriodo + '.xlsx');
+    } catch(err) {
+      console.error('Erro ao gerar relatório:', err);
+      alert('Erro ao gerar relatório. Tente novamente.');
+    } finally {
+      hideOverlay();
+    }
+  }
+
+  /* ── Carregar dados da API ── */
+  async function carregarDados(periodo) {
+    showOverlay();
+    ['kpiComBruta','kpiComLiq','kpiRepLiq','kpiRepEsc'].forEach(function(id){
+      document.getElementById(id).textContent = '...';
+    });
+    try {
+      const token = await getIdToken();
+      const res = await fetch(API_URL + '/api/receitas?periodo=' + periodo, {
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }
+      });
+      if (!res.ok) throw new Error('API retornou ' + res.status);
+      dadosCompletos = await res.json();
+      preencherFiltroAssessor(dadosCompletos.por_assessor || []);
+      clienteAtual = 'todos';
+      document.getElementById('filtroCliente').value = 'todos';
+      renderizar(dadosCompletos);
+    } catch(err) {
+      console.error('Erro ao carregar dados:', err);
+      hideOverlay();
+      ['kpiComBruta','kpiComLiq','kpiRepLiq','kpiRepEsc'].forEach(function(id){
+        document.getElementById(id).textContent = 'Erro';
+      });
+    }
+  }
+
+  /* ── Renderiza todos os gráficos e tabelas ── */
+  function renderizar(d) {
+    const k          = d.kpis                  || {};
+    const ev         = d.evolucao              || [];
+    const evPorAss   = d.evolucao_por_assessor || [];
+    const pcPorAss   = d.por_assessor_categoria || [];
+    let   pa         = d.por_assessor          || [];
+    let   pc         = d.por_categoria         || [];
+    let   cli        = d.por_cliente           || [];
+
+    const filtrado = assessorAtual !== 'todos';
+
+    /* Filtra por assessor e por cliente */
+    if (filtrado) {
+      cli = cli.filter(function(r){ return norm(r.assessor) === norm(assessorAtual); });
+    }
+    preencherFiltroCliente(cli);
+
+    const filtradoCli = clienteAtual !== 'todos';
+    let cliRow = null;
+    if (filtradoCli) {
+      cliRow = cli.find(function(r){ return norm(r.cliente) === norm(clienteAtual); }) || null;
+      cli = cliRow ? [cliRow] : [];
+    }
+
+    /* ── Assessor ativo: determina qual assessor usar para evolução e categorias ── */
+    // Cliente selecionado → assessor do cliente; assessor selecionado → esse assessor; senão → null
+    const assessorAtivo = filtradoCli && cliRow
+      ? norm(cliRow.assessor)
+      : (filtrado ? norm(assessorAtual) : null);
+
+    /* Evolução filtrada:
+       1ª prioridade — dados reais do cliente (/api/evolucao_cliente)
+       2ª prioridade — dados mensais do assessor (evPorAss)
+       3ª fallback   — dados globais (ev) */
+    let evFiltrada = ev;
+    if (filtradoCli && evolucaoClienteAtual && evolucaoClienteAtual.length > 0) {
+      // Cliente selecionado: usa evolução específica do cliente
+      evFiltrada = evolucaoClienteAtual;
+    } else if (assessorAtivo) {
+      const evAss = evPorAss.filter(function(r){ return norm(r.assessor) === assessorAtivo; });
+      if (evAss.length > 0) {
+        evFiltrada = evAss;
+      }
+    }
+
+    /* Categorias filtradas:
+       1ª prioridade — dados reais do cliente (vem de /api/evolucao_cliente)
+       2ª prioridade — dados do assessor (pcPorAss)
+       3ª fallback   — dados globais */
+    if (filtradoCli && categoriaClienteAtual && categoriaClienteAtual.length > 0) {
+      pc = categoriaClienteAtual;
+    } else if (assessorAtivo) {
+      const pcAss = pcPorAss.filter(function(r){ return norm(r.assessor) === assessorAtivo; });
+      if (pcAss.length > 0) pc = pcAss;
+    }
+
+    /* KPIs — prioridade: cliente > assessor > total */
+    if (filtradoCli && cliRow) {
+      const repEsc = (cliRow.comissao_liquida || 0) - (cliRow.repasse || 0);
+      document.getElementById('kpiComBruta').textContent = fmt(cliRow.comissao_bruta);
+      document.getElementById('kpiComLiq').textContent   = fmt(cliRow.comissao_liquida);
+      document.getElementById('kpiRepLiq').textContent   = fmt(cliRow.repasse);
+      document.getElementById('kpiRepEsc').textContent   = fmt(repEsc);
+    } else if (filtrado) {
+      const af = pa.find(function(r){ return norm(r.assessor) === norm(assessorAtual); }) || {};
+      const repEsc = (af.comissao_liquida || 0) - (af.repasse_liquido || 0);
+      document.getElementById('kpiComBruta').textContent = fmt(af.comissao_bruta);
+      document.getElementById('kpiComLiq').textContent   = fmt(af.comissao_liquida);
+      document.getElementById('kpiRepLiq').textContent   = fmt(af.repasse_liquido);
+      document.getElementById('kpiRepEsc').textContent   = fmt(repEsc);
+    } else {
+      document.getElementById('kpiComBruta').textContent = fmt(k.comissao_bruta);
+      document.getElementById('kpiComLiq').textContent   = fmt(k.comissao_liquida);
+      document.getElementById('kpiRepLiq').textContent   = fmt(k.repasse_liquido);
+      document.getElementById('kpiRepEsc').textContent   = fmt(k.receita_escritorio);
+    }
+
+    atualizarChips();
+
+    /* Destrói gráficos antigos */
+    Object.values(charts).forEach(function(c){ c.destroy(); });
+    charts = {};
+    Chart.defaults.font.family = "'Inter', sans-serif";
+    Chart.defaults.color = '#9ca3af';
+
+    /* Donuts: assessor do cliente (se filtrado por cliente), ou assessor selecionado, ou todos */
+    let paDonut, donutColors;
+    const afDonut = filtrado
+      ? (pa.find(function(r){ return norm(r.assessor) === norm(assessorAtual); }) || null)
+      : null;
+
+    if (filtradoCli && cliRow) {
+      // Cliente selecionado: mostra só o assessor do cliente vs restante
+      const assRow = pa.find(function(r){ return norm(r.assessor) === norm(cliRow.assessor); }) || {};
+      paDonut = [
+        { assessor: norm(cliRow.assessor) || 'Assessor', comissao_bruta: cliRow.comissao_bruta || 0, comissao_liquida: cliRow.comissao_liquida || 0, repasse_liquido: cliRow.repasse || 0 },
+        { assessor: 'Restante', comissao_bruta: (k.comissao_bruta||0) - (cliRow.comissao_bruta||0), comissao_liquida: (k.comissao_liquida||0) - (cliRow.comissao_liquida||0), repasse_liquido: (k.repasse_liquido||0) - (cliRow.repasse||0) },
+      ];
+      donutColors = ['#0bb5d5', '#e2e8f0'];
+    } else if (filtrado && afDonut) {
+      paDonut = [
+        { assessor: norm(assessorAtual), comissao_bruta: afDonut.comissao_bruta||0, comissao_liquida: afDonut.comissao_liquida||0, repasse_liquido: afDonut.repasse_liquido||0 },
+        { assessor: 'Restante', comissao_bruta: (k.comissao_bruta||0)-(afDonut.comissao_bruta||0), comissao_liquida: (k.comissao_liquida||0)-(afDonut.comissao_liquida||0), repasse_liquido: (k.repasse_liquido||0)-(afDonut.repasse_liquido||0) },
+      ];
+      donutColors = ['#0bb5d5', '#e2e8f0'];
+    } else {
+      const TOP = 8;
+      paDonut = pa;
+      if (pa.length > TOP) {
+        const top  = pa.slice(0, TOP);
+        const rest = pa.slice(TOP);
+        paDonut = top.concat([{
+          assessor:         'Outros',
+          comissao_bruta:   rest.reduce(function(s,r){ return s+(r.comissao_bruta||0);   }, 0),
+          comissao_liquida: rest.reduce(function(s,r){ return s+(r.comissao_liquida||0); }, 0),
+          repasse_liquido:  rest.reduce(function(s,r){ return s+(r.repasse_liquido||0);  }, 0),
+        }]);
+      }
+      donutColors = paDonut.map(function(r, i){ return PALETTE[i % PALETTE.length]; });
+    }
+
+    const kComBruta = filtradoCli && cliRow ? cliRow.comissao_bruta   : (filtrado && afDonut ? afDonut.comissao_bruta   : k.comissao_bruta);
+    const kComLiq   = filtradoCli && cliRow ? cliRow.comissao_liquida : (filtrado && afDonut ? afDonut.comissao_liquida : k.comissao_liquida);
+    const kRepLiq   = filtradoCli && cliRow ? cliRow.repasse          : (filtrado && afDonut ? afDonut.repasse_liquido  : k.repasse_liquido);
+
+    /* 1. Evolução Mensal */
+    charts.evolucao = new Chart(document.getElementById('chartEvolucao'), {
+      type: 'bar',
+      data: {
+        labels: evFiltrada.map(function(r){ return r.mes; }),
+        datasets: [{
+          label: 'Comissão Bruta',
+          data:  evFiltrada.map(function(r){ return r.comissao_bruta; }),
+          backgroundColor: '#0c1a35', borderRadius: 4, borderSkipped: false,
+        }]
+      },
+      options: barOpts()
+    });
+
+    /* 2. Donut — Comissão Bruta */
+    charts.comBruta = new Chart(document.getElementById('chartComBruta'), {
+      type: 'doughnut',
+      data: {
+        labels:   paDonut.map(function(r){ return r.assessor; }),
+        datasets: [{ data: paDonut.map(function(r){ return r.comissao_bruta; }), backgroundColor: donutColors, borderWidth: 0, hoverOffset: 4 }]
+      },
+      options: donutOpts(fmt(kComBruta))
+    });
+
+    /* 3. Donut — Comissão Líquida */
+    charts.comLiq = new Chart(document.getElementById('chartComLiq'), {
+      type: 'doughnut',
+      data: {
+        labels:   paDonut.map(function(r){ return r.assessor; }),
+        datasets: [{ data: paDonut.map(function(r){ return r.comissao_liquida; }), backgroundColor: donutColors, borderWidth: 0, hoverOffset: 4 }]
+      },
+      options: donutOpts(fmt(kComLiq))
+    });
+
+    /* 4. Donut — Repasse Líquido */
+    charts.repLiq = new Chart(document.getElementById('chartRepLiq'), {
+      type: 'doughnut',
+      data: {
+        labels:   paDonut.map(function(r){ return r.assessor; }),
+        datasets: [{ data: paDonut.map(function(r){ return r.repasse_liquido; }), backgroundColor: donutColors, borderWidth: 0, hoverOffset: 4 }]
+      },
+      options: donutOpts(fmt(kRepLiq))
+    });
+
+    /* 5. Barras — Repasse Escritório */
+    const kRepEscRow = filtradoCli && cliRow ? cliRow
+      : (filtrado ? (pa.find(function(r){ return norm(r.assessor) === norm(assessorAtual); }) || null) : null);
+    const kRepEsc = kRepEscRow;
+    charts.repEsc = new Chart(document.getElementById('chartRepEsc'), {
+      type: 'bar',
+      data: {
+        labels: evFiltrada.map(function(r){ return r.mes; }),
+        datasets: [{
+          label: 'Repasse Escritório',
+          data:  evFiltrada.map(function(r){ return r.receita_escritorio; }),
+          backgroundColor: '#1a3a6c', borderRadius: 3, borderSkipped: false,
+        }]
+      },
+      options: barOpts({ scales: { x: { grid: { display: false }, border: { display: false }, ticks: { font: { size: 10 } } }, y: { grid: { color: '#f0f3f8' }, border: { display: false }, ticks: { callback: function(v){ return fmt(v); } } } } })
+    });
+    const totalRepEscVal = assessorAtivo
+      ? evFiltrada.reduce(function(s,r){ return s+(r.receita_escritorio||0); }, 0)
+      : k.receita_escritorio;
+    document.getElementById('totalRepEsc').textContent = fmt(totalRepEscVal);
+
+    /* 6. Tabela por Categoria */
+    const totalCat = pc.reduce(function(s,r){ return s+(r.repasse||0); }, 0);
+    document.getElementById('totalCategoria').textContent = fmtTable(totalCat);
+    document.getElementById('bodyCategoria').innerHTML = pc.length
+      ? pc.map(function(r){
+          return '<tr>' +
+            '<td class="bold">' + r.categoria + '</td>' +
+            '<td class="right">' + fmtTable(r.comissao_bruta) + '</td>' +
+            '<td class="right">' + fmtTable(r.comissao_liquida) + '</td>' +
+            '<td class="right' + (r.repasse < 0 ? ' negative' : '') + '">' + fmtTable(r.repasse) + '</td>' +
+            '</tr>';
+        }).join('')
+      : '<tr><td colspan="4" class="empty-state">Sem dados</td></tr>';
+
+    /* 7. Tabela por Cliente */
+    const totalCli = cli.reduce(function(s,r){ return s+(r.repasse||0); }, 0);
+    document.getElementById('totalCliente').textContent = fmtTable(totalCli);
+    document.getElementById('bodyCliente').innerHTML = cli.length
+      ? cli.map(function(r){
+          return '<tr>' +
+            '<td>' + r.assessor + '</td>' +
+            '<td class="bold">' + r.cliente + '</td>' +
+            '<td class="right">' + fmtTable(r.comissao_bruta) + '</td>' +
+            '<td class="right">' + fmtTable(r.comissao_liquida) + '</td>' +
+            '<td class="right' + (r.repasse < 0 ? ' negative' : '') + '">' + fmtTable(r.repasse) + '</td>' +
+            '</tr>';
+        }).join('')
+      : '<tr><td colspan="5" class="empty-state">Sem dados</td></tr>';
+
+    /* 8. Tabela por Assessor */
+    // Quando cliente selecionado: usa os valores do cliRow (não o total do assessor)
+    const paTabela = filtradoCli && cliRow
+      ? [{ assessor:        norm(cliRow.assessor) || '—',
+           comissao_bruta:  cliRow.comissao_bruta,
+           comissao_liquida:cliRow.comissao_liquida,
+           repasse_liquido: cliRow.repasse }]
+      : assessorAtivo
+        ? pa.filter(function(r){ return norm(r.assessor) === assessorAtivo; })
+        : pa;
+    const totalAss = paTabela.reduce(function(s,r){ return s+(r.repasse_liquido||0); }, 0);
+    document.getElementById('totalAssessor').textContent = fmtTable(totalAss);
+    document.getElementById('bodyAssessor').innerHTML = paTabela.length
+      ? paTabela.map(function(r){
+          return '<tr>' +
+            '<td class="bold">' + r.assessor + '</td>' +
+            '<td class="right">' + fmtTable(r.comissao_bruta) + '</td>' +
+            '<td class="right">' + fmtTable(r.comissao_liquida) + '</td>' +
+            '<td class="right' + (r.repasse_liquido < 0 ? ' negative' : '') + '">' + fmtTable(r.repasse_liquido) + '</td>' +
+            '</tr>';
+        }).join('')
+      : '<tr><td colspan="4" class="empty-state">Sem dados</td></tr>';
+
+    hideOverlay();
+  }
+
+  /* ── Opções donut ── */
+  function donutOpts(centerText) {
+    return {
+      responsive: true, maintainAspectRatio: false,
+      cutout: '65%',
+      plugins: {
+        centerText: { text: centerText || '—' },
+        barLabel: false,
+        legend: {
+          position: 'bottom',
+          labels: {
+            boxWidth: 10, boxHeight: 10, borderRadius: 2,
+            padding: 8, font: { size: 10 },
+            filter: function(item) { return item.index < 10; }
+          }
+        },
+        tooltip: {
+          callbacks: {
+            label: function(ctx) {
+              const total = ctx.dataset.data.reduce(function(a,b){ return a+(b||0); }, 0);
+              const pct   = total > 0 ? ((ctx.parsed / total) * 100).toFixed(1) + '%' : '0%';
+              return ' ' + ctx.label + ': ' + fmt(ctx.parsed) + ' (' + pct + ')';
+            }
+          }
+        }
+      }
+    };
+  }
+
+  /* ── Opções barra (compartilhado) ── */
+  function barOpts(extra) {
+    return Object.assign({
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        barLabel: {},
+        legend: { display: false },
+        tooltip: { callbacks: { label: function(ctx){ return ' ' + fmt(ctx.parsed.y); } } }
+      },
+      scales: {
+        x: { grid: { display: false }, border: { display: false } },
+        y: { grid: { color: '#f0f3f8' }, border: { display: false }, ticks: { callback: function(v){ return fmt(v); } } }
+      },
+      layout: { padding: { top: 20 } }
+    }, extra || {});
+  }
+
+  /* ── Chips de filtros ativos ── */
+  function atualizarChips() {
+    const bar      = document.getElementById('activeFilters');
+    const chipAss  = document.getElementById('chipAssessor');
+    const chipCli  = document.getElementById('chipCliente');
+    const ehAdmin  = perfilUsuario && perfilUsuario.role === 'admin';
+
+    // Chip de assessor: só aparece para admins (assessores têm filtro automático)
+    const mostrarAss = ehAdmin && assessorAtual !== 'todos';
+    const mostrarCli = clienteAtual !== 'todos';
+
+    bar.classList.toggle('visible', mostrarAss || mostrarCli);
+
+    if (mostrarAss) {
+      chipAss.style.display = '';
+      document.getElementById('chipAssessorLabel').textContent = 'Assessor: ' + assessorAtual.split(' ')[0];
+    } else {
+      chipAss.style.display = 'none';
+    }
+    if (mostrarCli) {
+      chipCli.style.display = '';
+      document.getElementById('chipClienteLabel').textContent = 'Cliente: ' + clienteAtual;
+    } else {
+      chipCli.style.display = 'none';
+    }
+  }
+
+  function limparFiltro(tipo) {
+    const ehAdmin = perfilUsuario && perfilUsuario.role === 'admin';
+    if (tipo === 'assessor' && ehAdmin) {
+      assessorAtual = 'todos';
+      clienteAtual  = 'todos';
+      evolucaoClienteAtual  = null;
+      categoriaClienteAtual = null;
+      document.getElementById('filtroAssessor').value = 'todos';
+      document.getElementById('filtroCliente').value  = 'todos';
+    } else {
+      clienteAtual = 'todos';
+      evolucaoClienteAtual  = null;
+      categoriaClienteAtual = null;
+      document.getElementById('filtroCliente').value = 'todos';
+    }
+    if (dadosCompletos) renderizar(dadosCompletos);
+  }
+
+  function limparTodosFiltros() {
+    const ehAdmin = perfilUsuario && perfilUsuario.role === 'admin';
+    if (ehAdmin) {
+      assessorAtual = 'todos';
+      document.getElementById('filtroAssessor').value = 'todos';
+    }
+    clienteAtual = 'todos';
+    evolucaoClienteAtual  = null;
+    categoriaClienteAtual = null;
+    document.getElementById('filtroCliente').value = 'todos';
+    if (dadosCompletos) renderizar(dadosCompletos);
+  }
+
+  /* ── Filtro de período ── */
+  function setFilter(btn, period) {
+    document.querySelectorAll('.filter-btn').forEach(function(b){ b.classList.remove('active'); });
+    btn.classList.add('active');
+    periodoAtual = period;
+    carregarDados(period);
+  }
+
+  /* ── Sidebar / Dropdown ── */
+  function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('open');
+    document.getElementById('overlay').classList.toggle('open');
+  }
+  function closeSidebar() {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('overlay').classList.remove('open');
+  }
+  function toggleDropdown() { document.getElementById('userChip').classList.toggle('open'); }
+  document.addEventListener('click', function(e) {
+    const chip = document.getElementById('userChip');
+    if (chip && !chip.contains(e.target)) chip.classList.remove('open');
+  });
+</script>
+</body>
+</html>

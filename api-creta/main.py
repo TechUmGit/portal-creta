@@ -504,13 +504,13 @@ async def posicoes_endpoint(
         ),
         clientes AS (
             SELECT
-                TRIM(CAST(Conta AS STRING)) AS Conta,
-                MAX(Cliente)        AS cliente,
+                Conta AS conta_num,  -- INT64, usado no JOIN
+                MAX(Cliente)         AS cliente,
                 MAX(Assessor_Manual) AS assessor
             FROM {TABLE}
             WHERE Cliente IS NOT NULL AND Cliente != ''
             {assessor_filter}
-            GROUP BY TRIM(CAST(Conta AS STRING))
+            GROUP BY Conta
         ),
         suit AS (
             SELECT Conta, Perfil
@@ -527,7 +527,7 @@ async def posicoes_endpoint(
             ud.max_data AS data_referencia
         FROM posicao_base p
         CROSS JOIN ultima_data ud
-        {join_type} JOIN clientes c  ON p.Conta = c.Conta
+        {join_type} JOIN clientes c  ON SAFE_CAST(TRIM(p.Conta) AS INT64) = c.conta_num
         LEFT  JOIN suit             ON p.Conta = suit.Conta
         ORDER BY COALESCE(c.cliente, p.Conta), p.Classe
     """

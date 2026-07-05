@@ -13,10 +13,10 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from fastapi import FastAPI, Depends, HTTPException, Header, Query, status
+from fastapi import FastAPI, Depends, HTTPException, Header, Query, UploadFile, File, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from google.cloud import bigquery
+from google.cloud import bigquery, storage as gcs
 from google.cloud.bigquery import ScalarQueryParameter, QueryJobConfig
 import firebase_admin
 from firebase_admin import credentials, auth as firebase_auth, firestore as fb_firestore
@@ -41,6 +41,11 @@ TABLE          = f"`{GCP_PROJECT}.{DATASET}.receitas_para_repasse`"
 TABLE_POSICAO     = f"`{GCP_PROJECT}.{DATASET}.posicao_das_contas`"
 TABLE_SUITABILITY = f"`{GCP_PROJECT}.{DATASET}.suitability_contas`"
 TABLE_EXCECOES    = f"`{GCP_PROJECT}.{DATASET}.conta_assessor_excecoes`"
+
+# ── GCS ───────────────────────────────────────────────────────────────────────
+GCS_BUCKET  = os.getenv("GCS_BUCKET", "creta-btg-pipeline")
+GCS_PREFIX  = "entradas/"
+gcs_client  = gcs.Client(project=GCP_PROJECT)
 
 # ── Cache simples em memória ──────────────────────────────────────────────────
 # Evita consultar o BigQuery a cada requisição.
@@ -714,6 +719,80 @@ async def deletar_excecao(
             del _cache[k]
 
     return {"ok": True}
+
+
+# ── Pipeline: gestão de arquivos no GCS ──────────────────────────────────────
+
+@app.get("/api/pipeline/arquivos")
+async def listar_arquivos(
+    authorization: Optional[str] = Header(default=None),
+):
+    """Lista arquivos na pasta entradas/ do bucket — apenas admins."""
+    token_data = await verificar_token(authorization)
+    if token_data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Apenas administradores.")
+
+    bucket = gcs_client.bucket(GCS_BUCKET)
+    blobs  = bucket.list_blobs(prefix=GCS_PREFIX)
+
+    arquivos = []
+    for blob in blobs:
+        nome = blob.name.replace(GCS_PREFIX, "")
+        if not nome:
+            continue
+        arquivos.append({
+            "nome":        nome,
+            "tamanho_kb":  round(blob.size / 1024, 1),
+            "atualizado":  blob.updated.isoformat() if blob.updated else None,
+        })
+
+    arquivos.sort(key=lambda x: x["nome"])
+    return {"arquivos": arquivos}
+
+
+@app.post("/api/pipeline/upload")
+async def upload_arquivo(
+    file: UploadFile = File(...),
+    authorization: Optional[str] = Header(default=None),
+):
+    """Faz upload de um arquivo para entradas/ no bucket — apenas admins."""
+    token_data = await verificar_token(authorization)
+    if token_data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Apenas administradores.")
+
+    if not file.filename.endswith(".xlsx"):
+        raise HTTPException(status_code=400, detail="Apenas arquivos .xlsx são aceitos.")
+
+    try:
+        bucket = gcs_client.bucket(GCS_BUCKET)
+        blob   = bucket.blob(f"{GCS_PREFIX}{file.filename}")
+        blob.upload_from_file(file.file, content_type=file.content_type or "application/octet-stream")
+        log.info(f"Upload GCS: {file.filename}")
+        return {"ok": True, "nome": file.filename}
+    except Exception as e:
+        log.error(f"Erro upload GCS: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/pipeline/arquivo")
+async def deletar_arquivo(
+    nome: str = Query(...),
+    authorization: Optional[str] = Header(default=None),
+):
+    """Remove um arquivo de entradas/ no bucket — apenas admins."""
+    token_data = await verificar_token(authorization)
+    if token_data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Apenas administradores.")
+
+    try:
+        bucket = gcs_client.bucket(GCS_BUCKET)
+        blob   = bucket.blob(f"{GCS_PREFIX}{nome}")
+        blob.delete()
+        log.info(f"Deletado GCS: {nome}")
+        return {"ok": True}
+    except Exception as e:
+        log.error(f"Erro delete GCS: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.delete("/api/cache")

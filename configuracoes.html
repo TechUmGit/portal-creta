@@ -109,6 +109,11 @@
     .td-criado  { font-size: 11px; color: #c0c8d8; }
     .btn-del { height: 30px; padding: 0 12px; background: none; border: 1px solid #fecaca; color: #dc2626; border-radius: 6px; font-size: 12px; font-family: inherit; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
     .btn-del:hover { background: #fee2e2; }
+    .btn-upload-label { display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 16px; background: #f4f6fb; border: 1px solid #e2e6ef; border-radius: 8px; font-size: 13px; font-weight: 500; color: #374151; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+    .btn-upload-label:hover { background: #eef3ff; border-color: #0bb5d5; }
+    .td-arquivo { font-size: 13px; color: #111827; font-weight: 500; }
+    .td-kb { font-size: 12px; color: #6b7280; text-align: right; }
+    .td-date { font-size: 12px; color: #9ca3af; white-space: nowrap; }
     .empty-state { padding: 60px; text-align: center; color: #9ca3af; font-size: 14px; }
 
     /* TOAST */
@@ -233,6 +238,61 @@
     <!-- Conteúdo admin -->
     <div id="adminContent" style="display:none">
 
+      <!-- ── ARQUIVOS DO PIPELINE ── -->
+      <div class="section-title">Arquivos do Pipeline</div>
+      <div class="section-desc">
+        Gerencie os arquivos Excel na pasta de entrada do bucket. O upload substitui automaticamente um arquivo existente com o mesmo nome.
+      </div>
+
+      <!-- Upload -->
+      <div class="card">
+        <div class="card-title">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#0bb5d5" stroke-width="2.5"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3"/></svg>
+          Upload de arquivo
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <label class="btn-upload-label" for="fileInput">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3"/></svg>
+            Escolher arquivo .xlsx
+          </label>
+          <input type="file" id="fileInput" accept=".xlsx" style="display:none" onchange="onFileSelected()">
+          <span id="fileNome" style="font-size:13px;color:#6b7280">Nenhum arquivo selecionado</span>
+          <button class="btn-add" id="btnUpload" onclick="uploadArquivo()" disabled>Enviar para bucket</button>
+        </div>
+        <div id="uploadProgress" style="display:none;margin-top:14px">
+          <div style="height:4px;background:#e8ebf2;border-radius:4px;overflow:hidden">
+            <div id="uploadBar" style="height:100%;width:0%;background:#0bb5d5;transition:width 0.3s"></div>
+          </div>
+          <div id="uploadMsg" style="font-size:12px;color:#9ca3af;margin-top:6px">Enviando...</div>
+        </div>
+      </div>
+
+      <!-- Lista de arquivos -->
+      <div class="table-card" style="margin-bottom:40px">
+        <div class="table-header">
+          <div class="table-title">Arquivos no bucket</div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <div class="table-count" id="arquivosCount">—</div>
+            <button class="btn-clear" onclick="carregarArquivos()" style="height:30px;font-size:12px">↻ Atualizar</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Nome do arquivo</th>
+                <th class="num">Tamanho</th>
+                <th>Última atualização</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="arquivosBody">
+              <tr><td colspan="4" class="empty-state">Carregando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="section-title">Exceções de Assessor</div>
       <div class="section-desc">
         Defina contas que devem ter um assessor diferente do padrão em um período específico.
@@ -354,8 +414,7 @@
       document.getElementById('acessoNegado').style.display = 'block';
     } else {
       document.getElementById('adminContent').style.display = 'block';
-      await carregarExcecoes();
-      await carregarAssessores();
+      await Promise.all([carregarArquivos(), carregarExcecoes(), carregarAssessores()]);
     }
   });
 
@@ -492,6 +551,106 @@
     } finally {
       btn.disabled    = false;
       btn.textContent = 'Adicionar exceção';
+    }
+  }
+
+  // ── Arquivos do Pipeline ──────────────────────────────────────────────────
+
+  let arquivoSelecionado = null;
+
+  function onFileSelected() {
+    const input = document.getElementById('fileInput');
+    const file  = input.files[0];
+    if (!file) return;
+    arquivoSelecionado = file;
+    document.getElementById('fileNome').textContent = file.name;
+    document.getElementById('btnUpload').disabled   = false;
+  }
+
+  async function carregarArquivos() {
+    const tbody = document.getElementById('arquivosBody');
+    tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Carregando...</td></tr>';
+    try {
+      const token = await getIdToken();
+      const res   = await fetch(`${API_URL}/api/pipeline/arquivos`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data  = await res.json();
+      const lista = data.arquivos || [];
+
+      document.getElementById('arquivosCount').textContent = `${lista.length} arquivo${lista.length !== 1 ? 's' : ''}`;
+
+      if (lista.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Nenhum arquivo no bucket.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = lista.map(a => `
+        <tr>
+          <td class="td-arquivo">📄 ${a.nome}</td>
+          <td class="td-kb">${a.tamanho_kb} KB</td>
+          <td class="td-date">${a.atualizado ? new Date(a.atualizado).toLocaleString('pt-BR') : '—'}</td>
+          <td><button class="btn-del" onclick="deletarArquivo('${a.nome.replace(/'/g, "\\'")}')">Remover</button></td>
+        </tr>
+      `).join('');
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="4" class="empty-state">Erro: ${err.message}</td></tr>`;
+    }
+  }
+
+  async function uploadArquivo() {
+    if (!arquivoSelecionado) return;
+    const btn      = document.getElementById('btnUpload');
+    const progress = document.getElementById('uploadProgress');
+    const bar      = document.getElementById('uploadBar');
+    const msg      = document.getElementById('uploadMsg');
+
+    btn.disabled           = true;
+    btn.textContent        = 'Enviando...';
+    progress.style.display = 'block';
+    bar.style.width        = '30%';
+    msg.textContent        = `Enviando ${arquivoSelecionado.name}...`;
+
+    try {
+      const token    = await getIdToken();
+      const formData = new FormData();
+      formData.append('file', arquivoSelecionado);
+
+      const res = await fetch(`${API_URL}/api/pipeline/upload`, {
+        method:  'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body:    formData
+      });
+      bar.style.width = '100%';
+      if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Erro ao enviar'); }
+
+      showToast(`${arquivoSelecionado.name} enviado com sucesso.`);
+      document.getElementById('fileInput').value      = '';
+      document.getElementById('fileNome').textContent = 'Nenhum arquivo selecionado';
+      arquivoSelecionado = null;
+      await carregarArquivos();
+    } catch (err) {
+      showToast(err.message, 'err');
+    } finally {
+      btn.disabled    = false;
+      btn.textContent = 'Enviar para bucket';
+      setTimeout(() => { progress.style.display = 'none'; bar.style.width = '0%'; }, 1500);
+    }
+  }
+
+  async function deletarArquivo(nome) {
+    if (!confirm(`Remover "${nome}" do bucket?`)) return;
+    try {
+      const token = await getIdToken();
+      const res   = await fetch(
+        `${API_URL}/api/pipeline/arquivo?nome=${encodeURIComponent(nome)}`,
+        { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Erro ao remover'); }
+      showToast(`"${nome}" removido.`);
+      await carregarArquivos();
+    } catch (err) {
+      showToast(err.message, 'err');
     }
   }
 

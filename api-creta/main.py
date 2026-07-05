@@ -13,8 +13,9 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from fastapi import FastAPI, Depends, HTTPException, Header, status
+from fastapi import FastAPI, Depends, HTTPException, Header, Query, status
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 from google.cloud import bigquery
 from google.cloud.bigquery import ScalarQueryParameter, QueryJobConfig
 import firebase_admin
@@ -37,8 +38,9 @@ GCP_PROJECT    = os.getenv("GCP_PROJECT", "creta-btg")
 bq = bigquery.Client(project=GCP_PROJECT)
 DATASET        = os.getenv("BQ_DATASET",  "dados_crus")
 TABLE          = f"`{GCP_PROJECT}.{DATASET}.receitas_para_repasse`"
-TABLE_POSICAO    = f"`{GCP_PROJECT}.{DATASET}.posicao_das_contas`"
+TABLE_POSICAO     = f"`{GCP_PROJECT}.{DATASET}.posicao_das_contas`"
 TABLE_SUITABILITY = f"`{GCP_PROJECT}.{DATASET}.suitability_contas`"
+TABLE_EXCECOES    = f"`{GCP_PROJECT}.{DATASET}.conta_assessor_excecoes`"
 
 # ── Cache simples em memória ──────────────────────────────────────────────────
 # Evita consultar o BigQuery a cada requisição.
@@ -70,7 +72,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
 
@@ -611,6 +613,107 @@ async def posicao(
 
     cache_set(cache_key, resultado)
     return resultado
+
+
+# ── Modelo para criação de exceção ───────────────────────────────────────────
+class ExcecaoBody(BaseModel):
+    conta:       int
+    assessor:    str
+    data_inicio: str            # "YYYY-MM-DD"
+    data_fim:    Optional[str] = None   # "YYYY-MM-DD" ou None
+    motivo:      Optional[str] = None
+
+
+@app.get("/api/config/excecoes")
+async def listar_excecoes(
+    authorization: Optional[str] = Header(default=None),
+):
+    """Lista todas as exceções de assessor — apenas admins."""
+    token_data = await verificar_token(authorization)
+    if token_data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Apenas administradores.")
+
+    sql = f"""
+        SELECT
+            Conta,
+            Assessor,
+            FORMAT_DATE('%Y-%m-%d', DataInicio) AS DataInicio,
+            FORMAT_DATE('%Y-%m-%d', DataFim)    AS DataFim,
+            COALESCE(Motivo, '')                AS Motivo,
+            FORMAT_DATETIME('%Y-%m-%dT%H:%M:%S', DataCriacao) AS DataCriacao,
+            COALESCE(CriadoPor, '')             AS CriadoPor
+        FROM {TABLE_EXCECOES}
+        ORDER BY DataInicio DESC
+    """
+    rows = run_query(sql)
+    return {"excecoes": rows}
+
+
+@app.post("/api/config/excecoes")
+async def criar_excecao(
+    body: ExcecaoBody,
+    authorization: Optional[str] = Header(default=None),
+):
+    """Cria uma nova exceção de assessor — apenas admins."""
+    token_data = await verificar_token(authorization)
+    if token_data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Apenas administradores.")
+
+    email = token_data.get("email", "")
+
+    data_fim_expr = f"DATE('{body.data_fim}')" if body.data_fim else "NULL"
+    motivo_expr   = f"'{body.motivo.replace(chr(39), chr(39)*2)}'" if body.motivo else "NULL"
+    assessor_esc  = body.assessor.replace("'", "''")
+
+    sql = f"""
+        INSERT INTO {TABLE_EXCECOES}
+            (Conta, Assessor, DataInicio, DataFim, Motivo, DataCriacao, CriadoPor)
+        VALUES
+            ({body.conta}, '{assessor_esc}', DATE('{body.data_inicio}'),
+             {data_fim_expr}, {motivo_expr},
+             CURRENT_DATETIME(), '{email}')
+    """
+    try:
+        bq.query(sql).result()
+    except Exception as e:
+        log.error(f"Erro ao criar exceção: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+    # Invalida cache relacionado
+    for k in list(_cache.keys()):
+        if "posicoes" in k or "receitas" in k:
+            del _cache[k]
+
+    return {"ok": True}
+
+
+@app.delete("/api/config/excecoes")
+async def deletar_excecao(
+    conta:       int = Query(...),
+    data_inicio: str = Query(...),   # "YYYY-MM-DD"
+    authorization: Optional[str] = Header(default=None),
+):
+    """Remove uma exceção pelo par (Conta, DataInicio) — apenas admins."""
+    token_data = await verificar_token(authorization)
+    if token_data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Apenas administradores.")
+
+    sql = f"""
+        DELETE FROM {TABLE_EXCECOES}
+        WHERE Conta = {conta}
+          AND DataInicio = DATE('{data_inicio}')
+    """
+    try:
+        bq.query(sql).result()
+    except Exception as e:
+        log.error(f"Erro ao deletar exceção: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+    for k in list(_cache.keys()):
+        if "posicoes" in k or "receitas" in k:
+            del _cache[k]
+
+    return {"ok": True}
 
 
 @app.delete("/api/cache")

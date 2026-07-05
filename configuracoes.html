@@ -114,6 +114,10 @@
     .td-arquivo { font-size: 13px; color: #111827; font-weight: 500; }
     .td-kb { font-size: 12px; color: #6b7280; text-align: right; }
     .td-date { font-size: 12px; color: #9ca3af; white-space: nowrap; }
+    .table-wrap-scroll { max-height: 360px; overflow-y: auto; }
+    .btn-dl { height: 30px; padding: 0 12px; background: none; border: 1px solid #bfdbfe; color: #1d4ed8; border-radius: 6px; font-size: 12px; font-family: inherit; cursor: pointer; transition: all 0.15s; white-space: nowrap; margin-right: 6px; }
+    .btn-dl:hover { background: #eff6ff; }
+    .td-actions { white-space: nowrap; }
     .empty-state { padding: 60px; text-align: center; color: #9ca3af; font-size: 14px; }
 
     /* TOAST */
@@ -276,7 +280,7 @@
             <button class="btn-clear" onclick="carregarArquivos()" style="height:30px;font-size:12px">↻ Atualizar</button>
           </div>
         </div>
-        <div class="table-wrap">
+        <div class="table-wrap table-wrap-scroll">
           <table>
             <thead>
               <tr>
@@ -338,9 +342,14 @@
       <div class="table-card">
         <div class="table-header">
           <div class="table-title">Exceções cadastradas</div>
-          <div class="table-count" id="tabelaCount">—</div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <div class="table-count" id="tabelaCount">—</div>
+            <button class="btn-dl" onclick="downloadExcecoesExcel()" style="margin-right:0">
+              ⬇ Exportar Excel
+            </button>
+          </div>
         </div>
-        <div class="table-wrap">
+        <div class="table-wrap table-wrap-scroll">
           <table>
             <thead>
               <tr>
@@ -585,14 +594,19 @@
         return;
       }
 
-      tbody.innerHTML = lista.map(a => `
+      tbody.innerHTML = lista.map(a => {
+        const n = a.nome.replace(/'/g, "\\'");
+        return `
         <tr>
           <td class="td-arquivo">📄 ${a.nome}</td>
           <td class="td-kb">${a.tamanho_kb} KB</td>
           <td class="td-date">${a.atualizado ? new Date(a.atualizado).toLocaleString('pt-BR') : '—'}</td>
-          <td><button class="btn-del" onclick="deletarArquivo('${a.nome.replace(/'/g, "\\'")}')">Remover</button></td>
-        </tr>
-      `).join('');
+          <td class="td-actions">
+            <button class="btn-dl"  onclick="downloadArquivo('${n}')">⬇ Baixar</button>
+            <button class="btn-del" onclick="deletarArquivo('${n}')">Remover</button>
+          </td>
+        </tr>`;
+      }).join('');
     } catch (err) {
       tbody.innerHTML = `<tr><td colspan="4" class="empty-state">Erro: ${err.message}</td></tr>`;
     }
@@ -635,6 +649,41 @@
       btn.disabled    = false;
       btn.textContent = 'Enviar para bucket';
       setTimeout(() => { progress.style.display = 'none'; bar.style.width = '0%'; }, 1500);
+    }
+  }
+
+  async function downloadArquivo(nome) {
+    try {
+      const token = await getIdToken();
+      const res   = await fetch(
+        `${API_URL}/api/pipeline/arquivo/download?nome=${encodeURIComponent(nome)}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Erro ao baixar'); }
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href = url; a.download = nome; a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      showToast(err.message, 'err');
+    }
+  }
+
+  async function downloadExcecoesExcel() {
+    try {
+      const token = await getIdToken();
+      const res   = await fetch(`${API_URL}/api/config/excecoes/excel`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Erro ao exportar'); }
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href = url; a.download = 'excecoes_assessor.xlsx'; a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      showToast(err.message, 'err');
     }
   }
 

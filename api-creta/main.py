@@ -7,13 +7,16 @@ Endpoints:
   GET /health                     → health check
 """
 
+import io
 import os
 import time
 import logging
 from datetime import datetime
 from typing import Optional
+import pandas as pd
 
 from fastapi import FastAPI, Depends, HTTPException, Header, Query, UploadFile, File, status
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from google.cloud import bigquery, storage as gcs
@@ -793,6 +796,72 @@ async def deletar_arquivo(
     except Exception as e:
         log.error(f"Erro delete GCS: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/pipeline/arquivo/download")
+async def download_arquivo(
+    nome: str = Query(...),
+    authorization: Optional[str] = Header(default=None),
+):
+    """Faz download de um arquivo do bucket — apenas admins."""
+    token_data = await verificar_token(authorization)
+    if token_data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Apenas administradores.")
+
+    try:
+        bucket = gcs_client.bucket(GCS_BUCKET)
+        blob   = bucket.blob(f"{GCS_PREFIX}{nome}")
+        buffer = io.BytesIO()
+        blob.download_to_file(buffer)
+        buffer.seek(0)
+        return StreamingResponse(
+            buffer,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f'attachment; filename="{nome}"'},
+        )
+    except Exception as e:
+        log.error(f"Erro download GCS: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/config/excecoes/excel")
+async def excecoes_excel(
+    authorization: Optional[str] = Header(default=None),
+):
+    """Exporta todas as exceções como arquivo Excel — apenas admins."""
+    token_data = await verificar_token(authorization)
+    if token_data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Apenas administradores.")
+
+    sql = f"""
+        SELECT
+            Conta,
+            Assessor,
+            FORMAT_DATE('%d/%m/%Y', DataInicio) AS DataInicio,
+            FORMAT_DATE('%d/%m/%Y', DataFim)    AS DataFim,
+            COALESCE(Motivo, '')                AS Motivo,
+            COALESCE(CriadoPor, '')             AS CriadoPor,
+            FORMAT_DATETIME('%d/%m/%Y %H:%M', DataCriacao) AS DataCriacao
+        FROM {TABLE_EXCECOES}
+        ORDER BY DataInicio DESC
+    """
+    rows = run_query(sql)
+    df   = pd.DataFrame(rows)
+
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Exceções")
+        ws = writer.sheets["Exceções"]
+        for col in ws.columns:
+            max_len = max(len(str(cell.value or "")) for cell in col) + 4
+            ws.column_dimensions[col[0].column_letter].width = min(max_len, 50)
+    buffer.seek(0)
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="excecoes_assessor.xlsx"'},
+    )
 
 
 @app.delete("/api/cache")

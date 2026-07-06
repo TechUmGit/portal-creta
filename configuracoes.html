@@ -18,9 +18,7 @@
 
     /* TOPBAR */
     .topbar { height: 60px; background: #fff; border-bottom: 1px solid #e8ebf2; display: flex; align-items: center; padding: 0 24px; gap: 16px; position: fixed; top: 0; left: 0; right: 0; z-index: 200; }
-    .topbar-logo { font-size: 20px; font-weight: 900; letter-spacing: -0.03em; color: #0c1a35; white-space: nowrap; text-decoration: none; flex-shrink: 0; }
-    .topbar-logo span { color: #0bb5d5; }
-    .topbar-logo small { font-size: 9px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(0,0,0,0.3); display: block; line-height: 1; margin-top: 1px; }
+    .topbar-logo { text-decoration: none; flex-shrink: 0; display: flex; align-items: center; }
     .topbar-divider { width: 1px; height: 28px; background: #e2e6ef; margin: 0 4px; flex-shrink: 0; }
     .search-bar { flex: 1; max-width: 480px; display: flex; align-items: center; gap: 10px; background: #f4f6fb; border: 1px solid #e8ebf2; border-radius: 8px; padding: 0 14px; height: 38px; }
     .search-bar svg { color: #a0aec0; flex-shrink: 0; }
@@ -149,7 +147,7 @@
       <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
     </svg>
   </button>
-  <a href="dashboard.html" class="topbar-logo">CR<span>E</span>TA<small>Capital · BTG Pactual</small></a>
+  <a href="dashboard.html" class="topbar-logo"><img src="logo-creta.svg" alt="Creta Capital" style="height:32px;display:block;"></a>
   <div class="topbar-divider"></div>
   <div class="search-bar">
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>

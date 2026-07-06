@@ -21,9 +21,7 @@
 
     /* ── TOPBAR ── */
     .topbar { height: 60px; background: #fff; border-bottom: 1px solid #e8ebf2; display: flex; align-items: center; padding: 0 24px; gap: 16px; position: fixed; top: 0; left: 0; right: 0; z-index: 200; }
-    .topbar-logo { font-size: 20px; font-weight: 900; letter-spacing: -0.03em; color: #0c1a35; white-space: nowrap; text-decoration: none; flex-shrink: 0; }
-    .topbar-logo span { color: #0bb5d5; }
-    .topbar-logo small { font-size: 9px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(0,0,0,0.3); display: block; line-height: 1; margin-top: 1px; }
+    .topbar-logo { text-decoration: none; flex-shrink: 0; display: flex; align-items: center; }
     .topbar-divider { width: 1px; height: 28px; background: #e2e6ef; margin: 0 4px; flex-shrink: 0; }
     .topbar-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
     .icon-btn { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: none; border: none; cursor: pointer; color: #6b7280; transition: background 0.15s; }
@@ -160,10 +158,7 @@
   <button class="icon-btn" id="menu-toggle" aria-label="Menu">
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
   </button>
-  <a class="topbar-logo" href="dashboard.html">
-    Creta<span>Capital</span>
-    <small>Portal Interno</small>
-  </a>
+  <a class="topbar-logo" href="dashboard.html"><img src="logo-creta.svg" alt="Creta Capital" style="height:32px;display:block;"></a>
   <div class="topbar-divider"></div>
   <div class="topbar-actions">
     <button class="user-chip" id="user-chip">
@@ -254,6 +249,13 @@
     <button class="filter-btn active" data-periodo="12m">12M</button>
     <button class="filter-btn" data-periodo="6m">6M</button>
     <button class="filter-btn" data-periodo="all">Tudo</button>
+    <button class="filter-btn" data-periodo="custom">Personalizado</button>
+    <div id="custom-period-wrap" style="display:none;align-items:center;gap:8px;margin-left:4px;">
+      <input type="date" id="custom-start" style="padding:5px 8px;border:1.5px solid #e8ebf2;border-radius:6px;font-size:12px;font-family:inherit;color:#374151;background:#fff;cursor:pointer;">
+      <span style="font-size:12px;color:#9ca3af;">até</span>
+      <input type="date" id="custom-end" style="padding:5px 8px;border:1.5px solid #e8ebf2;border-radius:6px;font-size:12px;font-family:inherit;color:#374151;background:#fff;cursor:pointer;">
+      <button onclick="aplicarCustom()" style="padding:5px 12px;background:#0c1a35;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">Aplicar</button>
+    </div>
     <div class="filter-divider" id="filtro-assessor-sep" style="display:none"></div>
     <div class="filter-group" id="filtro-assessor-wrap" style="display:none">
       <span class="filter-label">Assessor</span>
@@ -470,6 +472,9 @@
     document.getElementById('status-bar').classList.add('visible');
     try {
       let url = `${API_BASE}/api/relatorio/historico?periodo=${currentPer}`;
+      if (currentPer === 'custom' && customStart && customEnd) {
+        url += `&start_date=${customStart}&end_date=${customEnd}`;
+      }
       if (currentAss) url += `&assessor=${encodeURIComponent(currentAss)}`;
 
       const res = await fetch(url, { headers: { Authorization: `Bearer ${idToken}` } });
@@ -740,14 +745,32 @@
   }
 
   /* ── FILTROS: botões de período ── */
+  let customStart = null, customEnd = null;
+
   document.querySelectorAll('.filter-btn[data-periodo]').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.filter-btn[data-periodo]').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       currentPer = btn.dataset.periodo;
-      carregarDados();
+      const wrap = document.getElementById('custom-period-wrap');
+      if (currentPer === 'custom') {
+        wrap.style.display = 'flex';
+      } else {
+        wrap.style.display = 'none';
+        customStart = null; customEnd = null;
+        carregarDados();
+      }
     });
   });
+
+  function aplicarCustom() {
+    const s = document.getElementById('custom-start').value;
+    const e = document.getElementById('custom-end').value;
+    if (!s || !e) { alert('Selecione as duas datas.'); return; }
+    if (s > e) { alert('A data inicial deve ser anterior à data final.'); return; }
+    customStart = s; customEnd = e;
+    carregarDados();
+  }
 
   /* ── FILTRO: assessor ── */
   document.getElementById('filtro-assessor').addEventListener('change', e => {

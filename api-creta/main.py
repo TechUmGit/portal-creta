@@ -207,8 +207,11 @@ async def verificar_token(authorization: Optional[str] = None) -> dict:
     return decoded
 
 # ── Helpers SQL ───────────────────────────────────────────────────────────────
-def where_periodo(periodo: str) -> str:
+def where_periodo(periodo: str, start_date: str = None, end_date: str = None) -> str:
     """Gera cláusula WHERE para o filtro de período."""
+    if periodo == "custom" and start_date:
+        fim = f"DATE '{end_date}'" if end_date else "CURRENT_DATE()"
+        return f"DATE(Data_De_Referencia) >= DATE '{start_date}' AND DATE(Data_De_Referencia) <= {fim}"
     mapa = {
         "3m":  "DATE_SUB(CURRENT_DATE(), INTERVAL 3  MONTH)",
         "6m":  "DATE_SUB(CURRENT_DATE(), INTERVAL 6  MONTH)",
@@ -257,6 +260,8 @@ def health():
 @app.get("/api/receitas")
 async def receitas(
     periodo: str = "12m",
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     authorization: Optional[str] = Header(default=None),
 ):
     """
@@ -274,12 +279,12 @@ async def receitas(
     is_admin        = role == "admin"
     forced_assessor = None if is_admin else assessor_name
 
-    cache_key = f"receitas:{periodo}:{forced_assessor or 'all'}"
+    cache_key = f"receitas:{periodo}:{start_date or ''}:{end_date or ''}:{forced_assessor or 'all'}"
     cached = cache_get(cache_key)
     if cached:
         return cached
 
-    where = where_periodo(periodo)
+    where = where_periodo(periodo, start_date, end_date)
 
     # Filtro extra para não-admins
     qp: list = []
@@ -1084,6 +1089,8 @@ async def assessores_endpoint(
 @app.get("/api/relatorio/historico")
 async def relatorio_historico(
     periodo: str = "12m",
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     assessor: Optional[str] = None,
     authorization: Optional[str] = Header(default=None),
 ):
@@ -1101,7 +1108,7 @@ async def relatorio_historico(
 
     filter_assessor = (assessor.strip() if assessor else None) if is_admin else assessor_name
 
-    cache_key = f"relatorio:{periodo}:{filter_assessor or 'all'}"
+    cache_key = f"relatorio:{periodo}:{start_date or ''}:{end_date or ''}:{filter_assessor or 'all'}"
     cached = cache_get(cache_key)
     if cached:
         return cached
@@ -1112,7 +1119,12 @@ async def relatorio_historico(
         "12m": "DATE_SUB(CURRENT_DATE(), INTERVAL 12 MONTH)",
         "all": "DATE '2010-01-01'",
     }
-    data_inicio = mapa_periodo.get(periodo, mapa_periodo["12m"])
+    if periodo == "custom" and start_date:
+        data_inicio = f"DATE '{start_date}'"
+        data_fim    = f"DATE '{end_date}'" if end_date else "CURRENT_DATE()"
+    else:
+        data_inicio = mapa_periodo.get(periodo, mapa_periodo["12m"])
+        data_fim    = "CURRENT_DATE()"
 
     qp = [ScalarQueryParameter("assessor", "STRING", filter_assessor)] if filter_assessor else []
 
@@ -1147,6 +1159,7 @@ async def relatorio_historico(
             FROM {TABLE_POSICAO} p
             {contas_join}
             WHERE DATE(p.Data) >= {data_inicio}
+              AND DATE(p.Data) <= {data_fim}
               AND p.Classe != 'Aluguel de Ações'
             GROUP BY DATE(p.Data)
         )
@@ -1169,6 +1182,7 @@ async def relatorio_historico(
             COUNT(*) AS novas_contas
         FROM primeira_aparicao
         WHERE primeira_data >= {data_inicio}
+          AND primeira_data <= {data_fim}
         GROUP BY mes
         ORDER BY mes
     """
@@ -1184,6 +1198,7 @@ async def relatorio_historico(
                 ROUND(SUM(Repasse_Total_liquido), 2) AS repasse_liquido
             FROM {TABLE}
             WHERE DATE(Data_De_Referencia) >= {data_inicio}
+              AND DATE(Data_De_Referencia) <= {data_fim}
               {assessor_where}
             GROUP BY mes
         ),
@@ -1195,6 +1210,7 @@ async def relatorio_historico(
                 SELECT DATE(p2.Data) AS dia_data, SUM(p2.ValorBruto) AS auc_dia
                 FROM {TABLE_POSICAO} p2
                 WHERE DATE(p2.Data) >= {data_inicio}
+                  AND DATE(p2.Data) <= {data_fim}
                   AND p2.Classe != 'Aluguel de Ações'
                 GROUP BY DATE(p2.Data)
             ) p

@@ -1168,7 +1168,7 @@ async def relatorio_historico(
         ORDER BY dia
     """
 
-    # ── 2. Novas contas por mês (primeira aparição na base) ───────────────────
+    # ── 2. Novas contas por mês (primeira aparição na posicao_das_contas) ───────
     sql_novas = f"""
         WITH{contas_cte}
         primeira_aparicao AS (

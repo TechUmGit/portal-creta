@@ -46,7 +46,8 @@ DATASET        = os.getenv("BQ_DATASET",  "dados_crus")
 TABLE          = f"`{GCP_PROJECT}.{DATASET}.receitas_para_repasse`"
 TABLE_POSICAO     = f"`{GCP_PROJECT}.{DATASET}.posicao_das_contas`"
 TABLE_SUITABILITY = f"`{GCP_PROJECT}.{DATASET}.suitability_contas`"
-TABLE_EXCECOES    = f"`{GCP_PROJECT}.{DATASET}.conta_assessor_excecoes`"
+TABLE_EXCECOES      = f"`{GCP_PROJECT}.{DATASET}.conta_assessor_excecoes`"
+TABLE_ASSESSOR_BASE = f"`{GCP_PROJECT}.{DATASET}.conta_assessor_base`"
 
 # ── GCS ───────────────────────────────────────────────────────────────────────
 GCS_BUCKET  = os.getenv("GCS_BUCKET", "creta-btg-pipeline")
@@ -223,6 +224,28 @@ def run_query(sql: str) -> list[dict]:
     log.info(f"BQ query: {sql[:120]}...")
     rows = bq.query(sql).result()
     return [dict(row) for row in rows]
+
+def _mapa_assessor_sq() -> str:
+    """
+    Subquery SQL que devolve (Conta INT64, Assessor STRING) para todas as contas.
+    Prioridade: exceções ativas (conta_assessor_excecoes) >
+                base mensal mais recente (conta_assessor_base).
+    Pode ser usada inline como subquery em qualquer JOIN ou WHERE.
+    """
+    return f"""(
+        SELECT Conta, Assessor
+        FROM (
+            SELECT e.Conta, e.Assessor, 1 AS prioridade
+            FROM {TABLE_EXCECOES} e
+            WHERE e.DataInicio <= CURRENT_DATE()
+              AND (e.DataFim IS NULL OR e.DataFim >= CURRENT_DATE())
+            UNION ALL
+            SELECT b.Conta, b.Assessor, 2 AS prioridade
+            FROM {TABLE_ASSESSOR_BASE} b
+            WHERE b.MesRef = (SELECT MAX(MesRef) FROM {TABLE_ASSESSOR_BASE})
+        )
+        QUALIFY ROW_NUMBER() OVER (PARTITION BY Conta ORDER BY prioridade) = 1
+    )"""
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
@@ -554,12 +577,11 @@ async def posicoes_endpoint(
         return cached
 
     qp = []
-    assessor_filter = ""
-    join_type = "LEFT"
     if forced_assessor:
-        assessor_filter = "AND TRIM(Assessor_Manual) = @assessor"
         qp.append(ScalarQueryParameter("assessor", "STRING", forced_assessor.strip()))
-        join_type = "INNER"  # só contas do assessor aparecem
+        ma_join = f"INNER JOIN {_mapa_assessor_sq()} ma ON SAFE_CAST(TRIM(p.Conta) AS INT64) = ma.Conta AND ma.Assessor = @assessor"
+    else:
+        ma_join = f"LEFT JOIN {_mapa_assessor_sq()} ma ON SAFE_CAST(TRIM(p.Conta) AS INT64) = ma.Conta"
 
     sql = f"""
         WITH ultima_data AS (
@@ -568,21 +590,18 @@ async def posicoes_endpoint(
         ),
         posicao_base AS (
             SELECT
-                TRIM(p.Conta)  AS Conta,
+                TRIM(p.Conta) AS Conta,
                 p.Classe,
                 ROUND(SUM(p.ValorBruto), 2) AS auc
             FROM {TABLE_POSICAO} p
             JOIN ultima_data ON DATE(p.Data) = ultima_data.max_data
+            WHERE p.Classe != 'Aluguel de Ações'
             GROUP BY TRIM(p.Conta), p.Classe
         ),
-        clientes AS (
-            SELECT
-                Conta AS conta_num,  -- INT64, usado no JOIN
-                MAX(Cliente)         AS cliente,
-                MAX(Assessor_Manual) AS assessor
+        nomes AS (
+            SELECT Conta AS conta_num, MAX(Cliente) AS cliente
             FROM {TABLE}
             WHERE Cliente IS NOT NULL AND Cliente != ''
-            {assessor_filter}
             GROUP BY Conta
         ),
         suit AS (
@@ -592,17 +611,18 @@ async def posicoes_endpoint(
         )
         SELECT
             p.Conta,
-            COALESCE(c.cliente,  '')           AS cliente,
-            COALESCE(c.assessor, '')           AS assessor,
+            COALESCE(n.cliente,  '')            AS cliente,
+            COALESCE(ma.Assessor, '')           AS assessor,
             COALESCE(suit.Perfil, 'Sem perfil') AS perfil,
             p.Classe,
             p.auc,
             ud.max_data AS data_referencia
         FROM posicao_base p
         CROSS JOIN ultima_data ud
-        {join_type} JOIN clientes c  ON SAFE_CAST(TRIM(p.Conta) AS INT64) = c.conta_num
-        LEFT  JOIN suit             ON p.Conta = suit.Conta
-        ORDER BY COALESCE(c.cliente, p.Conta), p.Classe
+        {ma_join}
+        LEFT JOIN nomes n  ON SAFE_CAST(TRIM(p.Conta) AS INT64) = n.conta_num
+        LEFT JOIN suit     ON p.Conta = suit.Conta
+        ORDER BY COALESCE(n.cliente, p.Conta), p.Classe
     """
 
     log.info(f"BQ posicoes: assessor={forced_assessor or 'todos'}")
@@ -661,10 +681,10 @@ async def opcoes_endpoint(
         qp.append(ScalarQueryParameter("assessor", "STRING", assessor_name.strip()))
         join_part = f"""
             INNER JOIN (
-                SELECT DISTINCT CAST(Conta AS STRING) AS cnt
-                FROM {TABLE}
-                WHERE TRIM(Assessor_Manual) = @assessor
-            ) r ON TRIM(p.Conta) = r.cnt
+                SELECT CAST(Conta AS STRING) AS cnt
+                FROM {_mapa_assessor_sq()}
+                WHERE Assessor = @assessor
+            ) ma ON TRIM(p.Conta) = ma.cnt
         """
     else:
         join_part = ""
@@ -762,6 +782,7 @@ async def posicao(
         FROM {TABLE_POSICAO} p
         CROSS JOIN ultima_data ud
         WHERE DATE(p.Data) = ud.max_data
+          AND p.Classe != 'Aluguel de Ações'
         GROUP BY ud.max_data
     """
 
@@ -847,9 +868,9 @@ async def criar_excecao(
         log.error(f"Erro ao criar exceção: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-    # Invalida cache relacionado
+    # Invalida cache relacionado (exceções afetam posicoes, relatorio, assessores e opcoes)
     for k in list(_cache.keys()):
-        if "posicoes" in k or "receitas" in k:
+        if any(x in k for x in ("posicoes", "receitas", "relatorio", "assessores", "opcoes")):
             del _cache[k]
 
     return {"ok": True}
@@ -1040,9 +1061,18 @@ async def assessores_endpoint(
         return cached
 
     sql = f"""
-        SELECT DISTINCT TRIM(Assessor_Manual) AS assessor
-        FROM {TABLE}
-        WHERE Assessor_Manual IS NOT NULL AND TRIM(Assessor_Manual) != ''
+        SELECT DISTINCT assessor
+        FROM (
+            SELECT Assessor AS assessor
+            FROM {TABLE_ASSESSOR_BASE}
+            WHERE MesRef = (SELECT MAX(MesRef) FROM {TABLE_ASSESSOR_BASE})
+            UNION DISTINCT
+            SELECT Assessor AS assessor
+            FROM {TABLE_EXCECOES}
+            WHERE DataInicio <= CURRENT_DATE()
+              AND (DataFim IS NULL OR DataFim >= CURRENT_DATE())
+        )
+        WHERE assessor IS NOT NULL AND assessor != ''
         ORDER BY assessor
     """
     rows = run_query(sql)
@@ -1086,15 +1116,15 @@ async def relatorio_historico(
 
     qp = [ScalarQueryParameter("assessor", "STRING", filter_assessor)] if filter_assessor else []
 
-    # CTEs que filtram posicao_das_contas por assessor (via join com receitas)
+    # CTEs que filtram posicao_das_contas por assessor (via conta_assessor_base + exceções)
     if filter_assessor:
         contas_cte = f"""
     contas_assessor AS (
-        SELECT DISTINCT Conta AS conta_num
-        FROM {TABLE}
-        WHERE TRIM(Assessor_Manual) = @assessor
+        SELECT Conta AS conta_num
+        FROM {_mapa_assessor_sq()}
+        WHERE Assessor = @assessor
     ),"""
-        contas_join = f"INNER JOIN contas_assessor ca ON SAFE_CAST(TRIM(p.Conta) AS INT64) = ca.conta_num"
+        contas_join = "INNER JOIN contas_assessor ca ON SAFE_CAST(TRIM(p.Conta) AS INT64) = ca.conta_num"
     else:
         contas_cte  = ""
         contas_join = ""
@@ -1117,6 +1147,7 @@ async def relatorio_historico(
             FROM {TABLE_POSICAO} p
             {contas_join}
             WHERE DATE(p.Data) >= {data_inicio}
+              AND p.Classe != 'Aluguel de Ações'
             GROUP BY DATE(p.Data)
         )
         SELECT FORMAT_DATE('%Y-%m-%d', dia) AS dia, auc
@@ -1164,6 +1195,7 @@ async def relatorio_historico(
                 SELECT DATE(p2.Data) AS dia_data, SUM(p2.ValorBruto) AS auc_dia
                 FROM {TABLE_POSICAO} p2
                 WHERE DATE(p2.Data) >= {data_inicio}
+                  AND p2.Classe != 'Aluguel de Ações'
                 GROUP BY DATE(p2.Data)
             ) p
             GROUP BY mes
@@ -1202,6 +1234,7 @@ async def relatorio_historico(
             CROSS JOIN ultima_data ud
             {contas_join}
             WHERE DATE(p.Data) = ud.max_data
+              AND p.Classe != 'Aluguel de Ações'
             GROUP BY TRIM(p.Conta)
         ),
         auc_ant AS (
@@ -1210,24 +1243,26 @@ async def relatorio_historico(
             CROSS JOIN data_ref dr
             {contas_join}
             WHERE DATE(p.Data) = dr.ref_data
+              AND p.Classe != 'Aluguel de Ações'
             GROUP BY TRIM(p.Conta)
         ),
-        clientes AS (
-            SELECT Conta AS conta_num, MAX(Cliente) AS cliente, MAX(Assessor_Manual) AS assessor
+        nomes AS (
+            SELECT Conta AS conta_num, MAX(Cliente) AS cliente
             FROM {TABLE}
             WHERE Cliente IS NOT NULL AND Cliente != ''
             GROUP BY Conta
         )
         SELECT
             a.Conta,
-            COALESCE(c.cliente,  '') AS cliente,
-            COALESCE(c.assessor, '') AS assessor,
-            COALESCE(a.auc, 0)       AS auc_atual,
-            COALESCE(r.auc, 0)       AS auc_ref,
+            COALESCE(n.cliente,   '') AS cliente,
+            COALESCE(ma.Assessor, '') AS assessor,
+            COALESCE(a.auc, 0)        AS auc_atual,
+            COALESCE(r.auc, 0)        AS auc_ref,
             ROUND(COALESCE(a.auc, 0) - COALESCE(r.auc, 0), 2) AS delta_auc
         FROM auc_atual a
-        LEFT JOIN auc_ant  r ON a.Conta = r.Conta
-        LEFT JOIN clientes c ON SAFE_CAST(a.Conta AS INT64) = c.conta_num
+        LEFT JOIN auc_ant r ON a.Conta = r.Conta
+        LEFT JOIN nomes n   ON SAFE_CAST(a.Conta AS INT64) = n.conta_num
+        LEFT JOIN {_mapa_assessor_sq()} ma ON SAFE_CAST(a.Conta AS INT64) = ma.Conta
         ORDER BY ABS(COALESCE(a.auc, 0) - COALESCE(r.auc, 0)) DESC
         LIMIT 20
     """

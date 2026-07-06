@@ -1224,7 +1224,7 @@ async def relatorio_historico(
             r.repasse_liquido,
             ROUND(COALESCE(a.avg_auc, 0), 0) AS avg_auc,
             CASE WHEN COALESCE(a.avg_auc, 0) > 0
-                 THEN ROUND((r.receita_liquida / a.avg_auc) * 12 * 100, 4)
+                 THEN ROUND((r.receita_bruta / a.avg_auc) * 12 * 100, 4)
                  ELSE NULL
             END AS roa_anualizado_pct
         FROM receita_mensal r

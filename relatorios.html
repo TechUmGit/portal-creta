@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Creta Capital — Relatórios</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; width: 100%; overflow-x: hidden; font-family: 'Inter', -apple-system, sans-serif; -webkit-font-smoothing: antialiased; background: #f0f3f8; }
+
+    .loading-screen { position: fixed; inset: 0; background: #f0f3f8; display: flex; align-items: center; justify-content: center; z-index: 999; }
+    .spinner { width: 26px; height: 26px; border: 3px solid rgba(11,181,213,0.2); border-top-color: #0bb5d5; border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── TOPBAR ── */
+    .topbar { height: 60px; background: #fff; border-bottom: 1px solid #e8ebf2; display: flex; align-items: center; padding: 0 24px; gap: 16px; position: fixed; top: 0; left: 0; right: 0; z-index: 200; }
+    .topbar-logo { font-size: 20px; font-weight: 900; letter-spacing: -0.03em; color: #0c1a35; white-space: nowrap; text-decoration: none; flex-shrink: 0; }
+    .topbar-logo span { color: #0bb5d5; }
+    .topbar-logo small { font-size: 9px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(0,0,0,0.3); display: block; line-height: 1; margin-top: 1px; }
+    .topbar-divider { width: 1px; height: 28px; background: #e2e6ef; margin: 0 4px; flex-shrink: 0; }
+    .topbar-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+    .icon-btn { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: none; border: none; cursor: pointer; color: #6b7280; transition: background 0.15s; }
+    .icon-btn:hover { background: #f4f6fb; }
+    .user-chip { display: flex; align-items: center; gap: 10px; padding: 4px 10px 4px 4px; border-radius: 8px; cursor: pointer; background: none; border: none; font-family: inherit; transition: background 0.15s; position: relative; }
+    .user-chip:hover { background: #f4f6fb; }
+    .avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #0c1a35, #1a3a6c); color: #fff; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .user-name { font-size: 13px; font-weight: 600; color: #1a202c; white-space: nowrap; }
+    .user-role { font-size: 11px; color: #9ca3af; }
+    .user-dropdown { display: none; position: absolute; top: calc(100% + 8px); right: 0; background: #fff; border: 1px solid #e8ebf2; border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.12); min-width: 200px; padding: 6px; z-index: 300; }
+    .user-chip.open .user-dropdown { display: block; }
+    .user-email-dd { padding: 10px 12px 8px; font-size: 12px; color: #9ca3af; border-bottom: 1px solid #f0f3f8; margin-bottom: 4px; }
+    .dd-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 6px; font-size: 13px; color: #374151; cursor: pointer; transition: background 0.12s; text-decoration: none; }
+    .dd-item:hover { background: #f4f6fb; }
+    .dd-item.danger { color: #dc2626; }
+    .dd-item.danger:hover { background: #fff5f5; }
+    .dd-sep { height: 1px; background: #f0f3f8; margin: 4px 0; }
+
+    /* ── SIDEBAR ── */
+    .sidebar { position: fixed; top: 60px; left: 0; bottom: 0; width: 240px; background: #fff; border-right: 1px solid #e8ebf2; display: flex; flex-direction: column; overflow-y: auto; z-index: 100; transform: translateX(-100%); transition: transform 0.25s cubic-bezier(0.25,0,0.25,1); }
+    .sidebar.open { transform: translateX(0); }
+    .sidebar-section { padding: 20px 12px 8px; }
+    .sidebar-label { font-size: 9.5px; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; color: #9ca3af; padding: 0 10px; margin-bottom: 6px; }
+    .nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px; font-size: 13.5px; font-weight: 500; color: #4b5563; cursor: pointer; transition: all 0.15s; text-decoration: none; position: relative; }
+    .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; opacity: 0.7; }
+    .nav-item:hover { background: #f4f6fb; color: #0c1a35; }
+    .nav-item:hover svg { opacity: 1; }
+    .nav-item.active { background: #eef3ff; color: #0c1a35; font-weight: 600; }
+    .nav-item.active svg { opacity: 1; color: #0bb5d5; }
+    .nav-item.active::before { content: ''; position: absolute; left: 0; top: 6px; bottom: 6px; width: 3px; background: #0bb5d5; border-radius: 0 3px 3px 0; }
+    .nav-badge { margin-left: auto; font-size: 10px; font-weight: 700; background: #0bb5d5; color: #fff; padding: 2px 7px; border-radius: 20px; }
+    .sidebar-footer { margin-top: auto; padding: 16px 12px; border-top: 1px solid #f0f3f8; }
+    .sidebar-footer .nav-item { color: #9ca3af; font-size: 13px; }
+    .sidebar-footer .nav-item:hover { color: #dc2626; }
+    .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 99; }
+    .admin-only { display: none; }
+
+    /* ── MAIN ── */
+    .main { margin-left: 0; padding-top: 60px; min-height: 100vh; }
+    .page-header { background: linear-gradient(135deg, #091525 0%, #0c2040 60%, #0f2e5c 100%); padding: 36px 44px; position: relative; overflow: hidden; }
+    .page-header::after { content: ''; position: absolute; width: 380px; height: 380px; border-radius: 50%; border: 1px solid rgba(11,181,213,0.1); right: -60px; top: -80px; pointer-events: none; }
+    .page-header-label { font-size: 10px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: rgba(255,255,255,0.3); margin-bottom: 8px; }
+    .page-header-title { font-size: 26px; font-weight: 700; color: #fff; letter-spacing: -0.03em; position: relative; z-index: 1; }
+    .page-header-sub { font-size: 14px; color: rgba(255,255,255,0.4); margin-top: 4px; position: relative; z-index: 1; }
+
+    /* ── FILTROS ── */
+    .filter-bar { background: #fff; border-bottom: 1px solid #e8ebf2; padding: 14px 44px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .filter-label { font-size: 12px; font-weight: 600; color: #6b7280; white-space: nowrap; }
+    .filter-btn { padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 500; border: 1.5px solid #e8ebf2; background: none; color: #6b7280; cursor: pointer; font-family: inherit; transition: all 0.15s; }
+    .filter-btn:hover { border-color: #0c1a35; color: #0c1a35; }
+    .filter-btn.active { background: #0c1a35; border-color: #0c1a35; color: #fff; }
+    .filter-divider { width: 1px; height: 24px; background: #e8ebf2; margin: 0 6px; }
+    .filter-group { display: flex; align-items: center; gap: 8px; }
+    .filter-select { padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 500; border: 1.5px solid #e8ebf2; background: #fff; color: #374151; cursor: pointer; font-family: inherit; outline: none; min-width: 170px; }
+    .filter-select:focus { border-color: #0bb5d5; }
+
+    /* ── CONTENT ── */
+    .content { padding: 32px 44px 56px; }
+
+    /* KPI cards */
+    .kpi-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 28px; }
+    .kpi-card { background: #fff; border-radius: 12px; padding: 20px 22px; border: 1px solid #e8ebf2; }
+    .kpi-card-label { font-size: 10.5px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: #9ca3af; margin-bottom: 8px; }
+    .kpi-card-value { font-size: 22px; font-weight: 700; color: #0c1a35; letter-spacing: -0.03em; }
+    .kpi-card-sub { font-size: 11.5px; color: #9ca3af; margin-top: 4px; }
+
+    /* Charts */
+    .section { margin-bottom: 24px; }
+    .chart-card { background: #fff; border-radius: 12px; border: 1px solid #e8ebf2; padding: 26px 28px; }
+    .chart-card-title { font-size: 13px; font-weight: 700; color: #0c1a35; margin-bottom: 20px; letter-spacing: -0.01em; }
+    .chart-full { position: relative; height: 270px; }
+    .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
+    .chart-half { position: relative; height: 300px; }
+
+    /* Tabela movers */
+    .table-wrap { overflow-x: auto; }
+    .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .data-table thead th { padding: 10px 12px; text-align: left; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #6b7280; border-bottom: 1.5px solid #e8ebf2; white-space: nowrap; }
+    .data-table thead th.num { text-align: right; }
+    .data-table tbody tr { border-bottom: 1px solid #f0f3f8; transition: background 0.1s; }
+    .data-table tbody tr:last-child { border-bottom: none; }
+    .data-table tbody tr:hover { background: #f8fafc; }
+    .data-table td { padding: 11px 12px; color: #374151; }
+    .data-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .data-table td.rank { text-align: center; font-size: 12px; color: #9ca3af; font-weight: 600; }
+    .pl-pos { color: #10b981; font-weight: 600; }
+    .pl-neg { color: #ef4444; font-weight: 600; }
+    .tag-assessor { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 500; background: #eef3ff; color: #0c1a35; }
+
+    /* Status loading */
+    .status-bar { display: none; background: #eef3ff; border-bottom: 1px solid #d4e0ff; padding: 8px 44px; font-size: 12px; color: #4b5563; align-items: center; gap: 8px; }
+    .status-bar.visible { display: flex; }
+    .status-dot { width: 6px; height: 6px; border-radius: 50%; background: #0bb5d5; animation: blink 1s infinite; }
+    @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+    /* ── Skeleton shimmer ── */
+    @keyframes shimmer {
+      0%   { background-position: -500px 0; }
+      100% { background-position: 500px 0; }
+    }
+    .skel {
+      display: block;
+      background: linear-gradient(90deg, #e8ecf4 25%, #f4f6fb 50%, #e8ecf4 75%);
+      background-size: 500px 100%;
+      animation: shimmer 1.5s ease-in-out infinite;
+      border-radius: 6px;
+    }
+    .skel-kpi-val { width: 120px; height: 26px; margin: 3px 0; }
+    .skel-kpi-sub { width: 76px; height: 12px; margin-top: 6px; }
+    .skel-chart {
+      position: absolute; inset: 8px;
+      border-radius: 8px;
+      z-index: 1;
+    }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      .kpi-row { grid-template-columns: repeat(2, 1fr); }
+      .chart-row { grid-template-columns: 1fr; }
+      .content { padding: 24px 20px 48px; }
+      .filter-bar { padding: 12px 20px; }
+      .page-header { padding: 28px 20px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="loading-screen" id="loading-screen">
+  <div class="spinner"></div>
+</div>
+
+<!-- ── TOPBAR ── -->
+<div class="topbar">
+  <button class="icon-btn" id="menu-toggle" aria-label="Menu">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+  </button>
+  <a class="topbar-logo" href="dashboard.html">
+    Creta<span>Capital</span>
+    <small>Portal Interno</small>
+  </a>
+  <div class="topbar-divider"></div>
+  <div class="topbar-actions">
+    <button class="user-chip" id="user-chip">
+      <div class="avatar" id="user-initials">?</div>
+      <div>
+        <div class="user-name" id="user-name">Carregando…</div>
+        <div class="user-role" id="user-role-label">—</div>
+      </div>
+      <div class="user-dropdown" id="user-dropdown">
+        <div class="user-email-dd" id="user-email-dd">—</div>
+        <a class="dd-item" href="profile.html">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="7" r="4"/><path d="M5.5 21a6.5 6.5 0 0113 0"/></svg>
+          Meu Perfil
+        </a>
+        <div class="dd-sep"></div>
+        <div class="dd-item danger" id="btn-logout">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Sair
+        </div>
+      </div>
+    </button>
+  </div>
+</div>
+
+<!-- ── SIDEBAR ── -->
+<div class="sidebar" id="sidebar">
+  <div class="sidebar-section">
+    <div class="sidebar-label">Principal</div>
+    <a class="nav-item" href="dashboard.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      Dashboard
+    </a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-label">Dados</div>
+    <a class="nav-item" href="posicoes.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      Posições
+    </a>
+    <a class="nav-item" href="opcoes.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+      Opções
+    </a>
+    <a class="nav-item" href="receitas.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 100 7h5a3.5 3.5 0 010 7H6"/></svg>
+      Receitas
+    </a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-label">Análise</div>
+    <a class="nav-item active" href="relatorios.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      Relatórios
+    </a>
+    <a class="nav-item" href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+      Apresentações
+    </a>
+  </div>
+  <div class="sidebar-section admin-only" id="sidebarSistema">
+    <div class="sidebar-label">Sistema</div>
+    <a class="nav-item" href="configuracoes.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      Configurações
+    </a>
+  </div>
+  <div class="sidebar-footer">
+    <div class="nav-item" id="sidebar-logout">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      Sair
+    </div>
+  </div>
+</div>
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+<!-- ── MAIN ── -->
+<div class="main">
+  <div class="page-header">
+    <div class="page-header-label">Análise</div>
+    <div class="page-header-title">Relatórios — Histórico de Carteiras</div>
+    <div class="page-header-sub">Evolução de AuC, receita, ROA e variações de patrimônio</div>
+  </div>
+
+  <!-- Filtros -->
+  <div class="filter-bar">
+    <span class="filter-label">Período</span>
+    <button class="filter-btn" data-periodo="3m">3M</button>
+    <button class="filter-btn active" data-periodo="12m">12M</button>
+    <button class="filter-btn" data-periodo="6m">6M</button>
+    <button class="filter-btn" data-periodo="all">Tudo</button>
+    <div class="filter-divider" id="filtro-assessor-sep" style="display:none"></div>
+    <div class="filter-group" id="filtro-assessor-wrap" style="display:none">
+      <span class="filter-label">Assessor</span>
+      <select class="filter-select" id="filtro-assessor">
+        <option value="">Todos</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Status loading -->
+  <div class="status-bar" id="status-bar">
+    <div class="status-dot"></div>
+    Carregando dados…
+  </div>
+
+  <div class="content">
+    <!-- KPIs -->
+    <div class="kpi-row">
+      <div class="kpi-card">
+        <div class="kpi-card-label">AuC Atual</div>
+        <div class="kpi-card-value" id="kpi-auc"><span class="skel skel-kpi-val"></span></div>
+        <div class="kpi-card-sub" id="kpi-auc-data"><span class="skel skel-kpi-sub"></span></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-card-label">Δ AuC no Período</div>
+        <div class="kpi-card-value" id="kpi-delta-auc"><span class="skel skel-kpi-val"></span></div>
+        <div class="kpi-card-sub">vs. início do período</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-card-label">Novas Contas</div>
+        <div class="kpi-card-value" id="kpi-novas"><span class="skel skel-kpi-val" style="width:60px"></span></div>
+        <div class="kpi-card-sub">abertas no período</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-card-label">Receita Líquida</div>
+        <div class="kpi-card-value" id="kpi-receita"><span class="skel skel-kpi-val"></span></div>
+        <div class="kpi-card-sub">no período</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-card-label">ROA Anualizado</div>
+        <div class="kpi-card-value" id="kpi-roa"><span class="skel skel-kpi-val" style="width:80px"></span></div>
+        <div class="kpi-card-sub">último mês, ×12</div>
+      </div>
+    </div>
+
+    <!-- AuC diário -->
+    <div class="section">
+      <div class="chart-card">
+        <div class="chart-card-title">Evolução do AuC — Visão Diária</div>
+        <div class="chart-full" style="position:relative">
+          <span class="skel skel-chart" id="skel-auc"></span>
+          <canvas id="chart-auc"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Receita + ROA | Novas Contas -->
+    <div class="chart-row">
+      <div class="chart-card">
+        <div class="chart-card-title">Receita Líquida & ROA Mensal</div>
+        <div class="chart-half" style="position:relative">
+          <span class="skel skel-chart" id="skel-receita"></span>
+          <canvas id="chart-receita"></canvas>
+        </div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-title">Novas Contas por Mês</div>
+        <div class="chart-half" style="position:relative">
+          <span class="skel skel-chart" id="skel-novas"></span>
+          <canvas id="chart-novas"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Top 20 PL movers -->
+    <div class="section">
+      <div class="chart-card">
+        <div class="chart-card-title">Top 20 — Maiores Variações de Patrimônio (últimos 30 dias)</div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width:40px">#</th>
+                <th>Conta</th>
+                <th>Cliente</th>
+                <th>Assessor</th>
+                <th class="num">PL Atual</th>
+                <th class="num">PL 30d atrás</th>
+                <th class="num">Δ PL</th>
+                <th class="num">% Variação</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-movers">
+              <tr><td colspan="8" style="text-align:center;padding:32px;color:#9ca3af">Carregando…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  /* ── CONFIG ── */
+  const API_BASE = 'https://api-creta-978599698367.us-central1.run.app';
+
+  const firebaseConfig = {
+    apiKey:            "AIzaSyDLJrg7Cmaq6DDlDdcLfe4kH9hUukMVuE0",
+    authDomain:        "creta-btg-bd3a8.firebaseapp.com",
+    projectId:         "creta-btg-bd3a8",
+    storageBucket:     "creta-btg-bd3a8.firebasestorage.app",
+    messagingSenderId: "609636823379",
+    appId:             "1:609636823379:web:fbf9de8c2960d7392c31a6",
+  };
+  if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+
+  /* ── STATE ── */
+  let idToken      = null;
+  let userRole     = null;
+  let currentPer   = '12m';
+  let currentAss   = '';
+  let chartAuc     = null;
+  let chartReceita = null;
+  let chartNovas   = null;
+
+  /* ── FORMAT HELPERS ── */
+  const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+
+  function fmtAbrev(n) {
+    if (n === null || n === undefined || isNaN(n)) return '—';
+    const abs = Math.abs(n), s = n < 0 ? '-' : '';
+    const fmt = (v, dec) => v.toLocaleString('pt-BR', {minimumFractionDigits: dec, maximumFractionDigits: dec});
+    if (abs >= 1e9) return `${s}${fmt(abs/1e9, 1)}B`;
+    if (abs >= 1e6) return `${s}${fmt(abs/1e6, 1)}M`;
+    if (abs >= 1e3) return `${s}${fmt(abs/1e3, 1)}K`;
+    return `${s}${fmt(abs, 2)}`;
+  }
+
+  function fmtMoeda(n) {
+    if (n === null || n === undefined || isNaN(n)) return '—';
+    return 'R$ ' + parseFloat(n).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  }
+
+  function fmtPct(n) {
+    if (n === null || n === undefined || isNaN(n)) return '—';
+    return parseFloat(n).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + '%';
+  }
+
+  function fmtDelta(n) {
+    if (n === null || n === undefined || isNaN(n)) return { text: '—', color: '#6b7280' };
+    const color = n >= 0 ? '#10b981' : '#ef4444';
+    return { text: (n >= 0 ? '+' : '') + fmtAbrev(n), color };
+  }
+
+  function fmtMes(ym) {
+    if (!ym) return '—';
+    const parts = ym.split('-');
+    if (parts.length < 2) return ym;
+    return `${MESES[parseInt(parts[1]) - 1]}/${parts[0].slice(2)}`;
+  }
+
+  function fmtDia(d) {
+    if (!d) return '—';
+    const [y, m, day] = d.split('-');
+    return `${day}/${m}/${y}`;
+  }
+
+  /* ── AUTH ── */
+  firebase.auth().onAuthStateChanged(async user => {
+    if (!user) { window.location.href = 'index.html'; return; }
+
+    idToken = await user.getIdToken(true);
+    const result = await user.getIdTokenResult();
+    userRole = result.claims.role || 'assessor';
+
+    // UI: user info
+    const nome = user.displayName || user.email || '';
+    document.getElementById('user-name').textContent = nome;
+    document.getElementById('user-initials').textContent = nome.charAt(0).toUpperCase();
+    document.getElementById('user-email-dd').textContent = user.email;
+    document.getElementById('user-role-label').textContent = userRole === 'admin' ? 'Administrador' : 'Assessor';
+
+    // Admin: mostrar filtro de assessor e menu de sistema
+    if (userRole === 'admin') {
+      document.getElementById('filtro-assessor-wrap').style.display = 'flex';
+      document.getElementById('filtro-assessor-sep').style.display = 'block';
+      document.getElementById('sidebarSistema').style.display = 'block';
+      carregarAssessores();
+    }
+
+    carregarDados();
+    document.getElementById('loading-screen').style.display = 'none';
+  });
+
+  /* ── ASSESSORES (admin) ── */
+  async function carregarAssessores() {
+    try {
+      const res = await fetch(`${API_BASE}/api/assessores`, {
+        headers: { Authorization: `Bearer ${idToken}` }
+      });
+      if (!res.ok) return;
+      const json = await res.json();
+      const sel = document.getElementById('filtro-assessor');
+      for (const a of json.assessores) {
+        const opt = document.createElement('option');
+        opt.value = a; opt.textContent = a;
+        sel.appendChild(opt);
+      }
+    } catch (e) { console.warn('assessores:', e); }
+  }
+
+  /* ── CARREGAR DADOS ── */
+  async function carregarDados() {
+    document.getElementById('status-bar').classList.add('visible');
+    try {
+      let url = `${API_BASE}/api/relatorio/historico?periodo=${currentPer}`;
+      if (currentAss) url += `&assessor=${encodeURIComponent(currentAss)}`;
+
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${idToken}` } });
+      if (!res.ok) throw new Error(await res.text());
+      const json = await res.json();
+
+      renderKPIs(json.kpis, json.auc_diario);
+      renderAuC(json.auc_diario);
+      renderReceitaROA(json.receita_roa);
+      renderNovasContas(json.novas_contas);
+      renderMovers(json.pl_movers);
+    } catch (err) {
+      console.error('relatorio/historico:', err);
+    } finally {
+      document.getElementById('status-bar').classList.remove('visible');
+    }
+  }
+
+  /* ── RENDER: KPIs ── */
+  function renderKPIs(kpis, aucDiario) {
+    document.getElementById('kpi-auc').innerHTML       = 'R$ ' + fmtAbrev(kpis.auc_atual);
+
+    const delta = fmtDelta(kpis.delta_auc_periodo);
+    const el = document.getElementById('kpi-delta-auc');
+    el.innerHTML   = delta.text;
+    el.style.color = delta.color;
+
+    document.getElementById('kpi-novas').innerHTML   = kpis.novas_contas_periodo ?? '—';
+    document.getElementById('kpi-receita').innerHTML = 'R$ ' + fmtAbrev(kpis.receita_periodo);
+
+    const roa = kpis.roa_anualizado_pct;
+    document.getElementById('kpi-roa').innerHTML = roa !== null && roa !== undefined ? fmtPct(roa) : '—';
+
+    if (aucDiario && aucDiario.length > 0) {
+      document.getElementById('kpi-auc-data').innerHTML = fmtDia(aucDiario[aucDiario.length - 1].dia);
+    }
+  }
+
+  /* ── RENDER: AuC diário ── */
+  function renderAuC(dados) {
+    if (chartAuc) { chartAuc.destroy(); chartAuc = null; }
+    document.getElementById('skel-auc').style.display = 'none';
+    if (!dados || dados.length === 0) return;
+
+    const ctx = document.getElementById('chart-auc').getContext('2d');
+    const grad = ctx.createLinearGradient(0, 0, 0, 270);
+    grad.addColorStop(0, 'rgba(11,181,213,0.2)');
+    grad.addColorStop(1, 'rgba(11,181,213,0)');
+
+    chartAuc = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: dados.map(r => r.dia),
+        datasets: [{
+          label: 'AuC',
+          data: dados.map(r => parseFloat(r.auc)),
+          borderColor: '#0bb5d5',
+          borderWidth: 2,
+          backgroundColor: grad,
+          fill: true,
+          pointRadius: 0,
+          pointHoverRadius: 5,
+          pointHoverBackgroundColor: '#0bb5d5',
+          pointHoverBorderColor: '#fff',
+          pointHoverBorderWidth: 2,
+          tension: 0.3,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              title: items => fmtDia(items[0].label),
+              label: item => `AuC: R$ ${parseFloat(item.raw).toLocaleString('pt-BR', {minimumFractionDigits: 0, maximumFractionDigits: 0})}`
+            }
+          }
+        },
+        scales: {
+          x: {
+            ticks: {
+              maxTicksLimit: 14,
+              font: { size: 10 },
+              callback: function(val) {
+                const label = this.getLabelForValue(val);
+                if (!label) return '';
+                const p = label.split('-');
+                return p.length >= 2 ? `${MESES[parseInt(p[1])-1]}/${p[0].slice(2)}` : label;
+              }
+            },
+            grid: { color: '#f0f3f8' }
+          },
+          y: {
+            ticks: {
+              font: { size: 10 },
+              callback: val => {
+                if (val >= 1e9) return `R$ ${(val/1e9).toFixed(1)}B`;
+                if (val >= 1e6) return `R$ ${(val/1e6).toFixed(0)}M`;
+                if (val >= 1e3) return `R$ ${(val/1e3).toFixed(0)}K`;
+                return `R$ ${val}`;
+              }
+            },
+            grid: { color: '#f0f3f8' }
+          }
+        }
+      }
+    });
+  }
+
+  /* ── RENDER: Receita + ROA ── */
+  function renderReceitaROA(dados) {
+    if (chartReceita) { chartReceita.destroy(); chartReceita = null; }
+    document.getElementById('skel-receita').style.display = 'none';
+    if (!dados || dados.length === 0) return;
+
+    const labels = dados.map(r => fmtMes(r.mes));
+
+    chartReceita = new Chart(document.getElementById('chart-receita').getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          {
+            type: 'bar',
+            label: 'Receita Líquida',
+            data: dados.map(r => parseFloat(r.receita_liquida) || 0),
+            backgroundColor: '#0c1a35',
+            borderRadius: 4,
+            yAxisID: 'y',
+            order: 2,
+          },
+          {
+            type: 'line',
+            label: 'ROA Anualizado',
+            data: dados.map(r => r.roa_anualizado_pct !== null ? parseFloat(r.roa_anualizado_pct) : null),
+            borderColor: '#f59e0b',
+            backgroundColor: 'rgba(245,158,11,0.1)',
+            borderWidth: 2.5,
+            pointRadius: 4,
+            pointBackgroundColor: '#f59e0b',
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2,
+            yAxisID: 'y1',
+            tension: 0.4,
+            order: 1,
+            spanGaps: true,
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: {
+            position: 'top',
+            labels: { font: { size: 11 }, boxWidth: 12, padding: 16 }
+          },
+          tooltip: {
+            callbacks: {
+              label: item => {
+                if (item.datasetIndex === 0)
+                  return `Receita: R$ ${parseFloat(item.raw).toLocaleString('pt-BR', {minimumFractionDigits: 0, maximumFractionDigits: 0})}`;
+                const v = item.raw;
+                return `ROA: ${v !== null ? fmtPct(v) : '—'}`;
+              }
+            }
+          }
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { font: { size: 11 } } },
+          y: {
+            type: 'linear', position: 'left',
+            ticks: {
+              font: { size: 10 },
+              callback: val => {
+                if (Math.abs(val) >= 1e6) return `R$${(val/1e6).toFixed(1)}M`;
+                if (Math.abs(val) >= 1e3) return `R$${(val/1e3).toFixed(0)}k`;
+                return `R$${val}`;
+              }
+            },
+            grid: { color: '#f0f3f8' }
+          },
+          y1: {
+            type: 'linear', position: 'right',
+            ticks: {
+              font: { size: 10 },
+              callback: val => `${parseFloat(val).toFixed(2)}%`
+            },
+            grid: { display: false }
+          }
+        }
+      }
+    });
+  }
+
+  /* ── RENDER: Novas Contas ── */
+  function renderNovasContas(dados) {
+    if (chartNovas) { chartNovas.destroy(); chartNovas = null; }
+    document.getElementById('skel-novas').style.display = 'none';
+    if (!dados || dados.length === 0) return;
+
+    chartNovas = new Chart(document.getElementById('chart-novas').getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels: dados.map(r => fmtMes(r.mes)),
+        datasets: [{
+          label: 'Novas contas',
+          data: dados.map(r => parseInt(r.novas_contas) || 0),
+          backgroundColor: '#1a3a6c',
+          borderRadius: 4,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: item => `${item.raw} conta${item.raw !== 1 ? 's' : ''} nova${item.raw !== 1 ? 's' : ''}`
+            }
+          }
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { font: { size: 11 } } },
+          y: {
+            beginAtZero: true,
+            ticks: { precision: 0, font: { size: 11 } },
+            grid: { color: '#f0f3f8' }
+          }
+        }
+      }
+    });
+  }
+
+  /* ── RENDER: Top 20 PL movers ── */
+  function renderMovers(dados) {
+    const tbody = document.getElementById('tbody-movers');
+    if (!dados || dados.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:#9ca3af">Sem dados disponíveis.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = '';
+    dados.forEach((row, i) => {
+      const delta  = parseFloat(row.delta_auc) || 0;
+      const ref    = parseFloat(row.auc_ref) || 0;
+      const pctVar = ref !== 0 ? (delta / ref) * 100 : null;
+      const cls    = delta >= 0 ? 'pl-pos' : 'pl-neg';
+      const sign   = delta >= 0 ? '+' : '';
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="rank">${i + 1}</td>
+        <td><strong>${row.Conta || '—'}</strong></td>
+        <td>${row.cliente || '—'}</td>
+        <td>${row.assessor ? `<span class="tag-assessor">${row.assessor}</span>` : '—'}</td>
+        <td class="num">${fmtMoeda(row.auc_atual)}</td>
+        <td class="num">${fmtMoeda(row.auc_ref)}</td>
+        <td class="num ${cls}">${sign}${fmtAbrev(delta)}</td>
+        <td class="num ${cls}">${pctVar !== null ? sign + fmtPct(pctVar) : '—'}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  /* ── FILTROS: botões de período ── */
+  document.querySelectorAll('.filter-btn[data-periodo]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.filter-btn[data-periodo]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentPer = btn.dataset.periodo;
+      carregarDados();
+    });
+  });
+
+  /* ── FILTRO: assessor ── */
+  document.getElementById('filtro-assessor').addEventListener('change', e => {
+    currentAss = e.target.value;
+    carregarDados();
+  });
+
+  /* ── SIDEBAR ── */
+  const sidebar  = document.getElementById('sidebar');
+  const overlay  = document.getElementById('sidebar-overlay');
+  const menuBtn  = document.getElementById('menu-toggle');
+  menuBtn.addEventListener('click', () => {
+    sidebar.classList.toggle('open');
+    overlay.style.display = sidebar.classList.contains('open') ? 'block' : 'none';
+  });
+  overlay.addEventListener('click', () => {
+    sidebar.classList.remove('open');
+    overlay.style.display = 'none';
+  });
+
+  /* ── USER DROPDOWN ── */
+  const userChip = document.getElementById('user-chip');
+  userChip.addEventListener('click', e => {
+    e.stopPropagation();
+    userChip.classList.toggle('open');
+  });
+  document.addEventListener('click', () => userChip.classList.remove('open'));
+
+  /* ── LOGOUT ── */
+  function doLogout() {
+    firebase.auth().signOut().then(() => window.location.href = 'index.html');
+  }
+  document.getElementById('btn-logout').addEventListener('click', doLogout);
+  document.getElementById('sidebar-logout').addEventListener('click', doLogout);
+</script>
+</body>
+</html>

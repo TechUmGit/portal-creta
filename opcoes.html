@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Creta Capital — Opções em Aberto</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; font-family: 'Inter', -apple-system, sans-serif; -webkit-font-smoothing: antialiased; background: #f0f3f8; }
+
+    .loading-screen { position: fixed; inset: 0; background: #f0f3f8; display: flex; align-items: center; justify-content: center; z-index: 999; }
+    .spinner { width: 26px; height: 26px; border: 3px solid rgba(11,181,213,0.2); border-top-color: #0bb5d5; border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* TOPBAR */
+    .topbar { height: 60px; background: #fff; border-bottom: 1px solid #e8ebf2; display: flex; align-items: center; padding: 0 24px; gap: 16px; position: fixed; top: 0; left: 0; right: 0; z-index: 200; }
+    .topbar-logo { font-size: 20px; font-weight: 900; letter-spacing: -0.03em; color: #0c1a35; white-space: nowrap; text-decoration: none; flex-shrink: 0; }
+    .topbar-logo span { color: #0bb5d5; }
+    .topbar-logo small { font-size: 9px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(0,0,0,0.3); display: block; line-height: 1; margin-top: 1px; }
+    .topbar-divider { width: 1px; height: 28px; background: #e2e6ef; margin: 0 4px; flex-shrink: 0; }
+    .search-bar { flex: 1; max-width: 480px; display: flex; align-items: center; gap: 10px; background: #f4f6fb; border: 1px solid #e8ebf2; border-radius: 8px; padding: 0 14px; height: 38px; }
+    .search-bar svg { color: #a0aec0; flex-shrink: 0; }
+    .search-bar input { flex: 1; border: none; background: none; outline: none; font-size: 14px; color: #555; font-family: inherit; }
+    .search-bar input::placeholder { color: #a0aec0; }
+    .topbar-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+    .icon-btn { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: none; border: none; cursor: pointer; color: #6b7280; transition: background 0.15s; }
+    .icon-btn:hover { background: #f4f6fb; }
+    .user-chip { display: flex; align-items: center; gap: 10px; padding: 4px 10px 4px 4px; border-radius: 8px; cursor: pointer; background: none; border: none; font-family: inherit; transition: background 0.15s; position: relative; }
+    .user-chip:hover { background: #f4f6fb; }
+    .avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #0c1a35, #1a3a6c); color: #fff; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .user-name { font-size: 13px; font-weight: 600; color: #1a202c; white-space: nowrap; }
+    .user-role { font-size: 11px; color: #9ca3af; }
+    .user-info { text-align: left; }
+    .user-dropdown { display: none; position: absolute; top: calc(100% + 8px); right: 0; background: #fff; border: 1px solid #e8ebf2; border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.12); min-width: 200px; padding: 6px; z-index: 300; }
+    .user-chip.open .user-dropdown { display: block; }
+    .user-email-dd { padding: 10px 12px 8px; font-size: 12px; color: #9ca3af; border-bottom: 1px solid #f0f3f8; margin-bottom: 4px; }
+    .dd-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 6px; font-size: 13px; color: #374151; cursor: pointer; transition: background 0.12s; }
+    .dd-item:hover { background: #f4f6fb; }
+    .dd-item.danger { color: #dc2626; }
+    .dd-item.danger:hover { background: #fff5f5; }
+    .dd-sep { height: 1px; background: #f0f3f8; margin: 4px 0; }
+
+    /* SIDEBAR */
+    .sidebar { position: fixed; top: 60px; left: 0; bottom: 0; width: 240px; background: #fff; border-right: 1px solid #e8ebf2; display: flex; flex-direction: column; overflow-y: auto; z-index: 100; transform: translateX(-100%); transition: transform 0.25s cubic-bezier(0.25,0,0.25,1); }
+    .sidebar.open { transform: translateX(0); }
+    .sidebar-section { padding: 20px 12px 8px; }
+    .sidebar-label { font-size: 9.5px; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; color: #9ca3af; padding: 0 10px; margin-bottom: 6px; }
+    .nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px; font-size: 13.5px; font-weight: 500; color: #4b5563; cursor: pointer; transition: all 0.15s; text-decoration: none; position: relative; }
+    .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; opacity: 0.7; }
+    .nav-item:hover { background: #f4f6fb; color: #0c1a35; }
+    .nav-item:hover svg { opacity: 1; }
+    .nav-item.active { background: #eef3ff; color: #0c1a35; font-weight: 600; }
+    .nav-item.active svg { opacity: 1; color: #0bb5d5; }
+    .nav-item.active::before { content: ''; position: absolute; left: 0; top: 6px; bottom: 6px; width: 3px; background: #0bb5d5; border-radius: 0 3px 3px 0; }
+    .sidebar-footer { margin-top: auto; padding: 16px 12px; border-top: 1px solid #f0f3f8; }
+    .sidebar-footer .nav-item { color: #9ca3af; font-size: 13px; }
+    .sidebar-footer .nav-item:hover { color: #dc2626; }
+    .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 99; }
+
+    /* MAIN */
+    .main { margin-left: 0; padding-top: 60px; min-height: 100vh; }
+
+    /* HERO */
+    .hero { background: linear-gradient(135deg, #091525 0%, #0c2040 60%, #0f2e5c 100%); padding: 36px 44px; position: relative; overflow: hidden; }
+    .hero::after { content: ''; position: absolute; width: 420px; height: 420px; border-radius: 50%; border: 1px solid rgba(11,181,213,0.12); right: -80px; top: -100px; pointer-events: none; }
+    .hero-label { font-size: 10px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: rgba(255,255,255,0.3); margin-bottom: 10px; }
+    .hero-name  { font-size: 28px; font-weight: 700; color: #fff; letter-spacing: -0.03em; margin-bottom: 6px; position: relative; z-index: 1; }
+    .hero-sub   { font-size: 14px; color: rgba(255,255,255,0.45); line-height: 1.6; position: relative; z-index: 1; }
+
+    /* CONTENT */
+    .content { padding: 32px 44px; }
+
+    /* KPI */
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; margin-bottom: 28px; }
+    .kpi { background: #fff; border-radius: 12px; padding: 22px; border: 1px solid #e8ebf2; transition: box-shadow 0.2s, transform 0.15s; }
+    .kpi:hover { box-shadow: 0 6px 24px rgba(12,26,53,0.08); transform: translateY(-2px); }
+    .kpi-label { font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: #9ca3af; margin-bottom: 10px; }
+    .kpi-value { font-size: 24px; font-weight: 700; color: #0c1a35; letter-spacing: -0.03em; margin-bottom: 4px; }
+    .kpi-sub   { font-size: 12px; color: #9ca3af; }
+    .kpi-icon  { float: right; width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 17px; }
+
+    /* FILTER BAR */
+    .filter-bar { background: #fff; border: 1px solid #e8ebf2; border-radius: 12px; padding: 16px 20px; display: flex; gap: 20px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 24px; }
+    .filter-group { display: flex; flex-direction: column; gap: 5px; }
+    .filter-label { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #9ca3af; }
+    .filter-select { height: 34px; border: 1px solid #e8ebf2; border-radius: 7px; padding: 0 10px; font-size: 13px; font-family: inherit; color: #374151; background: #f8f9fc; outline: none; cursor: pointer; min-width: 140px; }
+    .filter-select:focus { border-color: #0bb5d5; }
+    .filter-pills { display: flex; gap: 6px; }
+    .pill { height: 34px; padding: 0 14px; border: 1px solid #e8ebf2; border-radius: 7px; font-size: 13px; font-weight: 500; font-family: inherit; color: #4b5563; background: #f8f9fc; cursor: pointer; transition: all 0.15s; }
+    .pill:hover { border-color: #0bb5d5; color: #0c1a35; }
+    .pill.active { background: #0bb5d5; border-color: #0bb5d5; color: #fff; font-weight: 600; }
+    .filter-reset { margin-left: auto; height: 34px; padding: 0 14px; border: 1px solid #e8ebf2; border-radius: 7px; font-size: 12px; font-weight: 500; font-family: inherit; color: #9ca3af; background: none; cursor: pointer; transition: all 0.15s; }
+    .filter-reset:hover { border-color: #dc2626; color: #dc2626; background: #fff5f5; }
+
+    /* TABLE */
+    .section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+    .section-title { font-size: 15px; font-weight: 700; color: #0c1a35; }
+    .table-card { background: #fff; border-radius: 12px; border: 1px solid #e8ebf2; overflow: hidden; }
+    .table-wrap { overflow-x: auto; max-height: 580px; overflow-y: auto; }
+    .opt-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .opt-table thead tr { background: #f8f9fc; }
+    .opt-table thead { position: sticky; top: 0; z-index: 2; }
+    .opt-table th { padding: 11px 14px; text-align: left; font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #9ca3af; border-bottom: 1px solid #e8ebf2; white-space: nowrap; background: #f8f9fc; }
+    .opt-table th.num { text-align: right; }
+    .opt-table td { padding: 11px 14px; border-bottom: 1px solid #f5f7fb; white-space: nowrap; vertical-align: middle; }
+    .opt-table td.num { text-align: right; }
+    .opt-table tbody tr:last-child td { border-bottom: none; }
+    .opt-table tbody tr:hover { background: #f8f9fc; }
+
+    /* BADGES */
+    .badge { display: inline-block; font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 4px; letter-spacing: 0.03em; }
+    .badge-put      { background: #fff7ed; color: #c2410c; }
+    .badge-call     { background: #eff6ff; color: #1d4ed8; }
+    .badge-vendida  { background: #fef2f2; color: #dc2626; }
+    .badge-comprada { background: #f0fdf4; color: #16a34a; }
+
+    /* PL COLORS */
+    .pl-pos { color: #16a34a; font-weight: 700; }
+    .pl-neg { color: #dc2626; font-weight: 700; }
+
+    /* VENCIMENTO */
+    .venc-danger { color: #dc2626; font-weight: 700; }
+    .venc-warn   { color: #d97706; font-weight: 600; }
+    .dias-badge { display: inline-block; font-size: 10px; font-weight: 600; padding: 1px 5px; border-radius: 3px; margin-left: 4px; }
+    .dias-danger { background: #fef2f2; color: #dc2626; }
+    .dias-warn   { background: #fef3c7; color: #92400e; }
+    .dias-ok     { background: #f0fdf4; color: #15803d; }
+
+    /* SUMMARY BAR */
+    .table-summary { padding: 12px 16px; background: #f8f9fc; border-top: 1px solid #e8ebf2; display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 600; color: #374151; }
+    .summary-right { display: flex; gap: 24px; }
+
+    /* SORTABLE HEADERS */
+    .opt-table th.sortable { cursor: pointer; user-select: none; }
+    .opt-table th.sortable:hover { color: #0c1a35; background: #eef3ff; }
+    .opt-table th.sortable .sort-icon { margin-left: 4px; opacity: 0.3; font-style: normal; }
+    .opt-table th.sortable.sort-asc  .sort-icon,
+    .opt-table th.sortable.sort-desc .sort-icon { opacity: 1; color: #0bb5d5; }
+
+    /* EMPTY STATE */
+    .empty-state { padding: 60px; text-align: center; color: #9ca3af; }
+    .empty-state-icon { font-size: 40px; margin-bottom: 12px; }
+    .empty-state-title { font-size: 15px; font-weight: 600; color: #374151; margin-bottom: 6px; }
+  </style>
+</head>
+<body>
+
+<div id="loadingScreen" class="loading-screen">
+  <div class="spinner"></div>
+</div>
+
+<div id="app" style="display:none">
+
+<!-- TOPBAR -->
+<nav class="topbar">
+  <button class="icon-btn" onclick="toggleSidebar()" title="Menu">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+    </svg>
+  </button>
+  <a href="dashboard.html" class="topbar-logo">
+    CR<span>E</span>TA
+    <small>Capital · BTG Pactual</small>
+  </a>
+  <div class="topbar-divider"></div>
+  <div class="search-bar">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input type="text" placeholder="Buscar por conta, ticker, ativo..." id="searchInput" oninput="onSearch()">
+  </div>
+  <div class="topbar-actions">
+    <button class="icon-btn" title="Notificações">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+    </button>
+    <div class="topbar-divider"></div>
+    <button class="user-chip" id="userChip" onclick="toggleDropdown()">
+      <div class="avatar" id="userAvatar">?</div>
+      <div class="user-info">
+        <div class="user-name" id="userName">Carregando...</div>
+        <div class="user-role" id="userRoleLabel">Assessor BTG</div>
+      </div>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:#9ca3af;margin-left:2px"><polyline points="6 9 12 15 18 9"/></svg>
+      <div class="user-dropdown">
+        <div class="user-email-dd" id="userEmailDd">—</div>
+        <div class="dd-sep"></div>
+        <div class="dd-item danger" onclick="logout()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Sair
+        </div>
+      </div>
+    </button>
+  </div>
+</nav>
+
+<!-- SIDEBAR -->
+<div class="sidebar-overlay" id="overlay" onclick="closeSidebar()"></div>
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-section">
+    <div class="sidebar-label">Início</div>
+    <a class="nav-item" href="dashboard.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      Visão Geral
+    </a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-label">Dados</div>
+    <a class="nav-item" href="posicoes.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      Posições
+    </a>
+    <a class="nav-item active" href="opcoes.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+      Opções
+    </a>
+    <a class="nav-item" href="receitas.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+      Receitas e Repasses
+    </a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-label">Análise</div>
+    <a class="nav-item" href="relatorios.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      Relatórios
+    </a>
+  </div>
+  <div class="sidebar-section" id="sidebarSistema" style="display:none">
+    <div class="sidebar-label">Sistema</div>
+    <a class="nav-item" href="configuracoes.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      Configurações
+    </a>
+  </div>
+  <div class="sidebar-footer">
+    <a class="nav-item" href="#" onclick="logout()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      Sair
+    </a>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+  <div class="hero">
+    <div class="hero-label">Portal do Assessor · BTG Pactual</div>
+    <div class="hero-name">Opções em Aberto</div>
+    <div class="hero-sub" id="heroSub">Carregando posições...</div>
+  </div>
+
+  <div class="content">
+
+    <!-- KPIs -->
+    <div class="kpi-grid">
+      <div class="kpi">
+        <div class="kpi-icon" style="background:#eef3ff">📋</div>
+        <div class="kpi-label">Total Posições</div>
+        <div class="kpi-value" id="kpiTotal">—</div>
+        <div class="kpi-sub" id="kpiContas">— contas</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-icon" style="background:#fef2f2">🔴</div>
+        <div class="kpi-label">Exposição Vendida</div>
+        <div class="kpi-value" id="kpiVendida">—</div>
+        <div class="kpi-sub" id="kpiVendidaSub">a mercado</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-icon" style="background:#f0fdf4">🟢</div>
+        <div class="kpi-label">Exposição Comprada</div>
+        <div class="kpi-value" id="kpiComprada">—</div>
+        <div class="kpi-sub" id="kpiCompradaSub">a mercado</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-icon" style="background:#fefce8">💡</div>
+        <div class="kpi-label">P&amp;L Estimado</div>
+        <div class="kpi-value" id="kpiPL">—</div>
+        <div class="kpi-sub">vs. preço médio</div>
+      </div>
+    </div>
+
+    <!-- FILTER BAR -->
+    <div class="filter-bar">
+      <div class="filter-group">
+        <div class="filter-label">Conta</div>
+        <select id="filtConta" class="filter-select" onchange="aplicarFiltros()">
+          <option value="">Todas</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <div class="filter-label">Tipo</div>
+        <div class="filter-pills">
+          <button class="pill active" onclick="setTipo('', this)">Todos</button>
+          <button class="pill" onclick="setTipo('put', this)">Put</button>
+          <button class="pill" onclick="setTipo('call', this)">Call</button>
+        </div>
+      </div>
+      <div class="filter-group">
+        <div class="filter-label">Ativo</div>
+        <select id="filtAtivo" class="filter-select" onchange="aplicarFiltros()">
+          <option value="">Todos</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <div class="filter-label">Vencimento</div>
+        <select id="filtVencimento" class="filter-select" onchange="aplicarFiltros()">
+          <option value="">Todos</option>
+        </select>
+      </div>
+      <button class="filter-reset" onclick="resetFiltros()">✕ Limpar filtros</button>
+    </div>
+
+    <!-- TABLE -->
+    <div class="section-head">
+      <div class="section-title">Posições de Derivativos</div>
+      <div id="filtStatus" style="font-size:12px; color:#9ca3af;"></div>
+    </div>
+    <div class="table-card">
+      <div class="table-wrap">
+        <table class="opt-table">
+          <thead>
+            <tr>
+              <th class="sortable" data-col="Conta"     onclick="sortBy('Conta')">Conta<i class="sort-icon">↕</i></th>
+              <th class="sortable" data-col="Cliente"   onclick="sortBy('Cliente')">Cliente<i class="sort-icon">↕</i></th>
+              <th class="sortable" data-col="tipo"      onclick="sortBy('tipo')">Tipo<i class="sort-icon">↕</i></th>
+              <th class="sortable" data-col="Ticker"    onclick="sortBy('Ticker')">Ticker<i class="sort-icon">↕</i></th>
+              <th class="sortable" data-col="ativo"     onclick="sortBy('ativo')">Ativo<i class="sort-icon">↕</i></th>
+              <th class="sortable num" data-col="strike"    onclick="sortBy('strike')">Strike<i class="sort-icon">↕</i></th>
+              <th class="sortable num" data-col="spot"      onclick="sortBy('spot')">Spot<i class="sort-icon">↕</i></th>
+              <th class="sortable num" data-col="dist"      onclick="sortBy('dist')">Dist%<i class="sort-icon">↕</i></th>
+              <th class="sortable" data-col="Vencimento" onclick="sortBy('Vencimento')">Vencimento<i class="sort-icon">↕</i></th>
+              <th class="sortable" data-col="Direcao"   onclick="sortBy('Direcao')">Direção<i class="sort-icon">↕</i></th>
+              <th class="sortable num" data-col="qtd"   onclick="sortBy('qtd')">Qtd<i class="sort-icon">↕</i></th>
+              <th class="sortable num" data-col="pm"    onclick="sortBy('pm')">PM<i class="sort-icon">↕</i></th>
+              <th class="sortable num" data-col="Preco" onclick="sortBy('Preco')">Cotação<i class="sort-icon">↕</i></th>
+              <th class="sortable num" data-col="valor" onclick="sortBy('valor')">Valor (R$)<i class="sort-icon">↕</i></th>
+              <th class="sortable num" data-col="pl"    onclick="sortBy('pl')">P&amp;L (R$)<i class="sort-icon">↕</i></th>
+            </tr>
+          </thead>
+          <tbody id="tabelaOpcoes">
+            <tr><td colspan="15" class="empty-state"><div class="empty-state-icon">⏳</div><div class="empty-state-title">Carregando...</div></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="table-summary" id="tableSummary" style="display:none">
+        <div id="summaryCount" style="color:#374151">—</div>
+        <div class="summary-right">
+          <div>Vendidas: <span id="summaryVendida" style="color:#dc2626">—</span></div>
+          <div>Compradas: <span id="summaryComprada" style="color:#16a34a">—</span></div>
+          <div>P&amp;L Total: <span id="summaryPL">—</span></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</main>
+</div><!-- /app -->
+
+<script>
+  const API_URL = 'https://api-creta-978599698367.us-central1.run.app';
+
+  const firebaseConfig = {
+    apiKey:            "AIzaSyDLJrg7Cmaq6DDlDdcLfe4kH9hUukMVuE0",
+    authDomain:        "creta-btg-bd3a8.firebaseapp.com",
+    projectId:         "creta-btg-bd3a8",
+    storageBucket:     "creta-btg-bd3a8.firebasestorage.app",
+    messagingSenderId: "609636823379",
+    appId:             "1:609636823379:web:fbf9de8c2960d7392c31a6",
+    measurementId:     "G-WQSQD9CMJF"
+  };
+  if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db   = firebase.firestore();
+
+  let _token    = null;
+  let _dados    = [];
+  let _filtTipo = '';
+  let _sortCol  = null;
+  let _sortDir  = 'asc';
+  let _precos   = {};  // { ticker: preco_atual }
+
+
+  // ── Auth ──────────────────────────────────────────────────────────────────
+  auth.onAuthStateChanged(async function(user) {
+    document.getElementById('loadingScreen').style.display = 'none';
+    if (!user) { window.location.replace('index.html'); return; }
+    document.getElementById('app').style.display = 'block';
+
+    const email = user.email || '';
+    document.getElementById('userEmailDd').textContent = email;
+
+    try {
+      const snap = await db.collection('users').doc(user.uid).get();
+      const data = snap.exists ? snap.data() : {};
+      const name = data.displayName || user.displayName || email.split('@')[0];
+      const role = data.role || '';
+      document.getElementById('userName').textContent    = name;
+      document.getElementById('userAvatar').textContent  = name.charAt(0).toUpperCase();
+      document.getElementById('userRoleLabel').textContent = role === 'admin' ? 'Administrador' : 'Assessor BTG';
+      if (role === 'admin') document.getElementById('sidebarSistema').style.display = 'block';
+    } catch(e) {
+      document.getElementById('userName').textContent = email.split('@')[0];
+    }
+
+    _token = await user.getIdToken();
+    await carregarOpcoes();
+  });
+
+  // ── Dados ─────────────────────────────────────────────────────────────────
+  async function carregarOpcoes() {
+    try {
+      const res = await fetch(`${API_URL}/api/opcoes`, {
+        headers: { Authorization: `Bearer ${_token}` }
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        showErro(err.detail || `Erro HTTP ${res.status}`);
+        return;
+      }
+      const json = await res.json();
+      _dados  = json.opcoes || [];
+      _precos = json.precos || {};
+
+      if (json.data_referencia) {
+        const [y, m, d] = json.data_referencia.split('-');
+        document.getElementById('heroSub').textContent =
+          `Posição de ${d}/${m}/${y} · ${_dados.length} posição${_dados.length !== 1 ? 'ões' : ''}`;
+      }
+
+      popularFiltros();
+      aplicarFiltros();
+    } catch(e) {
+      showErro('Não foi possível carregar as opções. Verifique sua conexão.');
+    }
+  }
+
+
+  function showErro(msg) {
+    document.getElementById('tabelaOpcoes').innerHTML =
+      `<tr><td colspan="15" style="text-align:center;padding:40px;color:#dc2626">${msg}</td></tr>`;
+  }
+
+  // ── Parsing InfoExtra ─────────────────────────────────────────────────────
+  function parseInfoExtra(info) {
+    if (!info) return { strike: null, ref: null, pm: null };
+    const s = info.match(/Strike:\s*([\d.]+)/);
+    const r = info.match(/Ref:\s*([^\s|]+)/);
+    const p = info.match(/PM:\s*([\d.]+)/);
+    return {
+      strike: s ? parseFloat(s[1]) : null,
+      ref:    r ? r[1].trim()      : null,
+      pm:     p ? parseFloat(p[1]) : null
+    };
+  }
+
+  function calcPL(row) {
+    const { pm } = parseInfoExtra(row.InfoExtra);
+    if (pm === null || row.Quantidade == null || row.ValorBruto == null) return null;
+    return row.ValorBruto - pm * row.Quantidade;
+  }
+
+  function diasAteVencimento(venc) {
+    if (!venc) return null;
+    const hoje = new Date(); hoje.setHours(0,0,0,0);
+    const v = new Date(venc + 'T00:00:00');
+    return Math.round((v - hoje) / 86400000);
+  }
+
+  // ── Filtros ───────────────────────────────────────────────────────────────
+  function popularFiltros() {
+    // Conta
+    const contas = [...new Set(_dados.map(d => d.Conta))].sort();
+    const selConta = document.getElementById('filtConta');
+    selConta.innerHTML = '<option value="">Todas</option>';
+    contas.forEach(c => selConta.innerHTML += `<option value="${c}">${c}</option>`);
+
+    // Ativo (Ref)
+    const ativos = [...new Set(_dados.map(d => parseInfoExtra(d.InfoExtra).ref).filter(Boolean))].sort();
+    const selAtivo = document.getElementById('filtAtivo');
+    selAtivo.innerHTML = '<option value="">Todos</option>';
+    ativos.forEach(a => selAtivo.innerHTML += `<option value="${a}">${a}</option>`);
+
+    // Vencimento
+    const vencs = [...new Set(_dados.map(d => d.Vencimento).filter(Boolean))].sort();
+    const selVenc = document.getElementById('filtVencimento');
+    selVenc.innerHTML = '<option value="">Todos</option>';
+    vencs.forEach(v => {
+      const [y, m, d] = v.split('-');
+      const dias = diasAteVencimento(v);
+      const label = `${d}/${m}/${y}${dias !== null ? ` (${dias}d)` : ''}`;
+      selVenc.innerHTML += `<option value="${v}">${label}</option>`;
+    });
+  }
+
+  function aplicarFiltros() {
+    const conta = document.getElementById('filtConta').value;
+    const ativo = document.getElementById('filtAtivo').value;
+    const venc  = document.getElementById('filtVencimento').value;
+    const busca = (document.getElementById('searchInput').value || '').toLowerCase();
+
+    let dados = _dados;
+    if (conta) dados = dados.filter(d => d.Conta === conta);
+    if (_filtTipo) dados = dados.filter(d => (d.Subclasse || '').toLowerCase().includes(_filtTipo));
+    if (ativo) dados = dados.filter(d => parseInfoExtra(d.InfoExtra).ref === ativo);
+    if (venc)  dados = dados.filter(d => d.Vencimento === venc);
+    if (busca) dados = dados.filter(d =>
+      (d.Conta || '').includes(busca) ||
+      (d.Ticker || '').toLowerCase().includes(busca) ||
+      (parseInfoExtra(d.InfoExtra).ref || '').toLowerCase().includes(busca)
+    );
+
+    const total = _dados.length;
+    const filtrado = dados.length;
+    document.getElementById('filtStatus').textContent =
+      filtrado < total ? `${filtrado} de ${total} posições` : `${total} posições`;
+
+    renderKPIs(dados);
+    renderTabela(sortDados(dados));
+  }
+
+  function setTipo(tipo, btn) {
+    _filtTipo = tipo;
+    document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    aplicarFiltros();
+  }
+
+  function resetFiltros() {
+    _filtTipo = '';
+    document.getElementById('filtConta').value    = '';
+    document.getElementById('filtAtivo').value    = '';
+    document.getElementById('filtVencimento').value = '';
+    document.getElementById('searchInput').value  = '';
+    const pills = document.querySelectorAll('.pill');
+    pills.forEach((p, i) => p.classList.toggle('active', i === 0));
+    aplicarFiltros();
+  }
+
+  function onSearch() { aplicarFiltros(); }
+
+  // ── Sort ──────────────────────────────────────────────────────────────────
+  function sortBy(col) {
+    if (_sortCol === col) {
+      _sortDir = _sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      _sortCol = col;
+      _sortDir = 'asc';
+    }
+    // Atualiza visuais dos headers
+    document.querySelectorAll('.opt-table th.sortable').forEach(th => {
+      th.classList.remove('sort-asc', 'sort-desc');
+      const icon = th.querySelector('.sort-icon');
+      if (th.dataset.col === col) {
+        th.classList.add(_sortDir === 'asc' ? 'sort-asc' : 'sort-desc');
+        icon.textContent = _sortDir === 'asc' ? '↑' : '↓';
+      } else {
+        icon.textContent = '↕';
+      }
+    });
+    aplicarFiltros();
+  }
+
+  function getValorSort(row, col) {
+    const { strike, ref, pm } = parseInfoExtra(row.InfoExtra);
+    switch(col) {
+      case 'Conta':      return (row.Conta || '').padStart(12, '0');
+      case 'Cliente':    return (row.Cliente || '').toLowerCase();
+      case 'tipo':       return (row.Subclasse || '').toLowerCase();
+      case 'Ticker':     return (row.Ticker || '').toLowerCase();
+      case 'ativo':      return (ref || '').toLowerCase();
+      case 'strike':     return strike ?? -Infinity;
+      case 'spot':       return (_precos[ref] ?? -Infinity);
+      case 'dist': {
+        const spot = _precos[ref] ?? null;
+        return (spot !== null && strike) ? (spot / strike - 1) * 100 : -Infinity;
+      }
+      case 'Vencimento': return row.Vencimento || '';
+      case 'Direcao':    return (row.Direcao || '').toLowerCase();
+      case 'qtd':        return Math.abs(row.Quantidade || 0);
+      case 'pm':         return pm ?? -Infinity;
+      case 'Preco':      return row.Preco ?? -Infinity;
+      case 'valor':      return Math.abs(row.ValorBruto || 0);
+      case 'pl':         return calcPL(row) ?? -Infinity;
+      default:           return '';
+    }
+  }
+
+  function sortDados(dados) {
+    if (!_sortCol) return dados;
+    return [...dados].sort((a, b) => {
+      const va = getValorSort(a, _sortCol);
+      const vb = getValorSort(b, _sortCol);
+      let cmp = 0;
+      if (typeof va === 'string') cmp = va.localeCompare(vb, 'pt-BR');
+      else cmp = va < vb ? -1 : va > vb ? 1 : 0;
+      return _sortDir === 'asc' ? cmp : -cmp;
+    });
+  }
+
+  // ── KPIs ──────────────────────────────────────────────────────────────────
+  function renderKPIs(dados) {
+    const contas = new Set(dados.map(d => d.Conta)).size;
+    const vendidas  = dados.filter(d => (d.Direcao || '').toLowerCase().includes('vendida'));
+    const compradas = dados.filter(d => !(d.Direcao || '').toLowerCase().includes('vendida'));
+
+    const expVendida  = vendidas.reduce((s, d)  => s + Math.abs(d.ValorBruto || 0), 0);
+    const expComprada = compradas.reduce((s, d) => s + Math.abs(d.ValorBruto || 0), 0);
+    const plTotal = dados.reduce((s, d) => { const pl = calcPL(d); return pl !== null ? s + pl : s; }, 0);
+
+    document.getElementById('kpiTotal').textContent    = dados.length;
+    document.getElementById('kpiContas').textContent   = plural(contas, 'conta');
+    document.getElementById('kpiVendida').textContent  = 'R$ ' + fmtAbrev(expVendida);
+    document.getElementById('kpiVendidaSub').textContent = `${vendidas.length} ${vendidas.length !== 1 ? 'posições' : 'posição'}`;
+    document.getElementById('kpiComprada').textContent = 'R$ ' + fmtAbrev(expComprada);
+    document.getElementById('kpiCompradaSub').textContent = `${compradas.length} ${compradas.length !== 1 ? 'posições' : 'posição'}`;
+
+    const plEl = document.getElementById('kpiPL');
+    plEl.textContent = (plTotal >= 0 ? '+R$ ' : '-R$ ') + fmtAbrev(Math.abs(plTotal));
+    plEl.className   = 'kpi-value ' + (plTotal >= 0 ? 'pl-pos' : 'pl-neg');
+  }
+
+  // ── Tabela ────────────────────────────────────────────────────────────────
+  function renderTabela(dados) {
+    const tbody = document.getElementById('tabelaOpcoes');
+
+    if (!dados.length) {
+      tbody.innerHTML = `<tr><td colspan="15">
+        <div class="empty-state">
+          <div class="empty-state-icon">🔍</div>
+          <div class="empty-state-title">Nenhuma posição encontrada</div>
+        </div></td></tr>`;
+      document.getElementById('tableSummary').style.display = 'none';
+      return;
+    }
+
+    let html = '';
+    let totalPL = 0, totalVendida = 0, totalComprada = 0;
+
+    dados.forEach(row => {
+      const { strike, ref, pm } = parseInfoExtra(row.InfoExtra);
+      const pl      = calcPL(row);
+      const dias    = diasAteVencimento(row.Vencimento);
+      const isVend  = (row.Direcao || '').toLowerCase().includes('vendida');
+      const isPut   = (row.Subclasse || '').toLowerCase().includes('put');
+
+      // Vencimento
+      const vencStr = row.Vencimento ? row.Vencimento.split('-').reverse().join('/') : '—';
+      let diasBadge = '';
+      if (dias !== null) {
+        const cls = dias <= 7 ? 'dias-danger' : dias <= 30 ? 'dias-warn' : 'dias-ok';
+        diasBadge = `<span class="dias-badge ${cls}">${dias}d</span>`;
+      }
+
+      // P&L
+      let plStr = '—', plClass = '';
+      if (pl !== null) {
+        totalPL += pl;
+        plStr   = (pl >= 0 ? '+R$ ' : '-R$ ') + fmtNum(Math.abs(pl));
+        plClass = pl >= 0 ? 'pl-pos' : 'pl-neg';
+      }
+
+      // Exposição
+      const valAbs = Math.abs(row.ValorBruto || 0);
+      if (isVend) totalVendida += valAbs; else totalComprada += valAbs;
+
+      const qtdAbs = Math.abs(row.Quantidade || 0).toLocaleString('pt-BR');
+      const valorStr = row.ValorBruto != null
+        ? `<span style="color:${isVend ? '#dc2626' : '#16a34a'}">${isVend ? '-' : '+'}R$ ${fmtNum(valAbs)}</span>`
+        : '—';
+
+      html += `<tr>
+        <td style="font-weight:600;color:#0c1a35;font-size:12px;font-family:monospace">${row.Conta || '—'}</td>
+        <td style="color:#374151;max-width:160px;overflow:hidden;text-overflow:ellipsis" title="${row.Cliente || ''}">${row.Cliente || '—'}</td>
+        <td><span class="badge ${isPut ? 'badge-put' : 'badge-call'}">${isPut ? 'PUT' : 'CALL'}</span></td>
+        <td style="font-family:monospace;font-size:12px;color:#374151">${row.Ticker || '—'}</td>
+        <td style="font-weight:600;color:#0c1a35">${ref || '—'}</td>
+        <td class="num">${strike !== null ? fmtNum4(strike) : '—'}</td>
+        ${(() => {
+          const spot = _precos[ref] ?? null;
+          const dist = (spot !== null && strike) ? (spot / strike - 1) * 100 : null;
+          // ITM = bad para vendido: PUT vendida + spot < strike; CALL vendida + spot > strike
+          const itmParaComprador = isPut ? (dist < 0) : (dist > 0);
+          const eRuim = isVend ? itmParaComprador : !itmParaComprador;
+          const distClass = dist === null ? '' : Math.abs(dist) < 3 ? 'venc-warn' : eRuim ? 'pl-neg' : 'pl-pos';
+          const spotStr = spot !== null ? fmtNum4(spot) : '<span style="color:#d1d5db">—</span>';
+          const distStr = dist !== null
+            ? `<span class="${distClass}">${dist >= 0 ? '+' : ''}${dist.toFixed(1)}%</span>`
+            : '<span style="color:#d1d5db">—</span>';
+          return `<td class="num">${spotStr}</td><td class="num">${distStr}</td>`;
+        })()}
+        <td>${vencStr}${diasBadge}</td>
+        <td><span class="badge ${isVend ? 'badge-vendida' : 'badge-comprada'}">${isVend ? 'Vendida' : 'Comprada'}</span></td>
+        <td class="num">${qtdAbs}</td>
+        <td class="num" style="color:#6b7280">${pm !== null ? fmtNum4(pm) : '—'}</td>
+        <td class="num" style="color:#374151">${row.Preco != null ? fmtNum4(row.Preco) : '—'}</td>
+        <td class="num">${valorStr}</td>
+        <td class="num ${plClass}">${plStr}</td>
+      </tr>`;
+    });
+
+    tbody.innerHTML = html;
+
+    // Summary
+    const sumEl = document.getElementById('tableSummary');
+    document.getElementById('summaryCount').textContent    = `${dados.length} posição${dados.length !== 1 ? 'ões' : ''}`;
+    document.getElementById('summaryVendida').textContent  = 'R$ ' + fmtNum(totalVendida);
+    document.getElementById('summaryComprada').textContent = 'R$ ' + fmtNum(totalComprada);
+    const plSpan = document.getElementById('summaryPL');
+    plSpan.textContent = (totalPL >= 0 ? '+R$ ' : '-R$ ') + fmtNum(Math.abs(totalPL));
+    plSpan.style.color = totalPL >= 0 ? '#16a34a' : '#dc2626';
+    plSpan.style.fontWeight = '700';
+    sumEl.style.display = 'flex';
+  }
+
+  // ── Formatação ────────────────────────────────────────────────────────────
+  function fmtNum(n) {
+    if (n == null || isNaN(n)) return '—';
+    return Math.abs(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function fmtAbrev(n) {
+    if (n == null || isNaN(n)) return '—';
+    const abs = Math.abs(n);
+    if (abs >= 1e6) return (abs / 1e6).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + 'M';
+    if (abs >= 1e3) return (abs / 1e3).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 1 }) + 'K';
+    return abs.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function fmtNum4(n) {
+    if (n == null || isNaN(n)) return '—';
+    return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+  }
+  function plural(n, s) { return `${n} ${n !== 1 ? s + 's' : s}`; }
+
+  // ── UI Helpers ────────────────────────────────────────────────────────────
+  function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('open');
+    document.getElementById('overlay').style.display =
+      document.getElementById('sidebar').classList.contains('open') ? 'block' : 'none';
+  }
+  function closeSidebar() {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('overlay').style.display = 'none';
+  }
+  function toggleDropdown() {
+    document.getElementById('userChip').classList.toggle('open');
+  }
+  document.addEventListener('click', e => {
+    if (!document.getElementById('userChip').contains(e.target))
+      document.getElementById('userChip').classList.remove('open');
+  });
+  function logout() {
+    auth.signOut().then(() => window.location.replace('index.html'));
+  }
+</script>
+</body>
+</html>

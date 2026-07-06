@@ -9,11 +9,14 @@ Endpoints:
 
 import io
 import os
+import re
 import time
 import logging
 from datetime import datetime
 from typing import Optional
+from urllib.parse import quote
 import pandas as pd
+import yfinance as yf
 
 from fastapi import FastAPI, Depends, HTTPException, Header, Query, UploadFile, File, status
 from fastapi.responses import StreamingResponse
@@ -49,6 +52,66 @@ TABLE_EXCECOES    = f"`{GCP_PROJECT}.{DATASET}.conta_assessor_excecoes`"
 GCS_BUCKET  = os.getenv("GCS_BUCKET", "creta-btg-pipeline")
 GCS_PREFIX  = "entradas/"
 gcs_client  = gcs.Client(project=GCP_PROJECT)
+
+# ── Cotações via Yahoo Finance ────────────────────────────────────────────────
+# Tickers BTG internos → código B3 padrão (.SA é o sufixo do Yahoo para B3)
+TICKER_MAP_YF: dict[str, str] = {
+    "VALEON": "VALE3.SA",
+    "PETRPN": "PETR4.SA",
+    "PETRPP": "PETR3.SA",
+    "BRADPN": "BBDC4.SA",
+    "RENTON": "RENT3.SA",
+}
+_preco_cache: dict = {}   # { ref: {"v": float|None, "ts": float} }
+PRECO_TTL = 900           # 15 minutos
+
+def _yf_ticker(ref: str) -> str:
+    return TICKER_MAP_YF.get(ref, ref + ".SA")
+
+def _ref_from_info(info: str | None) -> str | None:
+    if not info:
+        return None
+    m = re.search(r"Ref:\s*([^\s|]+)", info)
+    return m.group(1).strip() if m else None
+
+def buscar_precos(refs: list[str]) -> dict[str, float]:
+    """Retorna {ref: preco} usando cache de 15 min. Busca via yfinance."""
+    agora = time.time()
+    faltando = [r for r in set(refs)
+                if r not in _preco_cache or (agora - _preco_cache[r]["ts"]) > PRECO_TTL]
+
+    if faltando:
+        tmap = {r: _yf_ticker(r) for r in faltando}
+        uniq = list(set(tmap.values()))
+        try:
+            raw = yf.download(uniq, period="5d", progress=False, auto_adjust=True)
+            if not raw.empty:
+                # yf.download retorna estrutura diferente para 1 vs N tickers
+                if len(uniq) == 1:
+                    col = raw["Close"].dropna()
+                    v   = round(float(col.iloc[-1]), 2) if not col.empty else None
+                    for ref in faltando:
+                        _preco_cache[ref] = {"v": v, "ts": agora}
+                else:
+                    close = raw["Close"]
+                    for ref, yft in tmap.items():
+                        try:
+                            col = close[yft].dropna()
+                            v   = round(float(col.iloc[-1]), 2) if not col.empty else None
+                        except Exception:
+                            v = None
+                        _preco_cache[ref] = {"v": v, "ts": agora}
+            else:
+                for ref in faltando:
+                    _preco_cache[ref] = {"v": None, "ts": agora}
+        except Exception as e:
+            log.warning(f"yfinance erro: {e}")
+            for ref in faltando:
+                _preco_cache[ref] = {"v": None, "ts": agora}
+
+    return {r: _preco_cache[r]["v"] for r in set(refs)
+            if _preco_cache.get(r, {}).get("v") is not None}
+
 
 # ── Cache simples em memória ──────────────────────────────────────────────────
 # Evita consultar o BigQuery a cada requisição.
@@ -575,6 +638,103 @@ async def posicoes_endpoint(
     return resultado
 
 
+@app.get("/api/opcoes")
+async def opcoes_endpoint(
+    authorization: Optional[str] = Header(default=None),
+):
+    """
+    Retorna todas as posições de derivativos (opções) da data mais recente.
+    Admins veem todas as contas; assessores veem apenas as suas.
+    """
+    token_data    = await verificar_token(authorization)
+    role          = token_data.get("role", "assessor")
+    assessor_name = token_data.get("assessor_name")
+    is_admin      = role == "admin"
+
+    cache_key = f"opcoes:{assessor_name if not is_admin else 'all'}"
+    cached = cache_get(cache_key)
+    if cached:
+        return cached
+
+    qp = []
+    if not is_admin and assessor_name:
+        qp.append(ScalarQueryParameter("assessor", "STRING", assessor_name.strip()))
+        join_part = f"""
+            INNER JOIN (
+                SELECT DISTINCT CAST(Conta AS STRING) AS cnt
+                FROM {TABLE}
+                WHERE TRIM(Assessor_Manual) = @assessor
+            ) r ON TRIM(p.Conta) = r.cnt
+        """
+    else:
+        join_part = ""
+
+    sql = f"""
+        WITH ultima_data AS (
+            SELECT MAX(DATE(Data)) AS max_data
+            FROM {TABLE_POSICAO}
+            WHERE Classe = 'Derivativo'
+        ),
+        clientes AS (
+            SELECT
+                Conta            AS conta_num,
+                MAX(Cliente)     AS cliente
+            FROM {TABLE}
+            WHERE Cliente IS NOT NULL AND Cliente != ''
+            GROUP BY Conta
+        )
+        SELECT
+            p.Conta,
+            COALESCE(c.cliente, '')  AS Cliente,
+            p.Subclasse,
+            p.Nome,
+            p.Ticker,
+            FORMAT_DATE('%Y-%m-%d', SAFE_CAST(p.Vencimento AS DATE)) AS Vencimento,
+            p.Direcao,
+            SAFE_CAST(p.Quantidade AS FLOAT64) AS Quantidade,
+            SAFE_CAST(p.Preco      AS FLOAT64) AS Preco,
+            SAFE_CAST(p.ValorBruto AS FLOAT64) AS ValorBruto,
+            p.InfoExtra,
+            ud.max_data AS data_referencia
+        FROM {TABLE_POSICAO} p
+        CROSS JOIN ultima_data ud
+        LEFT JOIN clientes c ON SAFE_CAST(TRIM(p.Conta) AS INT64) = c.conta_num
+        {join_part}
+        WHERE DATE(p.Data) = ud.max_data
+          AND p.Classe = 'Derivativo'
+        ORDER BY p.Conta, SAFE_CAST(p.Vencimento AS DATE)
+    """
+
+    log.info(f"BQ opcoes: {'todos' if is_admin else assessor_name}")
+    if qp:
+        rows_raw = list(bq.query(sql, job_config=QueryJobConfig(query_parameters=qp)).result())
+    else:
+        rows_raw = list(bq.query(sql).result())
+
+    data_ref = None
+    rows_list = []
+    for row in rows_raw:
+        d = dict(row)
+        dr = d.pop("data_referencia", None)
+        if data_ref is None and dr is not None:
+            data_ref = dr.isoformat() if hasattr(dr, "isoformat") else str(dr)
+        for field in ["Quantidade", "Preco", "ValorBruto"]:
+            if d.get(field) is not None:
+                try:
+                    d[field] = float(d[field])
+                except (TypeError, ValueError):
+                    d[field] = None
+        rows_list.append(d)
+
+    # Cotações dos ativos subjacentes (ex: BOVA11, VALE3, ITUB4)
+    refs = list({_ref_from_info(r.get("InfoExtra")) for r in rows_list} - {None})
+    precos = buscar_precos(refs) if refs else {}
+
+    resultado = {"data_referencia": data_ref, "opcoes": rows_list, "precos": precos}
+    cache_set(cache_key, resultado)
+    return resultado
+
+
 @app.get("/api/posicao")
 async def posicao(
     authorization: Optional[str] = Header(default=None),
@@ -817,7 +977,7 @@ async def download_arquivo(
         return StreamingResponse(
             buffer,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={"Content-Disposition": f'attachment; filename="{nome}"'},
+            headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(nome)}"},
         )
     except Exception as e:
         log.error(f"Erro download GCS: {e}")
@@ -862,6 +1022,250 @@ async def excecoes_excel(
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": 'attachment; filename="excecoes_assessor.xlsx"'},
     )
+
+
+# ── Relatórios ───────────────────────────────────────────────────────────────
+
+@app.get("/api/assessores")
+async def assessores_endpoint(
+    authorization: Optional[str] = Header(default=None),
+):
+    """Lista assessores distintos — apenas admins (filtro do relatório)."""
+    token_data = await verificar_token(authorization)
+    if token_data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Apenas administradores.")
+
+    cached = cache_get("assessores")
+    if cached:
+        return cached
+
+    sql = f"""
+        SELECT DISTINCT TRIM(Assessor_Manual) AS assessor
+        FROM {TABLE}
+        WHERE Assessor_Manual IS NOT NULL AND TRIM(Assessor_Manual) != ''
+        ORDER BY assessor
+    """
+    rows = run_query(sql)
+    resultado = {"assessores": [r["assessor"] for r in rows]}
+    cache_set("assessores", resultado)
+    return resultado
+
+
+@app.get("/api/relatorio/historico")
+async def relatorio_historico(
+    periodo: str = "12m",
+    assessor: Optional[str] = None,
+    authorization: Optional[str] = Header(default=None),
+):
+    """
+    Relatório histórico: AuC diário, novas contas/mês, receita+ROA mensal,
+    top 20 variações absolutas de PL (últimos 30 dias).
+
+    periodo: "3m" | "6m" | "12m" | "all"
+    assessor: nome do assessor (apenas admins podem especificar)
+    """
+    token_data    = await verificar_token(authorization)
+    role          = token_data.get("role", "assessor")
+    assessor_name = token_data.get("assessor_name")
+    is_admin      = role == "admin"
+
+    filter_assessor = (assessor.strip() if assessor else None) if is_admin else assessor_name
+
+    cache_key = f"relatorio:{periodo}:{filter_assessor or 'all'}"
+    cached = cache_get(cache_key)
+    if cached:
+        return cached
+
+    mapa_periodo = {
+        "3m":  "DATE_SUB(CURRENT_DATE(), INTERVAL 3  MONTH)",
+        "6m":  "DATE_SUB(CURRENT_DATE(), INTERVAL 6  MONTH)",
+        "12m": "DATE_SUB(CURRENT_DATE(), INTERVAL 12 MONTH)",
+        "all": "DATE '2010-01-01'",
+    }
+    data_inicio = mapa_periodo.get(periodo, mapa_periodo["12m"])
+
+    qp = [ScalarQueryParameter("assessor", "STRING", filter_assessor)] if filter_assessor else []
+
+    # CTEs que filtram posicao_das_contas por assessor (via join com receitas)
+    if filter_assessor:
+        contas_cte = f"""
+    contas_assessor AS (
+        SELECT DISTINCT Conta AS conta_num
+        FROM {TABLE}
+        WHERE TRIM(Assessor_Manual) = @assessor
+    ),"""
+        contas_join = f"INNER JOIN contas_assessor ca ON SAFE_CAST(TRIM(p.Conta) AS INT64) = ca.conta_num"
+    else:
+        contas_cte  = ""
+        contas_join = ""
+
+    assessor_where = "AND TRIM(Assessor_Manual) = @assessor" if filter_assessor else ""
+
+    def rq(sql: str) -> list[dict]:
+        if qp:
+            return [dict(r) for r in bq.query(sql, job_config=QueryJobConfig(query_parameters=qp)).result()]
+        return [dict(r) for r in bq.query(sql).result()]
+
+    def ser(rows: list[dict]) -> list[dict]:
+        return [{k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in row.items()} for row in rows]
+
+    # ── 1. AuC diário ─────────────────────────────────────────────────────────
+    sql_auc = f"""
+        WITH{contas_cte}
+        auc_dia AS (
+            SELECT DATE(p.Data) AS dia, ROUND(SUM(p.ValorBruto), 2) AS auc
+            FROM {TABLE_POSICAO} p
+            {contas_join}
+            WHERE DATE(p.Data) >= {data_inicio}
+            GROUP BY DATE(p.Data)
+        )
+        SELECT FORMAT_DATE('%Y-%m-%d', dia) AS dia, auc
+        FROM auc_dia
+        ORDER BY dia
+    """
+
+    # ── 2. Novas contas por mês (primeira aparição na base) ───────────────────
+    sql_novas = f"""
+        WITH{contas_cte}
+        primeira_aparicao AS (
+            SELECT TRIM(p.Conta) AS Conta, MIN(DATE(p.Data)) AS primeira_data
+            FROM {TABLE_POSICAO} p
+            {contas_join}
+            GROUP BY TRIM(p.Conta)
+        )
+        SELECT
+            FORMAT_DATE('%Y-%m', DATE_TRUNC(primeira_data, MONTH)) AS mes,
+            COUNT(*) AS novas_contas
+        FROM primeira_aparicao
+        WHERE primeira_data >= {data_inicio}
+        GROUP BY mes
+        ORDER BY mes
+    """
+
+    # ── 3. Receita + ROA mensal ────────────────────────────────────────────────
+    sql_receita = f"""
+        WITH receita_mensal AS (
+            SELECT
+                FORMAT_DATE('%Y-%m', DATE_TRUNC(DATE(Data_De_Referencia), MONTH)) AS mes,
+                ROUND(SUM(Receita_Liquida),       2) AS receita_liquida,
+                ROUND(SUM(Receita_Bruta),         2) AS receita_bruta,
+                ROUND(SUM(Comissao_Liquida),      2) AS comissao_liquida,
+                ROUND(SUM(Repasse_Total_liquido), 2) AS repasse_liquido
+            FROM {TABLE}
+            WHERE DATE(Data_De_Referencia) >= {data_inicio}
+              {assessor_where}
+            GROUP BY mes
+        ),
+        auc_mensal AS (
+            SELECT
+                FORMAT_DATE('%Y-%m', DATE_TRUNC(p.dia_data, MONTH)) AS mes,
+                ROUND(AVG(p.auc_dia), 2) AS avg_auc
+            FROM (
+                SELECT DATE(p2.Data) AS dia_data, SUM(p2.ValorBruto) AS auc_dia
+                FROM {TABLE_POSICAO} p2
+                WHERE DATE(p2.Data) >= {data_inicio}
+                GROUP BY DATE(p2.Data)
+            ) p
+            GROUP BY mes
+        )
+        SELECT
+            r.mes,
+            r.receita_liquida,
+            r.receita_bruta,
+            r.comissao_liquida,
+            r.repasse_liquido,
+            ROUND(COALESCE(a.avg_auc, 0), 0) AS avg_auc,
+            CASE WHEN COALESCE(a.avg_auc, 0) > 0
+                 THEN ROUND((r.receita_liquida / a.avg_auc) * 12 * 100, 4)
+                 ELSE NULL
+            END AS roa_anualizado_pct
+        FROM receita_mensal r
+        LEFT JOIN auc_mensal a USING (mes)
+        ORDER BY r.mes
+    """
+
+    # ── 4. Top 20 PL movers (delta AuC vs ~30 dias atrás) ────────────────────
+    sql_movers = f"""
+        WITH ultima_data AS (
+            SELECT MAX(DATE(Data)) AS max_data
+            FROM {TABLE_POSICAO}
+        ),
+        data_ref AS (
+            SELECT MAX(DATE(p.Data)) AS ref_data
+            FROM {TABLE_POSICAO} p
+            CROSS JOIN ultima_data ud
+            WHERE DATE(p.Data) <= DATE_SUB(ud.max_data, INTERVAL 30 DAY)
+        ),{contas_cte}
+        auc_atual AS (
+            SELECT TRIM(p.Conta) AS Conta, ROUND(SUM(p.ValorBruto), 2) AS auc
+            FROM {TABLE_POSICAO} p
+            CROSS JOIN ultima_data ud
+            {contas_join}
+            WHERE DATE(p.Data) = ud.max_data
+            GROUP BY TRIM(p.Conta)
+        ),
+        auc_ant AS (
+            SELECT TRIM(p.Conta) AS Conta, ROUND(SUM(p.ValorBruto), 2) AS auc
+            FROM {TABLE_POSICAO} p
+            CROSS JOIN data_ref dr
+            {contas_join}
+            WHERE DATE(p.Data) = dr.ref_data
+            GROUP BY TRIM(p.Conta)
+        ),
+        clientes AS (
+            SELECT Conta AS conta_num, MAX(Cliente) AS cliente, MAX(Assessor_Manual) AS assessor
+            FROM {TABLE}
+            WHERE Cliente IS NOT NULL AND Cliente != ''
+            GROUP BY Conta
+        )
+        SELECT
+            a.Conta,
+            COALESCE(c.cliente,  '') AS cliente,
+            COALESCE(c.assessor, '') AS assessor,
+            COALESCE(a.auc, 0)       AS auc_atual,
+            COALESCE(r.auc, 0)       AS auc_ref,
+            ROUND(COALESCE(a.auc, 0) - COALESCE(r.auc, 0), 2) AS delta_auc
+        FROM auc_atual a
+        LEFT JOIN auc_ant  r ON a.Conta = r.Conta
+        LEFT JOIN clientes c ON SAFE_CAST(a.Conta AS INT64) = c.conta_num
+        ORDER BY ABS(COALESCE(a.auc, 0) - COALESCE(r.auc, 0)) DESC
+        LIMIT 20
+    """
+
+    log.info(f"BQ relatorio/historico: periodo={periodo}, assessor={filter_assessor or 'todos'}")
+    auc_diario   = ser(rq(sql_auc))
+    novas_contas = ser(rq(sql_novas))
+    receita_roa  = ser(rq(sql_receita))
+    pl_movers    = ser(rq(sql_movers))
+
+    # KPIs derivados
+    auc_atual_val     = float(auc_diario[-1]["auc"]) if auc_diario else 0
+    delta_auc         = round(
+        float(auc_diario[-1]["auc"]) - float(auc_diario[0]["auc"]), 2
+    ) if len(auc_diario) >= 2 else 0
+    novas_total       = sum(int(r.get("novas_contas") or 0) for r in novas_contas)
+    receita_total     = round(sum(float(r.get("receita_liquida") or 0) for r in receita_roa), 2)
+    roa_ultimo        = float(receita_roa[-1]["roa_anualizado_pct"]) if receita_roa and receita_roa[-1].get("roa_anualizado_pct") is not None else None
+
+    resultado = {
+        "periodo":      periodo,
+        "assessor":     filter_assessor,
+        "gerado_em":    datetime.utcnow().isoformat(),
+        "kpis": {
+            "auc_atual":            auc_atual_val,
+            "delta_auc_periodo":    delta_auc,
+            "novas_contas_periodo": novas_total,
+            "roa_anualizado_pct":   roa_ultimo,
+            "receita_periodo":      receita_total,
+        },
+        "auc_diario":   auc_diario,
+        "novas_contas": novas_contas,
+        "receita_roa":  receita_roa,
+        "pl_movers":    pl_movers,
+    }
+
+    cache_set(cache_key, resultado)
+    return resultado
 
 
 @app.delete("/api/cache")

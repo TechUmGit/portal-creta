@@ -5,7 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Creta Capital — Configurações</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js">
+  function showConfirm(msg) {
+    return new Promise(resolve => {
+      document.getElementById('confirm-modal-msg').textContent = msg;
+      document.getElementById('confirm-modal').style.display = 'flex';
+      document.getElementById('confirm-ok-btn').onclick = () => {
+        document.getElementById('confirm-modal').style.display = 'none'; resolve(true);
+      };
+      document.getElementById('confirm-cancel-btn').onclick = () => {
+        document.getElementById('confirm-modal').style.display = 'none'; resolve(false);
+      };
+    });
+  }
+</script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
   <style>
@@ -377,6 +390,17 @@
 </main>
 </div><!-- /app -->
 
+<!-- Confirm modal customizado -->
+<div id="confirm-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;padding:28px 32px;max-width:360px;width:90%;box-shadow:0 20px 48px rgba(0,0,0,0.18);text-align:center;">
+    <p id="confirm-modal-msg" style="font-size:14px;color:#374151;margin-bottom:22px;line-height:1.6;"></p>
+    <div style="display:flex;gap:12px;justify-content:center;">
+      <button id="confirm-cancel-btn" style="padding:9px 22px;background:#f4f6fb;color:#374151;border:1.5px solid #e8ebf2;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">Cancelar</button>
+      <button id="confirm-ok-btn" style="padding:9px 22px;background:#dc2626;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">Remover</button>
+    </div>
+  </div>
+</div>
+
 <script>
   const API_URL  = 'https://api-creta-978599698367.us-central1.run.app';
   const FB_CONFIG = {
@@ -690,7 +714,7 @@
   }
 
   async function deletarArquivo(nome) {
-    if (!confirm(`Remover "${nome}" do bucket?`)) return;
+    if (!await showConfirm(`Remover "${nome}" do bucket?`)) return;
     try {
       const token = await getIdToken();
       const res   = await fetch(
@@ -707,7 +731,7 @@
 
   // ── Deletar exceção ───────────────────────────────────────────────────────
   async function deletarExcecao(conta, dataInicio) {
-    if (!confirm(`Remover exceção da conta ${conta} com início em ${fmtData(dataInicio)}?`)) return;
+    if (!await showConfirm(`Remover exceção da conta ${conta} com início em ${fmtData(dataInicio)}?`)) return;
     try {
       const token = await getIdToken();
       const res   = await fetch(

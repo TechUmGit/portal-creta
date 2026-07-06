@@ -135,11 +135,26 @@
     @media (max-width: 1100px) { .two-col { grid-template-columns: 1fr; } .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
     @media (max-width: 900px)  { .sidebar-overlay.open { display: block; } .search-bar { display: none; } .hero { padding: 28px 24px; } .content { padding: 24px 20px; } }
     @media (max-width: 600px)  { .topbar { padding: 0 16px; } .kpi-grid { grid-template-columns: 1fr; } .user-name, .user-role { display: none; } .filter-input { min-width: 100%; } }
+    .data-overlay { position: fixed; inset: 0; background: rgba(240,243,248,0.82); z-index: 500; display: none; align-items: center; justify-content: center; backdrop-filter: blur(2px); flex-direction: column; gap: 12px; }
+    .data-overlay .spinner { width: 32px; height: 32px; border: 3px solid rgba(11,181,213,0.2); border-top-color: #0bb5d5; border-radius: 50%; animation: spin 0.7s linear infinite; }
+    .data-overlay-label { font-size: 13px; color: #9ca3af; font-weight: 500; }
   </style>
 </head>
 <body>
 
 <div class="loading-screen" id="loadingScreen"><div class="spinner"></div></div>
+
+<div class="data-overlay" id="dataOverlay">
+  <div class="spinner"></div>
+  <div class="data-overlay-label">Carregando dados...</div>
+</div>
+<!-- Modal customizado (substitui alert nativo) -->
+<div id="custom-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;padding:28px 32px;max-width:360px;width:90%;box-shadow:0 20px 48px rgba(0,0,0,0.18);text-align:center;">
+    <p id="custom-modal-msg" style="font-size:14px;color:#374151;margin-bottom:22px;line-height:1.6;"></p>
+    <button onclick="document.getElementById('custom-modal').style.display='none';" style="padding:9px 32px;background:#0c1a35;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;letter-spacing:0.02em;">OK</button>
+  </div>
+</div>
 
 <div id="app" style="display:none">
 
@@ -336,6 +351,15 @@
   let sortCol    = 'total';
   let sortDir    = -1;
 
+
+  function showOverlay() { document.getElementById('dataOverlay').style.display = 'flex'; }
+  function hideOverlay() { document.getElementById('dataOverlay').style.display = 'none'; }
+
+  function showAlert(msg) {
+    document.getElementById('custom-modal-msg').textContent = msg;
+    document.getElementById('custom-modal').style.display = 'flex';
+  }
+
   // ── Auth ──────────────────────────────────────────────────────────────────
   auth.onAuthStateChanged(async function(user) {
     document.getElementById('loadingScreen').style.display = 'none';
@@ -375,6 +399,7 @@
 
   // ── Carregar dados da API ─────────────────────────────────────────────────
   async function carregarDados() {
+    showOverlay();
     try {
       const token = await getIdToken();
       const resp  = await fetch(API_URL + '/api/posicoes', {
@@ -384,6 +409,7 @@
       dadosRaw = await resp.json();
       processarDados();
       renderizar();
+      hideOverlay();
     } catch(e) {
       console.error('Erro ao carregar posições:', e);
       document.getElementById('kpiAuc').textContent    = 'Erro';
@@ -391,6 +417,7 @@
       document.getElementById('kpiMedio').textContent  = 'Erro';
       ['kpiAuc','kpiContas','kpiMedio'].forEach(id =>
         document.getElementById(id).classList.remove('loading-kpi'));
+      hideOverlay();
     }
   }
 

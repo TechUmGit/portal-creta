@@ -111,9 +111,6 @@
     .pl-neg { color: #ef4444; font-weight: 600; }
     .tag-assessor { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 500; background: #eef3ff; color: #0c1a35; }
 
-    /* Status loading */
-    .status-bar { display: none; background: #eef3ff; border-bottom: 1px solid #d4e0ff; padding: 8px 44px; font-size: 12px; color: #4b5563; align-items: center; gap: 8px; }
-    .status-bar.visible { display: flex; }
     .status-dot { width: 6px; height: 6px; border-radius: 50%; background: #0bb5d5; animation: blink 1s infinite; }
     @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
 
@@ -145,6 +142,9 @@
       .filter-bar { padding: 12px 20px; }
       .page-header { padding: 28px 20px; }
     }
+    .data-overlay { position: fixed; inset: 0; background: rgba(240,243,248,0.82); z-index: 500; display: none; align-items: center; justify-content: center; backdrop-filter: blur(2px); flex-direction: column; gap: 12px; }
+    .data-overlay .spinner { width: 32px; height: 32px; border: 3px solid rgba(11,181,213,0.2); border-top-color: #0bb5d5; border-radius: 50%; animation: spin 0.7s linear infinite; }
+    .data-overlay-label { font-size: 13px; color: #9ca3af; font-weight: 500; }
   </style>
 </head>
 <body>
@@ -265,11 +265,20 @@
     </div>
   </div>
 
-  <!-- Status loading -->
-  <div class="status-bar" id="status-bar">
-    <div class="status-dot"></div>
-    Carregando dados…
+
+<div class="data-overlay" id="dataOverlay">
+  <div class="spinner"></div>
+  <div class="data-overlay-label">Carregando dados...</div>
+</div>
+
+<!-- Modal customizado (substitui alert nativo) -->
+<div id="custom-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;padding:28px 32px;max-width:360px;width:90%;box-shadow:0 20px 48px rgba(0,0,0,0.18);text-align:center;">
+    <p id="custom-modal-msg" style="font-size:14px;color:#374151;margin-bottom:22px;line-height:1.6;"></p>
+    <button onclick="document.getElementById('custom-modal').style.display='none';" style="padding:9px 32px;background:#0c1a35;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;letter-spacing:0.02em;">OK</button>
   </div>
+</div>
+  
 
   <div class="content">
     <!-- KPIs -->
@@ -469,7 +478,7 @@
 
   /* ── CARREGAR DADOS ── */
   async function carregarDados() {
-    document.getElementById('status-bar').classList.add('visible');
+    showOverlay();
     try {
       let url = `${API_BASE}/api/relatorio/historico?periodo=${currentPer}`;
       if (currentPer === 'custom' && customStart && customEnd) {
@@ -489,7 +498,7 @@
     } catch (err) {
       console.error('relatorio/historico:', err);
     } finally {
-      document.getElementById('status-bar').classList.remove('visible');
+      hideOverlay();
     }
   }
 
@@ -744,6 +753,15 @@
     });
   }
 
+
+  function showOverlay() { document.getElementById('dataOverlay').style.display = 'flex'; }
+  function hideOverlay() { document.getElementById('dataOverlay').style.display = 'none'; }
+
+  function showAlert(msg) {
+    document.getElementById('custom-modal-msg').textContent = msg;
+    document.getElementById('custom-modal').style.display = 'flex';
+  }
+
   /* ── FILTROS: botões de período ── */
   let customStart = null, customEnd = null;
 
@@ -766,8 +784,8 @@
   function aplicarCustom() {
     const s = document.getElementById('custom-start').value;
     const e = document.getElementById('custom-end').value;
-    if (!s || !e) { alert('Selecione as duas datas.'); return; }
-    if (s > e) { alert('A data inicial deve ser anterior à data final.'); return; }
+    if (!s || !e) { showAlert('Selecione as duas datas.'); return; }
+    if (s > e) { showAlert('A data inicial deve ser anterior à data final.'); return; }
     customStart = s; customEnd = e;
     carregarDados();
   }

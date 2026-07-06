@@ -190,6 +190,14 @@
 </div>
 
 <!-- Overlay de carregamento de dados -->
+
+<!-- Modal customizado (substitui alert nativo) -->
+<div id="custom-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;padding:28px 32px;max-width:360px;width:90%;box-shadow:0 20px 48px rgba(0,0,0,0.18);text-align:center;">
+    <p id="custom-modal-msg" style="font-size:14px;color:#374151;margin-bottom:22px;line-height:1.6;"></p>
+    <button onclick="document.getElementById('custom-modal').style.display='none';" style="padding:9px 32px;background:#0c1a35;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;letter-spacing:0.02em;">OK</button>
+  </div>
+</div>
 <div class="data-overlay" id="dataOverlay">
   <div class="spinner"></div>
   <div class="data-overlay-label">Carregando dados...</div>
@@ -622,6 +630,12 @@
   let categoriaClienteAtual = null;   // categorias do cliente selecionado
 
   /* ── Overlay ── */
+
+  function showAlert(msg) {
+    document.getElementById('custom-modal-msg').textContent = msg;
+    document.getElementById('custom-modal').style.display = 'flex';
+  }
+
   function showOverlay() { document.getElementById('dataOverlay').style.display = 'flex'; }
   function hideOverlay() { document.getElementById('dataOverlay').style.display = 'none'; }
 
@@ -749,7 +763,7 @@
       XLSX.writeFile(wb, 'Detalhamento' + nomeAss + '_' + nomePeriodo + '.xlsx');
     } catch(err) {
       console.error('Erro ao gerar relatório:', err);
-      alert('Erro ao gerar relatório. Tente novamente.');
+      showAlert('Erro ao gerar relatório. Tente novamente.');
     } finally {
       hideOverlay();
     }
@@ -1152,8 +1166,8 @@
   function aplicarCustom() {
     const s = document.getElementById('custom-start').value;
     const e = document.getElementById('custom-end').value;
-    if (!s || !e) { alert('Selecione as duas datas.'); return; }
-    if (s > e) { alert('A data inicial deve ser anterior à data final.'); return; }
+    if (!s || !e) { showAlert('Selecione as duas datas.'); return; }
+    if (s > e) { showAlert('A data inicial deve ser anterior à data final.'); return; }
     carregarDados('custom', s, e);
   }
 

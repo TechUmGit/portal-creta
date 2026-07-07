@@ -75,8 +75,22 @@ def _ref_from_info(info: str | None) -> str | None:
     m = re.search(r"Ref:\s*([^\s|]+)", info)
     return m.group(1).strip() if m else None
 
+def _yf_fetch_one(yft: str) -> float | None:
+    """Busca preço de um único ticker via yfinance."""
+    try:
+        raw = yf.download(yft, period="5d", progress=False, auto_adjust=True)
+        if raw.empty:
+            return None
+        col = raw["Close"].dropna()
+        return round(float(col.iloc[-1]), 2) if not col.empty else None
+    except Exception:
+        return None
+
 def buscar_precos(refs: list[str]) -> dict[str, float]:
-    """Retorna {ref: preco} usando cache de 15 min. Busca via yfinance."""
+    """Retorna {ref: preco} usando cache de 15 min. Busca via yfinance.
+    Falhas NÃO são cacheadas — serão retentadas na próxima chamada.
+    Se o batch falhar, tenta cada ticker individualmente.
+    """
     agora = time.time()
     faltando = [r for r in set(refs)
                 if r not in _preco_cache or (agora - _preco_cache[r]["ts"]) > PRECO_TTL]
@@ -84,31 +98,41 @@ def buscar_precos(refs: list[str]) -> dict[str, float]:
     if faltando:
         tmap = {r: _yf_ticker(r) for r in faltando}
         uniq = list(set(tmap.values()))
+        resultados: dict[str, float | None] = {}
+
+        # 1ª tentativa: batch
         try:
             raw = yf.download(uniq, period="5d", progress=False, auto_adjust=True)
             if not raw.empty:
-                # yf.download retorna estrutura diferente para 1 vs N tickers
                 if len(uniq) == 1:
                     col = raw["Close"].dropna()
                     v   = round(float(col.iloc[-1]), 2) if not col.empty else None
-                    for ref in faltando:
-                        _preco_cache[ref] = {"v": v, "ts": agora}
+                    resultados[uniq[0]] = v
                 else:
                     close = raw["Close"]
-                    for ref, yft in tmap.items():
+                    for yft in uniq:
                         try:
                             col = close[yft].dropna()
-                            v   = round(float(col.iloc[-1]), 2) if not col.empty else None
+                            resultados[yft] = round(float(col.iloc[-1]), 2) if not col.empty else None
                         except Exception:
-                            v = None
-                        _preco_cache[ref] = {"v": v, "ts": agora}
-            else:
-                for ref in faltando:
-                    _preco_cache[ref] = {"v": None, "ts": agora}
+                            resultados[yft] = None
         except Exception as e:
-            log.warning(f"yfinance erro: {e}")
-            for ref in faltando:
-                _preco_cache[ref] = {"v": None, "ts": agora}
+            log.warning(f"yfinance batch erro: {e}")
+
+        # 2ª tentativa: individual para os que falharam no batch
+        falhou_batch = [yft for yft in uniq if resultados.get(yft) is None]
+        if falhou_batch:
+            log.info(f"yfinance retry individual: {falhou_batch}")
+            for yft in falhou_batch:
+                resultados[yft] = _yf_fetch_one(yft)
+
+        # Cacheia apenas sucessos; falhas serão retentadas na próxima chamada
+        for ref, yft in tmap.items():
+            v = resultados.get(yft)
+            if v is not None:
+                _preco_cache[ref] = {"v": v, "ts": agora}
+            else:
+                log.warning(f"Preço não obtido para {ref} ({yft}) — não cacheando falha")
 
     return {r: _preco_cache[r]["v"] for r in set(refs)
             if _preco_cache.get(r, {}).get("v") is not None}

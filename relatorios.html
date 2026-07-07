@@ -100,6 +100,10 @@
     .table-wrap { overflow-x: auto; }
     .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
     .data-table thead th { padding: 10px 12px; text-align: left; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #6b7280; border-bottom: 1.5px solid #e8ebf2; white-space: nowrap; }
+    .data-table thead th.sortable { cursor: pointer; user-select: none; }
+    .data-table thead th.sortable:hover { color: #0c1a35; }
+    .data-table thead th.sort-asc::after { content: " ↑"; color: #0bb5d5; }
+    .data-table thead th.sort-desc::after { content: " ↓"; color: #0bb5d5; }
     .data-table thead th.num { text-align: right; }
     .data-table tbody tr { border-bottom: 1px solid #f0f3f8; transition: background 0.1s; }
     .data-table tbody tr:last-child { border-bottom: none; }
@@ -347,14 +351,14 @@
           <table class="data-table">
             <thead>
               <tr>
-                <th style="width:40px">#</th>
-                <th>Conta</th>
-                <th>Cliente</th>
-                <th>Assessor</th>
-                <th class="num">PL Atual</th>
-                <th class="num">PL 30d atrás</th>
-                <th class="num">Δ PL</th>
-                <th class="num">% Variação</th>
+                <th style="width:40px" class="sortable" data-col="rank" onclick="sortMovers('rank')">#</th>
+                <th class="sortable" data-col="Conta" onclick="sortMovers('Conta')">Conta</th>
+                <th class="sortable" data-col="cliente" onclick="sortMovers('cliente')">Cliente</th>
+                <th class="sortable" data-col="assessor" onclick="sortMovers('assessor')">Assessor</th>
+                <th class="num sortable" data-col="auc_atual" onclick="sortMovers('auc_atual')">PL Atual</th>
+                <th class="num sortable" data-col="auc_ref" onclick="sortMovers('auc_ref')">PL 30d atrás</th>
+                <th class="num sortable sort-desc" data-col="delta_auc" onclick="sortMovers('delta_auc')">Δ PL</th>
+                <th class="num sortable" data-col="pct_var" onclick="sortMovers('pct_var')">% Variação</th>
               </tr>
             </thead>
             <tbody id="tbody-movers">
@@ -724,20 +728,54 @@
   }
 
   /* ── RENDER: Top 20 PL movers ── */
-  function renderMovers(dados) {
+  let _moversData    = [];
+  let _moversSortCol = 'delta_auc';
+  let _moversSortAsc = false;
+
+  function sortMovers(col) {
+    if (_moversSortCol === col) {
+      _moversSortAsc = !_moversSortAsc;
+    } else {
+      _moversSortCol = col;
+      _moversSortAsc = ['Conta','cliente','assessor'].includes(col);
+    }
+    // Atualiza indicadores visuais
+    document.querySelectorAll('.data-table thead th.sortable').forEach(th => {
+      th.classList.remove('sort-asc','sort-desc');
+      if (th.dataset.col === col) th.classList.add(_moversSortAsc ? 'sort-asc' : 'sort-desc');
+    });
+    renderMoversRows();
+  }
+
+  function renderMoversRows() {
     const tbody = document.getElementById('tbody-movers');
-    if (!dados || dados.length === 0) {
+    if (!_moversData || _moversData.length === 0) {
       tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:#9ca3af">Sem dados disponíveis.</td></tr>';
       return;
     }
-    tbody.innerHTML = '';
-    dados.forEach((row, i) => {
+    const sorted = [..._moversData].map(row => {
       const delta  = parseFloat(row.delta_auc) || 0;
       const ref    = parseFloat(row.auc_ref) || 0;
-      const pctVar = ref !== 0 ? (delta / ref) * 100 : null;
-      const cls    = delta >= 0 ? 'pl-pos' : 'pl-neg';
-      const sign   = delta >= 0 ? '+' : '';
+      return { ...row, _delta: delta, _pct: ref !== 0 ? (delta / ref) * 100 : 0 };
+    }).sort((a, b) => {
+      let va, vb;
+      if (_moversSortCol === 'rank')     { va = Math.abs(a._delta); vb = Math.abs(b._delta); }
+      else if (_moversSortCol === 'pct_var') { va = a._pct; vb = b._pct; }
+      else if (['Conta','cliente','assessor'].includes(_moversSortCol)) {
+        va = (a[_moversSortCol] || '').toLowerCase();
+        vb = (b[_moversSortCol] || '').toLowerCase();
+        return _moversSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+      } else {
+        va = parseFloat(a[_moversSortCol]) || 0;
+        vb = parseFloat(b[_moversSortCol]) || 0;
+      }
+      return _moversSortAsc ? va - vb : vb - va;
+    });
 
+    tbody.innerHTML = '';
+    sorted.forEach((row, i) => {
+      const cls  = row._delta >= 0 ? 'pl-pos' : 'pl-neg';
+      const sign = row._delta >= 0 ? '+' : '';
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td class="rank">${i + 1}</td>
@@ -746,11 +784,16 @@
         <td>${row.assessor ? `<span class="tag-assessor">${row.assessor}</span>` : '—'}</td>
         <td class="num">${fmtMoeda(row.auc_atual)}</td>
         <td class="num">${fmtMoeda(row.auc_ref)}</td>
-        <td class="num ${cls}">${sign}${fmtAbrev(delta)}</td>
-        <td class="num ${cls}">${pctVar !== null ? sign + fmtPct(pctVar) : '—'}</td>
+        <td class="num ${cls}">${sign}${fmtAbrev(row._delta)}</td>
+        <td class="num ${cls}">${row._pct !== null ? sign + fmtPct(row._pct) : '—'}</td>
       `;
       tbody.appendChild(tr);
     });
+  }
+
+  function renderMovers(dados) {
+    _moversData = dados || [];
+    renderMoversRows();
   }
 
 

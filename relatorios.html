@@ -362,7 +362,7 @@
               </tr>
             </thead>
             <tbody id="tbody-movers">
-              <tr><td colspan="8" style="text-align:center;padding:32px;color:#9ca3af">Carregando…</td></tr>
+              <tr><td colspan="9" style="text-align:center;padding:32px;color:#9ca3af">Carregando…</td></tr>
             </tbody>
           </table>
         </div>
@@ -376,7 +376,8 @@
             <thead>
               <tr>
                 <th style="width:36px" class="sortable" data-col="rank" onclick="sortTopSub('rank')">#</th>
-                <th class="sortable sort-desc" data-col="receita_bruta" onclick="sortTopSub('receita_bruta')">Subclasse</th>
+                <th class="sortable" data-col="subclasse" onclick="sortTopSub('subclasse')">Categoria</th>
+                <th class="sortable" data-col="produto" onclick="sortTopSub('produto')">Produto</th>
                 <th class="sortable" data-col="Conta" onclick="sortTopSub('Conta')">Conta</th>
                 <th class="sortable" data-col="cliente" onclick="sortTopSub('cliente')">Cliente</th>
                 <th class="sortable" data-col="assessor" onclick="sortTopSub('assessor')">Assessor</th>
@@ -386,7 +387,7 @@
               </tr>
             </thead>
             <tbody id="tbody-top-sub">
-              <tr><td colspan="8" style="text-align:center;padding:32px;color:#9ca3af">Carregando…</td></tr>
+              <tr><td colspan="9" style="text-align:center;padding:32px;color:#9ca3af">Carregando…</td></tr>
             </tbody>
           </table>
         </div>
@@ -776,7 +777,7 @@
   function renderMoversRows() {
     const tbody = document.getElementById('tbody-movers');
     if (!_moversData || _moversData.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:#9ca3af">Sem dados disponíveis.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:32px;color:#9ca3af">Sem dados disponíveis.</td></tr>';
       return;
     }
     const sorted = [..._moversData].map(row => {
@@ -845,12 +846,12 @@
   function renderTopSubRows() {
     const tbody = document.getElementById('tbody-top-sub');
     if (!_topSubData || _topSubData.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:#9ca3af">Sem dados disponíveis.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:32px;color:#9ca3af">Sem dados disponíveis.</td></tr>';
       return;
     }
     const sorted = [..._topSubData].sort((a, b) => {
       const col = _topSubSortCol;
-      if (['subclasse','Conta','cliente','assessor'].includes(col)) {
+      if (['subclasse','produto','Conta','cliente','assessor'].includes(col)) {
         const va = (a[col] || '').toLowerCase(), vb = (b[col] || '').toLowerCase();
         return _topSubSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
       }
@@ -863,9 +864,10 @@
       tr.innerHTML = `
         <td class="rank">${i + 1}</td>
         <td><strong>${row.subclasse || '—'}</strong></td>
+        <td>${row.produto || '—'}</td>
         <td>${row.Conta || '—'}</td>
         <td>${row.cliente || '—'}</td>
-        <td>${row.assessor ? `<span class="tag-assessor">${row.assessor}</span>` : '—'}</td>
+        <td>${row.assessor ? \`<span class="tag-assessor">${row.assessor}</span>\` : '—'}</td>
         <td class="num">${fmtMoeda(row.receita_bruta)}</td>
         <td class="num">${fmtMoeda(row.receita_liquida)}</td>
         <td class="num">${fmtMoeda(row.repasse)}</td>

@@ -357,7 +357,7 @@ async def receitas(
     # 3. Por assessor — donuts + tabela
     por_assessor = run_q(f"""
         SELECT
-          COALESCE(Assessor_Manual, 'Sem assessor') AS assessor,
+          UPPER(COALESCE(Assessor_Manual, 'Sem assessor')) AS assessor,
           ROUND(SUM(Comissao),              2)       AS comissao_bruta,
           ROUND(SUM(Comissao_Liquida),      2)       AS comissao_liquida,
           ROUND(SUM(Repasse_Total_liquido), 2)       AS repasse_liquido
@@ -384,7 +384,7 @@ async def receitas(
     # 5. Por cliente — tabela (top 100 por repasse)
     por_cliente = run_q(f"""
         SELECT
-          COALESCE(Assessor_Manual, '') AS assessor,
+          UPPER(COALESCE(Assessor_Manual, '')) AS assessor,
           COALESCE(Cliente, '')         AS cliente,
           ROUND(SUM(Receita_Bruta),              2) AS receita_bruta,
           ROUND(SUM(Receita_Liquida),            2) AS receita_liquida,
@@ -403,7 +403,7 @@ async def receitas(
     # 6. Evolução mensal por assessor (usada quando assessor/cliente está filtrado no frontend)
     evolucao_por_assessor = run_q(f"""
         SELECT
-          COALESCE(Assessor_Manual, '') AS assessor,
+          UPPER(COALESCE(Assessor_Manual, '')) AS assessor,
           FORMAT_DATE('%b/%y', DATE(Data_De_Referencia))      AS mes,
           DATE_TRUNC(DATE(Data_De_Referencia), MONTH)         AS data_ref,
           ROUND(SUM(Comissao),              2)                 AS comissao_bruta,
@@ -423,7 +423,7 @@ async def receitas(
     # 7. Por categoria por assessor (usada quando assessor/cliente está filtrado no frontend)
     por_assessor_categoria = run_q(f"""
         SELECT
-          COALESCE(Assessor_Manual, '') AS assessor,
+          UPPER(COALESCE(Assessor_Manual, '')) AS assessor,
           COALESCE(Categoria_de_Repasse, 'Outros') AS categoria,
           ROUND(SUM(Comissao),              2) AS comissao_bruta,
           ROUND(SUM(Comissao_Liquida),      2) AS comissao_liquida,
@@ -641,7 +641,7 @@ async def posicoes_endpoint(
         SELECT
             p.Conta,
             COALESCE(n.cliente,  '')            AS cliente,
-            COALESCE(ma.Assessor, '')           AS assessor,
+            UPPER(COALESCE(ma.Assessor, ''))           AS assessor,
             COALESCE(suit.Perfil, 'Sem perfil') AS perfil,
             p.Classe,
             p.auc,
@@ -1092,11 +1092,11 @@ async def assessores_endpoint(
     sql = f"""
         SELECT DISTINCT assessor
         FROM (
-            SELECT Assessor AS assessor
+            SELECT UPPER(Assessor) AS assessor
             FROM {TABLE_ASSESSOR_BASE}
             WHERE MesRef = (SELECT MAX(MesRef) FROM {TABLE_ASSESSOR_BASE})
             UNION DISTINCT
-            SELECT Assessor AS assessor
+            SELECT UPPER(Assessor) AS assessor
             FROM {TABLE_EXCECOES}
             WHERE DataInicio <= CURRENT_DATE()
               AND (DataFim IS NULL OR DataFim >= CURRENT_DATE())
@@ -1295,7 +1295,7 @@ async def relatorio_historico(
         SELECT
             a.Conta,
             COALESCE(n.cliente,   '') AS cliente,
-            COALESCE(ma.Assessor, '') AS assessor,
+            UPPER(COALESCE(ma.Assessor, '')) AS assessor,
             COALESCE(a.auc, 0)        AS auc_atual,
             COALESCE(r.auc, 0)        AS auc_ref,
             ROUND(COALESCE(a.auc, 0) - COALESCE(r.auc, 0), 2) AS delta_auc
@@ -1307,13 +1307,14 @@ async def relatorio_historico(
         LIMIT 20
     """
 
-    # ── 5. Top 20 Subclasse × Cliente por Receita Bruta ──────────────────────
+    # ── 5. Top 20 Categoria × Cliente por Receita Bruta ─────────────────────
     sql_top_sub = f"""
         SELECT
-            COALESCE(NULLIF(TRIM(Subclasse), ''), 'Sem Subclasse') AS subclasse,
+            COALESCE(NULLIF(TRIM(Categoria), ''), 'Sem Categoria') AS subclasse,
+            COALESCE(NULLIF(TRIM(Produto),   ''), '—')             AS produto,
             CAST(Conta AS STRING)                                   AS Conta,
             COALESCE(NULLIF(TRIM(Cliente), ''), '—')               AS cliente,
-            COALESCE(TRIM(Assessor_Manual), '')                    AS assessor,
+            UPPER(COALESCE(TRIM(Assessor_Manual), ''))             AS assessor,
             ROUND(SUM(Receita_Bruta),         2) AS receita_bruta,
             ROUND(SUM(Receita_Liquida),       2) AS receita_liquida,
             ROUND(SUM(Comissao_Liquida),      2) AS comissao_liquida,
@@ -1322,13 +1323,13 @@ async def relatorio_historico(
         WHERE DATE(Data_De_Referencia) >= {data_inicio}
           AND DATE(Data_De_Referencia) <= {data_fim}
           {assessor_where}
-          AND Subclasse IS NOT NULL AND TRIM(Subclasse) != ''
-        GROUP BY subclasse, Conta, cliente, assessor
+          AND Categoria IS NOT NULL AND TRIM(Categoria) != ''
+        GROUP BY subclasse, produto, Conta, cliente, assessor
         ORDER BY receita_bruta DESC
         LIMIT 20
     """
 
-        log.info(f"BQ relatorio/historico: periodo={periodo}, assessor={filter_assessor or 'todos'}")
+    log.info(f"BQ relatorio/historico: periodo={periodo}, assessor={filter_assessor or 'todos'}")
     auc_diario   = ser(rq(sql_auc))
     novas_contas = ser(rq(sql_novas))
     receita_roa  = ser(rq(sql_receita))

@@ -604,7 +604,8 @@
 
     /* Assessores: força filtro pelo próprio nome e oculta dropdown de assessor */
     if (!ehAdmin && perfilUsuario.assessor_name) {
-      assessorAtual = perfilUsuario.assessor_name;
+      assessorAtual      = perfilUsuario.assessor_name;
+      isNonAdminAssessor = true;  // API já filtra tudo via JWT — não depender de nome exato
       const g = document.getElementById('grupoFiltroAssessor');
       if (g) g.style.display = 'none';
     }
@@ -632,6 +633,7 @@
   let perfilUsuario        = null;   // { role, assessor_name, displayName }
   let evolucaoClienteAtual  = null;   // evolução mensal do cliente selecionado
   let categoriaClienteAtual = null;   // categorias do cliente selecionado
+  let isNonAdminAssessor   = false;  // true quando assessor logado (API já filtrou por JWT)
 
   /* ── Overlay ── */
 
@@ -815,9 +817,12 @@
 
     const filtrado = assessorAtual !== 'todos';
 
-    /* Filtra por assessor e por cliente */
-    if (filtrado) {
-      cli = cli.filter(function(r){ return norm(r.assessor) === norm(assessorAtual); });
+    /* Filtra por assessor e por cliente.
+       Se isNonAdminAssessor: API já filtrou tudo via JWT — não filtramos por nome aqui
+       (evita quebra quando assessor_name do Firestore difere do nome no BigQuery) */
+    if (filtrado && !isNonAdminAssessor) {
+      const cliFiltrado = cli.filter(function(r){ return norm(r.assessor) === norm(assessorAtual); });
+      if (cliFiltrado.length > 0) cli = cliFiltrado;
     }
     preencherFiltroCliente(cli);
 
@@ -829,35 +834,28 @@
     }
 
     /* ── Assessor ativo: determina qual assessor usar para evolução e categorias ── */
-    // Cliente selecionado → assessor do cliente; assessor selecionado → esse assessor; senão → null
     const assessorAtivo = filtradoCli && cliRow
       ? norm(cliRow.assessor)
-      : (filtrado ? norm(assessorAtual) : null);
+      : (filtrado ? (isNonAdminAssessor && pa.length > 0 ? norm(pa[0].assessor) : norm(assessorAtual)) : null);
 
-    /* Evolução filtrada:
-       1ª prioridade — dados reais do cliente (/api/evolucao_cliente)
-       2ª prioridade — dados mensais do assessor (evPorAss)
-       3ª fallback   — dados globais (ev) */
+    /* Evolução filtrada */
     let evFiltrada = ev;
     if (filtradoCli && evolucaoClienteAtual && evolucaoClienteAtual.length > 0) {
-      // Cliente selecionado: usa evolução específica do cliente
       evFiltrada = evolucaoClienteAtual;
     } else if (assessorAtivo) {
       const evAss = evPorAss.filter(function(r){ return norm(r.assessor) === assessorAtivo; });
-      if (evAss.length > 0) {
-        evFiltrada = evAss;
-      }
+      // fallback: se isNonAdminAssessor e nada foi encontrado, usa evPorAss completo (já filtrado pela API)
+      evFiltrada = evAss.length > 0 ? evAss : (isNonAdminAssessor && evPorAss.length > 0 ? evPorAss : ev);
     }
 
-    /* Categorias filtradas:
-       1ª prioridade — dados reais do cliente (vem de /api/evolucao_cliente)
-       2ª prioridade — dados do assessor (pcPorAss)
-       3ª fallback   — dados globais */
+    /* Categorias filtradas */
     if (filtradoCli && categoriaClienteAtual && categoriaClienteAtual.length > 0) {
       pc = categoriaClienteAtual;
     } else if (assessorAtivo) {
       const pcAss = pcPorAss.filter(function(r){ return norm(r.assessor) === assessorAtivo; });
+      // fallback: se isNonAdminAssessor e nada foi encontrado, usa pcPorAss completo (já filtrado pela API)
       if (pcAss.length > 0) pc = pcAss;
+      else if (isNonAdminAssessor && pcPorAss.length > 0) pc = pcPorAss;
     }
 
     /* KPIs — prioridade: cliente > assessor > total */
@@ -868,12 +866,23 @@
       document.getElementById('kpiRepLiq').textContent   = fmt(cliRow.repasse);
       document.getElementById('kpiRepEsc').textContent   = fmt(repEsc);
     } else if (filtrado) {
-      const af = pa.find(function(r){ return norm(r.assessor) === norm(assessorAtual); }) || {};
-      const repEsc = (af.comissao_liquida || 0) - (af.repasse_liquido || 0);
-      document.getElementById('kpiComBruta').textContent = fmt(af.comissao_bruta);
-      document.getElementById('kpiComLiq').textContent   = fmt(af.comissao_liquida);
-      document.getElementById('kpiRepLiq').textContent   = fmt(af.repasse_liquido);
-      document.getElementById('kpiRepEsc').textContent   = fmt(repEsc);
+      // Tenta achar o assessor em por_assessor pelo nome.
+      // Se não achar (nome no Firestore difere do BQ), e for assessor logado,
+      // usa kpis direto — API já filtrou tudo pelo JWT.
+      const af = pa.find(function(r){ return norm(r.assessor) === norm(assessorAtual); }) || null;
+      if (af) {
+        const repEsc = (af.comissao_liquida || 0) - (af.repasse_liquido || 0);
+        document.getElementById('kpiComBruta').textContent = fmt(af.comissao_bruta);
+        document.getElementById('kpiComLiq').textContent   = fmt(af.comissao_liquida);
+        document.getElementById('kpiRepLiq').textContent   = fmt(af.repasse_liquido);
+        document.getElementById('kpiRepEsc').textContent   = fmt(repEsc);
+      } else {
+        // Fallback: usa kpis globais (já são do assessor quando isNonAdminAssessor)
+        document.getElementById('kpiComBruta').textContent = fmt(k.comissao_bruta);
+        document.getElementById('kpiComLiq').textContent   = fmt(k.comissao_liquida);
+        document.getElementById('kpiRepLiq').textContent   = fmt(k.repasse_liquido);
+        document.getElementById('kpiRepEsc').textContent   = fmt(k.receita_escritorio);
+      }
     } else {
       document.getElementById('kpiComBruta').textContent = fmt(k.comissao_bruta);
       document.getElementById('kpiComLiq').textContent   = fmt(k.comissao_liquida);
@@ -891,13 +900,13 @@
 
     /* Donuts: assessor do cliente (se filtrado por cliente), ou assessor selecionado, ou todos */
     let paDonut, donutColors;
+    // Tenta achar o assessor em por_assessor; fallback para pa[0] se isNonAdminAssessor
     const afDonut = filtrado
-      ? (pa.find(function(r){ return norm(r.assessor) === norm(assessorAtual); }) || null)
+      ? (pa.find(function(r){ return norm(r.assessor) === norm(assessorAtual); }) || (isNonAdminAssessor && pa.length > 0 ? pa[0] : null))
       : null;
 
     if (filtradoCli && cliRow) {
       // Cliente selecionado: mostra só o assessor do cliente vs restante
-      const assRow = pa.find(function(r){ return norm(r.assessor) === norm(cliRow.assessor); }) || {};
       paDonut = [
         { assessor: norm(cliRow.assessor) || 'Assessor', comissao_bruta: cliRow.comissao_bruta || 0, comissao_liquida: cliRow.comissao_liquida || 0, repasse_liquido: cliRow.repasse || 0 },
         { assessor: 'Restante', comissao_bruta: (k.comissao_bruta||0) - (cliRow.comissao_bruta||0), comissao_liquida: (k.comissao_liquida||0) - (cliRow.comissao_liquida||0), repasse_liquido: (k.repasse_liquido||0) - (cliRow.repasse||0) },
@@ -905,9 +914,12 @@
       donutColors = ['#0bb5d5', '#e2e8f0'];
     } else if (filtrado && afDonut) {
       paDonut = [
-        { assessor: norm(assessorAtual), comissao_bruta: afDonut.comissao_bruta||0, comissao_liquida: afDonut.comissao_liquida||0, repasse_liquido: afDonut.repasse_liquido||0 },
-        { assessor: 'Restante', comissao_bruta: (k.comissao_bruta||0)-(afDonut.comissao_bruta||0), comissao_liquida: (k.comissao_liquida||0)-(afDonut.comissao_liquida||0), repasse_liquido: (k.repasse_liquido||0)-(afDonut.repasse_liquido||0) },
+        { assessor: afDonut.assessor || norm(assessorAtual), comissao_bruta: afDonut.comissao_bruta||0, comissao_liquida: afDonut.comissao_liquida||0, repasse_liquido: afDonut.repasse_liquido||0 },
       ];
+      // Para isNonAdminAssessor o donut é 100% dele (sem "Restante" — não tem acesso ao total geral)
+      if (!isNonAdminAssessor) {
+        paDonut.push({ assessor: 'Restante', comissao_bruta: (k.comissao_bruta||0)-(afDonut.comissao_bruta||0), comissao_liquida: (k.comissao_liquida||0)-(afDonut.comissao_liquida||0), repasse_liquido: (k.repasse_liquido||0)-(afDonut.repasse_liquido||0) });
+      }
       donutColors = ['#0bb5d5', '#e2e8f0'];
     } else {
       const TOP = 8;
@@ -1031,7 +1043,7 @@
            comissao_liquida:cliRow.comissao_liquida,
            repasse_liquido: cliRow.repasse }]
       : assessorAtivo
-        ? pa.filter(function(r){ return norm(r.assessor) === assessorAtivo; })
+        ? (function(){ var f = pa.filter(function(r){ return norm(r.assessor) === assessorAtivo; }); return f.length > 0 ? f : (isNonAdminAssessor ? pa : []); })()
         : pa;
     const totalAss = paTabela.reduce(function(s,r){ return s+(r.repasse_liquido||0); }, 0);
     document.getElementById('totalAssessor').textContent = fmtTable(totalAss);

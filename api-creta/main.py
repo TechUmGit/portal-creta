@@ -313,7 +313,7 @@ async def receitas(
     # Filtro extra para não-admins
     qp: list = []
     if forced_assessor:
-        where += " AND TRIM(Assessor_Manual) = @assessor"
+        where += " AND UPPER(TRIM(Assessor_Manual)) = UPPER(@assessor)"
         qp.append(ScalarQueryParameter("assessor", "STRING", forced_assessor.strip()))
 
     def run_q(sql: str) -> list[dict]:
@@ -481,7 +481,7 @@ async def detalhe(
     query_params = []
 
     if assessor:
-        where += " AND TRIM(Assessor_Manual) = @assessor"
+        where += " AND UPPER(TRIM(Assessor_Manual)) = UPPER(@assessor)"
         query_params.append(ScalarQueryParameter("assessor", "STRING", assessor.strip()))
 
     sql = f"""
@@ -541,7 +541,7 @@ async def evolucao_cliente(
 
     # Não-admins só podem consultar clientes do próprio assessor
     if not is_admin and assessor_name:
-        where += " AND TRIM(Assessor_Manual) = @assessor"
+        where += " AND UPPER(TRIM(Assessor_Manual)) = UPPER(@assessor)"
         qp.append(ScalarQueryParameter("assessor", "STRING", assessor_name.strip()))
 
     sql = f"""
@@ -1165,7 +1165,7 @@ async def relatorio_historico(
         contas_cte  = ""
         contas_join = ""
 
-    assessor_where = "AND TRIM(Assessor_Manual) = @assessor" if filter_assessor else ""
+    assessor_where = "AND UPPER(TRIM(Assessor_Manual)) = UPPER(@assessor)" if filter_assessor else ""
 
     def rq(sql: str) -> list[dict]:
         if qp:

@@ -1307,11 +1307,33 @@ async def relatorio_historico(
         LIMIT 20
     """
 
-    log.info(f"BQ relatorio/historico: periodo={periodo}, assessor={filter_assessor or 'todos'}")
+    # ── 5. Top 20 Subclasse × Cliente por Receita Bruta ──────────────────────
+    sql_top_sub = f"""
+        SELECT
+            COALESCE(NULLIF(TRIM(Subclasse), ''), 'Sem Subclasse') AS subclasse,
+            CAST(Conta AS STRING)                                   AS Conta,
+            COALESCE(NULLIF(TRIM(Cliente), ''), '—')               AS cliente,
+            COALESCE(TRIM(Assessor_Manual), '')                    AS assessor,
+            ROUND(SUM(Receita_Bruta),         2) AS receita_bruta,
+            ROUND(SUM(Receita_Liquida),       2) AS receita_liquida,
+            ROUND(SUM(Comissao_Liquida),      2) AS comissao_liquida,
+            ROUND(SUM(Repasse_Total_liquido), 2) AS repasse
+        FROM {TABLE}
+        WHERE DATE(Data_De_Referencia) >= {data_inicio}
+          AND DATE(Data_De_Referencia) <= {data_fim}
+          {assessor_where}
+          AND Subclasse IS NOT NULL AND TRIM(Subclasse) != ''
+        GROUP BY subclasse, Conta, cliente, assessor
+        ORDER BY receita_bruta DESC
+        LIMIT 20
+    """
+
+        log.info(f"BQ relatorio/historico: periodo={periodo}, assessor={filter_assessor or 'todos'}")
     auc_diario   = ser(rq(sql_auc))
     novas_contas = ser(rq(sql_novas))
     receita_roa  = ser(rq(sql_receita))
     pl_movers    = ser(rq(sql_movers))
+    top_subclass = ser(rq(sql_top_sub))
 
     # KPIs derivados
     auc_atual_val     = float(auc_diario[-1]["auc"]) if auc_diario else 0
@@ -1337,6 +1359,7 @@ async def relatorio_historico(
         "novas_contas": novas_contas,
         "receita_roa":  receita_roa,
         "pl_movers":    pl_movers,
+        "top_subclass": top_subclass,
     }
 
     cache_set(cache_key, resultado)

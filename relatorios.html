@@ -367,6 +367,31 @@
           </table>
         </div>
       </div>
+    <!-- Top 20 Subclasse × Cliente -->
+    <div class="section">
+      <div class="chart-card">
+        <div class="chart-card-title">Top 20 — Subclasses que Mais Geraram Receita por Cliente</div>
+        <div class="table-wrap">
+          <table class="data-table" id="table-top-sub">
+            <thead>
+              <tr>
+                <th style="width:36px" class="sortable" data-col="rank" onclick="sortTopSub('rank')">#</th>
+                <th class="sortable sort-desc" data-col="receita_bruta" onclick="sortTopSub('receita_bruta')">Subclasse</th>
+                <th class="sortable" data-col="Conta" onclick="sortTopSub('Conta')">Conta</th>
+                <th class="sortable" data-col="cliente" onclick="sortTopSub('cliente')">Cliente</th>
+                <th class="sortable" data-col="assessor" onclick="sortTopSub('assessor')">Assessor</th>
+                <th class="num sortable sort-desc" data-col="receita_bruta" onclick="sortTopSub('receita_bruta')">Receita Bruta</th>
+                <th class="num sortable" data-col="receita_liquida" onclick="sortTopSub('receita_liquida')">Receita Líquida</th>
+                <th class="num sortable" data-col="repasse" onclick="sortTopSub('repasse')">Repasse</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-top-sub">
+              <tr><td colspan="8" style="text-align:center;padding:32px;color:#9ca3af">Carregando…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
     </div>
   </div>
 </div>
@@ -499,6 +524,7 @@
       renderReceitaROA(json.receita_roa);
       renderNovasContas(json.novas_contas);
       renderMovers(json.pl_movers);
+      renderTopSubclass(json.top_subclass || []);
     } catch (err) {
       console.error('relatorio/historico:', err);
     } finally {
@@ -796,6 +822,62 @@
     renderMoversRows();
   }
 
+
+  /* ── RENDER: Top 20 Subclasse × Cliente ── */
+  let _topSubData    = [];
+  let _topSubSortCol = 'receita_bruta';
+  let _topSubSortAsc = false;
+
+  function sortTopSub(col) {
+    if (_topSubSortCol === col) {
+      _topSubSortAsc = !_topSubSortAsc;
+    } else {
+      _topSubSortCol = col;
+      _topSubSortAsc = ['subclasse','Conta','cliente','assessor'].includes(col);
+    }
+    document.querySelectorAll('#table-top-sub thead th.sortable').forEach(th => {
+      th.classList.remove('sort-asc','sort-desc');
+      if (th.dataset.col === col) th.classList.add(_topSubSortAsc ? 'sort-asc' : 'sort-desc');
+    });
+    renderTopSubRows();
+  }
+
+  function renderTopSubRows() {
+    const tbody = document.getElementById('tbody-top-sub');
+    if (!_topSubData || _topSubData.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:#9ca3af">Sem dados disponíveis.</td></tr>';
+      return;
+    }
+    const sorted = [..._topSubData].sort((a, b) => {
+      const col = _topSubSortCol;
+      if (['subclasse','Conta','cliente','assessor'].includes(col)) {
+        const va = (a[col] || '').toLowerCase(), vb = (b[col] || '').toLowerCase();
+        return _topSubSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+      }
+      const va = parseFloat(a[col]) || 0, vb = parseFloat(b[col]) || 0;
+      return _topSubSortAsc ? va - vb : vb - va;
+    });
+    tbody.innerHTML = '';
+    sorted.forEach((row, i) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="rank">${i + 1}</td>
+        <td><strong>${row.subclasse || '—'}</strong></td>
+        <td>${row.Conta || '—'}</td>
+        <td>${row.cliente || '—'}</td>
+        <td>${row.assessor ? `<span class="tag-assessor">${row.assessor}</span>` : '—'}</td>
+        <td class="num">${fmtMoeda(row.receita_bruta)}</td>
+        <td class="num">${fmtMoeda(row.receita_liquida)}</td>
+        <td class="num">${fmtMoeda(row.repasse)}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  function renderTopSubclass(dados) {
+    _topSubData = dados || [];
+    renderTopSubRows();
+  }
 
   function showOverlay() { document.getElementById('dataOverlay').style.display = 'flex'; }
   function hideOverlay() { document.getElementById('dataOverlay').style.display = 'none'; }

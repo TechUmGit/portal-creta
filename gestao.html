@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Creta Capital — Gestão de Carteira</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; font-family: 'Inter', -apple-system, sans-serif; -webkit-font-smoothing: antialiased; background: #f0f3f8; }
+    .loading-screen { position: fixed; inset: 0; background: #f0f3f8; display: flex; align-items: center; justify-content: center; z-index: 999; }
+    .spinner { width: 26px; height: 26px; border: 3px solid rgba(11,181,213,0.2); border-top-color: #0bb5d5; border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .data-overlay { position: fixed; inset: 0; background: rgba(240,243,248,0.82); z-index: 500; display: none; align-items: center; justify-content: center; backdrop-filter: blur(2px); flex-direction: column; gap: 12px; }
+    .data-overlay .spinner { width: 32px; height: 32px; }
+    .data-overlay-label { font-size: 13px; color: #9ca3af; font-weight: 500; }
+    /* TOPBAR */
+    .topbar { height: 60px; background: #fff; border-bottom: 1px solid #e8ebf2; display: flex; align-items: center; padding: 0 24px; gap: 16px; position: fixed; top: 0; left: 0; right: 0; z-index: 200; }
+    .topbar-logo { text-decoration: none; flex-shrink: 0; display: flex; align-items: center; }
+    .topbar-divider { width: 1px; height: 28px; background: #e2e6ef; margin: 0 4px; flex-shrink: 0; }
+    .topbar-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+    .icon-btn { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: none; border: none; cursor: pointer; color: #6b7280; transition: background 0.15s; }
+    .icon-btn:hover { background: #f4f6fb; }
+    .user-chip { display: flex; align-items: center; gap: 10px; padding: 4px 10px 4px 4px; border-radius: 8px; cursor: pointer; background: none; border: none; font-family: inherit; transition: background 0.15s; position: relative; }
+    .user-chip:hover { background: #f4f6fb; }
+    .avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #0c1a35, #1a3a6c); color: #fff; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+    .user-name { font-size: 13px; font-weight: 600; color: #1a202c; white-space: nowrap; }
+    .user-role { font-size: 11px; color: #9ca3af; }
+    .user-dropdown { display: none; position: absolute; top: calc(100% + 8px); right: 0; background: #fff; border: 1px solid #e8ebf2; border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.12); min-width: 200px; padding: 6px; z-index: 300; }
+    .user-chip.open .user-dropdown { display: block; }
+    .user-email-dd { padding: 10px 12px 8px; font-size: 12px; color: #9ca3af; border-bottom: 1px solid #f0f3f8; margin-bottom: 4px; }
+    .dd-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 6px; font-size: 13px; color: #374151; cursor: pointer; transition: background 0.12s; text-decoration: none; }
+    .dd-item:hover { background: #f4f6fb; }
+    .dd-item.danger { color: #dc2626; }
+    .dd-item.danger:hover { background: #fff5f5; }
+    .dd-sep { height: 1px; background: #f0f3f8; margin: 4px 0; }
+    /* SIDEBAR */
+    .sidebar { position: fixed; top: 60px; left: 0; bottom: 0; width: 240px; background: #fff; border-right: 1px solid #e8ebf2; display: flex; flex-direction: column; overflow-y: auto; z-index: 100; transform: translateX(-100%); transition: transform 0.25s cubic-bezier(0.25,0,0.25,1); }
+    .sidebar.open { transform: translateX(0); }
+    .sidebar-section { padding: 20px 12px 8px; }
+    .sidebar-label { font-size: 9.5px; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; color: #9ca3af; padding: 0 10px; margin-bottom: 6px; }
+    .nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px; font-size: 13.5px; font-weight: 500; color: #4b5563; cursor: pointer; transition: all 0.15s; text-decoration: none; position: relative; }
+    .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; opacity: 0.7; }
+    .nav-item:hover { background: #f4f6fb; color: #0c1a35; }
+    .nav-item.active { background: #eef3ff; color: #0c1a35; font-weight: 600; }
+    .nav-item.active svg { opacity: 1; color: #0bb5d5; }
+    .nav-item.active::before { content: ''; position: absolute; left: 0; top: 6px; bottom: 6px; width: 3px; background: #0bb5d5; border-radius: 0 3px 3px 0; }
+    .sidebar-footer { margin-top: auto; padding: 16px 12px; border-top: 1px solid #f0f3f8; }
+    .sidebar-footer .nav-item { color: #9ca3af; font-size: 13px; }
+    .sidebar-footer .nav-item:hover { color: #dc2626; }
+    .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 99; }
+    /* MAIN */
+    .main { margin-left: 0; padding-top: 60px; min-height: 100vh; }
+    .page-header { background: linear-gradient(135deg, #091525 0%, #0c2040 60%, #0f2e5c 100%); padding: 36px 44px; position: relative; overflow: hidden; }
+    .page-header::after { content: ''; position: absolute; width: 380px; height: 380px; border-radius: 50%; border: 1px solid rgba(11,181,213,0.1); right: -60px; top: -80px; pointer-events: none; }
+    .page-header-label { font-size: 10px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: rgba(255,255,255,0.3); margin-bottom: 8px; }
+    .page-header-title { font-size: 26px; font-weight: 700; color: #fff; letter-spacing: -0.03em; position: relative; z-index: 1; }
+    .page-header-sub { font-size: 14px; color: rgba(255,255,255,0.4); margin-top: 4px; position: relative; z-index: 1; }
+    /* FILTRO */
+    .filter-bar { background: #fff; border-bottom: 1px solid #e8ebf2; padding: 14px 44px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .filter-label { font-size: 12px; font-weight: 600; color: #6b7280; }
+    .filter-select { padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 500; border: 1.5px solid #e8ebf2; background: #fff; color: #374151; cursor: pointer; font-family: inherit; }
+    /* CONTENT */
+    .content { padding: 28px 44px 48px; display: flex; flex-direction: column; gap: 24px; }
+    /* SECTION */
+    .section-title { font-size: 13px; font-weight: 700; color: #0c1a35; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+    .section-badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 20px; }
+    .badge-red    { background: #fee2e2; color: #dc2626; }
+    .badge-yellow { background: #fef9c3; color: #92400e; }
+    .badge-blue   { background: #dbeafe; color: #1d4ed8; }
+    .badge-green  { background: #dcfce7; color: #15803d; }
+    .badge-gray   { background: #f1f5f9; color: #475569; }
+    /* CARD */
+    .card { background: #fff; border-radius: 12px; border: 1px solid #e8ebf2; padding: 20px 24px; }
+    /* TABELA */
+    .table-wrap { overflow-x: auto; }
+    .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .data-table thead th { padding: 10px 12px; text-align: left; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #6b7280; border-bottom: 1.5px solid #e8ebf2; white-space: nowrap; }
+    .data-table thead th.num { text-align: right; }
+    .data-table thead th.sortable { cursor: pointer; user-select: none; }
+    .data-table thead th.sortable:hover { color: #0c1a35; }
+    .data-table thead th.sort-asc::after  { content: " ↑"; color: #0bb5d5; }
+    .data-table thead th.sort-desc::after { content: " ↓"; color: #0bb5d5; }
+    .data-table tbody tr { border-bottom: 1px solid #f0f3f8; transition: background 0.1s; }
+    .data-table tbody tr:last-child { border-bottom: none; }
+    .data-table tbody tr:hover { background: #f8fafc; }
+    .data-table td { padding: 10px 12px; color: #374151; }
+    .data-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .data-table td.rank { text-align: center; font-size: 12px; color: #9ca3af; font-weight: 600; }
+    .tag-assessor { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 500; background: #eef3ff; color: #0c1a35; }
+    .tag-alert { display: inline-block; padding: 2px 7px; border-radius: 20px; font-size: 11px; font-weight: 500; }
+    .empty-msg { text-align: center; padding: 32px; color: #9ca3af; font-size: 13px; }
+    .val-neg { color: #ef4444; font-weight: 600; }
+    .val-pos { color: #10b981; font-weight: 600; }
+    .dias-chip { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+    .dias-urgent { background: #fee2e2; color: #dc2626; }
+    .dias-warn   { background: #fef9c3; color: #92400e; }
+    .dias-ok     { background: #dcfce7; color: #15803d; }
+    /* Prioridade score */
+    .score-high { color: #dc2626; font-weight: 700; }
+    .score-mid  { color: #92400e; font-weight: 600; }
+    .score-low  { color: #374151; }
+    /* modal */
+    #custom-modal { display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;align-items:center;justify-content:center; }
+    #custom-modal > div { background:#fff;border-radius:12px;padding:28px 32px;max-width:360px;width:90%;box-shadow:0 20px 48px rgba(0,0,0,0.18); }
+    #custom-modal-msg { font-size:14px;color:#374151;margin-bottom:22px;line-height:1.6;text-align:left; }
+    #custom-modal button { padding:9px 32px;background:#0c1a35;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit; }
+  </style>
+</head>
+<body>
+<div class="loading-screen" id="loadingScreen"><div class="spinner"></div></div>
+<div class="data-overlay" id="dataOverlay"><div class="spinner"></div><div class="data-overlay-label">Carregando dados...</div></div>
+<div id="custom-modal"><div><p id="custom-modal-msg"></p><button onclick="document.getElementById('custom-modal').style.display='none'">OK</button></div></div>
+
+<div id="app" style="display:none">
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <button class="icon-btn" id="menuBtn" onclick="toggleSidebar()">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <a href="dashboard.html" class="topbar-logo"><img src="logo-creta.svg" alt="Creta Capital" style="height:60px;display:block;"></a>
+    <div class="topbar-divider"></div>
+    <span style="font-size:13px;font-weight:600;color:#374151;">Gestão de Carteira</span>
+    <div class="topbar-actions">
+      <button class="user-chip" id="userChip" onclick="this.classList.toggle('open')">
+        <div class="avatar" id="avatarEl">?</div>
+        <div><div class="user-name" id="userNameEl">—</div><div class="user-role" id="userRoleEl">—</div></div>
+        <div class="user-dropdown">
+          <div class="user-email-dd" id="userEmailEl"></div>
+          <a href="profile.html" class="dd-item">Meu Perfil</a>
+          <div class="dd-sep"></div>
+          <div class="dd-item danger" onclick="firebase.auth().signOut()">Sair</div>
+        </div>
+      </button>
+    </div>
+  </header>
+
+  <!-- SIDEBAR -->
+  <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Menu</div>
+      <a href="dashboard.html" class="nav-item">
+        <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Dashboard
+      </a>
+      <a href="posicoes.html" class="nav-item">
+        <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="m7 16 4-4 4 4 4-6"/></svg>Posições
+      </a>
+      <a href="receitas.html" class="nav-item">
+        <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/></svg>Receitas
+      </a>
+      <a href="relatorios.html" class="nav-item">
+        <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Relatórios
+      </a>
+      <a href="gestao.html" class="nav-item active">
+        <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Gestão de Carteira
+      </a>
+      <a href="opcoes.html" class="nav-item">
+        <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Opções
+      </a>
+    </div>
+    <div class="sidebar-section admin-only" id="sidebarSistema" style="display:none">
+      <div class="sidebar-label">Sistema</div>
+      <a href="configuracoes.html" class="nav-item">
+        <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Configurações
+      </a>
+    </div>
+    <div class="sidebar-footer">
+      <div class="nav-item" onclick="firebase.auth().signOut()">
+        <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>Sair
+      </div>
+    </div>
+  </nav>
+
+  <!-- MAIN -->
+  <main class="main">
+    <div class="page-header">
+      <div class="page-header-label">Gestão de Carteira</div>
+      <div class="page-header-title">Oportunidades & Alertas</div>
+      <div class="page-header-sub">Priorize ações com base em dados da carteira</div>
+    </div>
+
+    <!-- FILTRO ASSESSOR -->
+    <div class="filter-bar" id="filterBar" style="display:none">
+      <span class="filter-label">Assessor:</span>
+      <select class="filter-select" id="assessorSelect" onchange="carregarDados()">
+        <option value="">Todos</option>
+      </select>
+    </div>
+
+    <div class="content">
+
+      <!-- 1. PRIORIDADES -->
+      <div class="card">
+        <div class="section-title">
+          🎯 Lista de Prioridades
+          <span class="section-badge badge-red" id="badge-prior">—</span>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr>
+              <th style="width:36px">#</th>
+              <th>Cliente</th>
+              <th>Conta</th>
+              <th>Assessor</th>
+              <th class="num">Score</th>
+              <th>Alertas</th>
+            </tr></thead>
+            <tbody id="tbody-prior"><tr><td colspan="6" class="empty-msg">Carregando...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 2. CAIXA PARADO -->
+      <div class="card">
+        <div class="section-title">
+          💰 Caixa Parado
+          <span class="section-badge badge-yellow" id="badge-caixa">—</span>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr>
+              <th>Conta</th><th>Cliente</th><th>Assessor</th>
+              <th class="num">Valor em Caixa</th>
+              <th class="num">AuC Total</th>
+              <th class="num">% do PL</th>
+            </tr></thead>
+            <tbody id="tbody-caixa"><tr><td colspan="6" class="empty-msg">Carregando...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 3. VENCIMENTOS -->
+      <div class="card">
+        <div class="section-title">
+          📅 Vencimentos nos Próximos 90 Dias
+          <span class="section-badge badge-blue" id="badge-venc">—</span>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr>
+              <th>Conta</th><th>Cliente</th><th>Assessor</th>
+              <th>Classe</th><th>Produto</th>
+              <th class="num">Vencimento</th>
+              <th class="num">Dias</th>
+              <th class="num">Valor</th>
+            </tr></thead>
+            <tbody id="tbody-venc"><tr><td colspan="8" class="empty-msg">Carregando...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 4. ROA POR CLIENTE -->
+      <div class="card">
+        <div class="section-title">
+          📊 Clientes com Menor ROA (últimos 12 meses)
+          <span class="section-badge badge-gray" id="badge-roa">—</span>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr>
+              <th style="width:36px">#</th>
+              <th>Conta</th><th>Cliente</th><th>Assessor</th>
+              <th class="num">AuC Médio</th>
+              <th class="num">Receita Bruta 12m</th>
+              <th class="num">ROA Anualizado</th>
+            </tr></thead>
+            <tbody id="tbody-roa"><tr><td colspan="7" class="empty-msg">Carregando...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 5. SEM RECEITA -->
+      <div class="card">
+        <div class="section-title">
+          ⚠️ Clientes sem Receita há 60+ dias
+          <span class="section-badge badge-red" id="badge-semrec">—</span>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr>
+              <th>Conta</th><th>Cliente</th><th>Assessor</th>
+              <th class="num">AuC Atual</th>
+              <th class="num">Última Receita</th>
+              <th class="num">Dias sem Receita</th>
+            </tr></thead>
+            <tbody id="tbody-semrec"><tr><td colspan="6" class="empty-msg">Carregando...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 6. AuC EM QUEDA -->
+      <div class="card">
+        <div class="section-title">
+          📉 AuC em Queda (vs 60 dias atrás)
+          <span class="section-badge badge-red" id="badge-queda">—</span>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr>
+              <th>Conta</th><th>Cliente</th><th>Assessor</th>
+              <th class="num">AuC Atual</th>
+              <th class="num">AuC 60d atrás</th>
+              <th class="num">Δ Valor</th>
+              <th class="num">% Variação</th>
+            </tr></thead>
+            <tbody id="tbody-queda"><tr><td colspan="7" class="empty-msg">Carregando...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<script>
+  const API_BASE = 'https://api-creta-978599698367.us-central1.run.app';
+  const firebaseConfig = {
+    apiKey: "AIzaSyDLJrg7Cmaq6DDlDdcLfe4kH9hUukMVuE0",
+    authDomain: "creta-btg-bd3a8.firebaseapp.com",
+    projectId: "creta-btg-bd3a8",
+    storageBucket: "creta-btg-bd3a8.appspot.com",
+    messagingSenderId: "978599698367",
+    appId: "1:978599698367:web:f9e2c8a3b1d4e5f6a7b8c9"
+  };
+  firebase.initializeApp(firebaseConfig);
+
+  let idToken = null, userRole = null, userAssessor = null;
+
+  function fmtMoeda(v) {
+    if (v == null || isNaN(v)) return '—';
+    return 'R$ ' + parseFloat(v).toLocaleString('pt-BR', {minimumFractionDigits:0, maximumFractionDigits:0});
+  }
+  function fmtPct(v) {
+    if (v == null || isNaN(v)) return '—';
+    return parseFloat(v).toFixed(2) + '%';
+  }
+  function showOverlay() { document.getElementById('dataOverlay').style.display = 'flex'; }
+  function hideOverlay() { document.getElementById('dataOverlay').style.display = 'none'; }
+  function showAlert(msg) { document.getElementById('custom-modal-msg').textContent = msg; document.getElementById('custom-modal').style.display = 'flex'; }
+
+  function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('open');
+    document.getElementById('sidebarOverlay').style.display =
+      document.getElementById('sidebar').classList.contains('open') ? 'block' : 'none';
+  }
+  document.addEventListener('click', e => {
+    const chip = document.getElementById('userChip');
+    if (chip && !chip.contains(e.target)) chip.classList.remove('open');
+  });
+
+  async function carregarAssessores() {
+    try {
+      const res = await fetch(`${API_BASE}/api/assessores`, { headers: { Authorization: `Bearer ${idToken}` } });
+      const json = await res.json();
+      const sel = document.getElementById('assessorSelect');
+      (json.assessores || []).forEach(a => {
+        const opt = document.createElement('option'); opt.value = a; opt.textContent = a; sel.appendChild(opt);
+      });
+    } catch(e) { console.warn('assessores:', e); }
+  }
+
+  async function carregarDados() {
+    showOverlay();
+    try {
+      const sel = document.getElementById('assessorSelect');
+      let url = `${API_BASE}/api/gestao`;
+      if (userRole === 'admin' && sel && sel.value) url += `?assessor=${encodeURIComponent(sel.value)}`;
+
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${idToken}` } });
+      if (!res.ok) throw new Error(await res.text());
+      const json = await res.json();
+
+      renderPrioridades(json.prioridades || []);
+      renderCaixa(json.caixa_parado || []);
+      renderVencimentos(json.vencimentos || []);
+      renderRoa(json.roa_cliente || []);
+      renderSemReceita(json.sem_receita || []);
+      renderQueda(json.auc_queda || []);
+    } catch(e) {
+      console.error('gestao:', e);
+      showAlert('Erro ao carregar dados. Tente novamente.');
+    } finally {
+      hideOverlay();
+    }
+  }
+
+  function assessorTag(a) {
+    return a ? '<span class="tag-assessor">' + a + '</span>' : '—';
+  }
+  function emptyRow(cols, msg) {
+    return '<tr><td colspan="' + cols + '" class="empty-msg">' + (msg || 'Sem dados.') + '</td></tr>';
+  }
+
+  function renderPrioridades(dados) {
+    const el = document.getElementById('badge-prior');
+    el.textContent = dados.length;
+    const tbody = document.getElementById('tbody-prior');
+    if (!dados.length) { tbody.innerHTML = emptyRow(6, 'Nenhuma prioridade identificada.'); return; }
+    tbody.innerHTML = dados.map((r, i) => {
+      const scoreClass = r.score >= 5 ? 'score-high' : r.score >= 3 ? 'score-mid' : 'score-low';
+      return '<tr>' +
+        '<td class="rank">' + (i+1) + '</td>' +
+        '<td><strong>' + (r.cliente || '—') + '</strong></td>' +
+        '<td>' + (r.Conta || '—') + '</td>' +
+        '<td>' + assessorTag(r.assessor) + '</td>' +
+        '<td class="num ' + scoreClass + '">' + r.score + '</td>' +
+        '<td style="font-size:12px;color:#6b7280">' + (r.alertas || '—') + '</td>' +
+        '</tr>';
+    }).join('');
+  }
+
+  function renderCaixa(dados) {
+    document.getElementById('badge-caixa').textContent = dados.length;
+    const tbody = document.getElementById('tbody-caixa');
+    if (!dados.length) { tbody.innerHTML = emptyRow(6); return; }
+    tbody.innerHTML = dados.map(r => {
+      const pct = r.pct_caixa;
+      const pctClass = pct >= 50 ? 'val-neg' : pct >= 20 ? '' : '';
+      return '<tr>' +
+        '<td><strong>' + (r.Conta||'—') + '</strong></td>' +
+        '<td>' + (r.cliente||'—') + '</td>' +
+        '<td>' + assessorTag(r.assessor) + '</td>' +
+        '<td class="num val-neg">' + fmtMoeda(r.valor_caixa) + '</td>' +
+        '<td class="num">' + fmtMoeda(r.total_auc) + '</td>' +
+        '<td class="num ' + pctClass + '">' + (pct != null ? pct.toFixed(1)+'%' : '—') + '</td>' +
+        '</tr>';
+    }).join('');
+  }
+
+  function renderVencimentos(dados) {
+    document.getElementById('badge-venc').textContent = dados.length;
+    const tbody = document.getElementById('tbody-venc');
+    if (!dados.length) { tbody.innerHTML = emptyRow(8, 'Nenhum vencimento nos próximos 90 dias.'); return; }
+    tbody.innerHTML = dados.map(r => {
+      const dias = parseInt(r.dias_para_vencer);
+      const chipClass = dias <= 15 ? 'dias-urgent' : dias <= 45 ? 'dias-warn' : 'dias-ok';
+      return '<tr>' +
+        '<td><strong>' + (r.Conta||'—') + '</strong></td>' +
+        '<td>' + (r.cliente||'—') + '</td>' +
+        '<td>' + assessorTag(r.assessor) + '</td>' +
+        '<td>' + (r.Classe||'—') + '</td>' +
+        '<td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (r.Nome||r.Subclasse||'—') + '</td>' +
+        '<td class="num">' + (r.Vencimento||'—') + '</td>' +
+        '<td class="num"><span class="dias-chip ' + chipClass + '">' + dias + 'd</span></td>' +
+        '<td class="num">' + fmtMoeda(r.valor) + '</td>' +
+        '</tr>';
+    }).join('');
+  }
+
+  function renderRoa(dados) {
+    document.getElementById('badge-roa').textContent = dados.length;
+    const tbody = document.getElementById('tbody-roa');
+    if (!dados.length) { tbody.innerHTML = emptyRow(7); return; }
+    tbody.innerHTML = dados.map((r, i) => {
+      const roa = r.roa_pct;
+      const roaClass = roa != null && roa < 0.5 ? 'val-neg' : '';
+      return '<tr>' +
+        '<td class="rank">' + (i+1) + '</td>' +
+        '<td><strong>' + (r.Conta||'—') + '</strong></td>' +
+        '<td>' + (r.cliente||'—') + '</td>' +
+        '<td>' + assessorTag(r.assessor) + '</td>' +
+        '<td class="num">' + fmtMoeda(r.avg_auc) + '</td>' +
+        '<td class="num">' + fmtMoeda(r.receita_bruta) + '</td>' +
+        '<td class="num ' + roaClass + '">' + (roa != null ? fmtPct(roa) : '—') + '</td>' +
+        '</tr>';
+    }).join('');
+  }
+
+  function renderSemReceita(dados) {
+    document.getElementById('badge-semrec').textContent = dados.length;
+    const tbody = document.getElementById('tbody-semrec');
+    if (!dados.length) { tbody.innerHTML = emptyRow(6, 'Todos os clientes geraram receita recentemente.'); return; }
+    tbody.innerHTML = dados.map(r => {
+      const dias = parseInt(r.dias_sem_receita);
+      const chipClass = dias >= 180 ? 'dias-urgent' : dias >= 90 ? 'dias-warn' : 'dias-ok';
+      return '<tr>' +
+        '<td><strong>' + (r.Conta||'—') + '</strong></td>' +
+        '<td>' + (r.cliente||'—') + '</td>' +
+        '<td>' + assessorTag(r.assessor) + '</td>' +
+        '<td class="num">' + fmtMoeda(r.auc_atual) + '</td>' +
+        '<td class="num">' + (r.ultima_receita||'Nunca') + '</td>' +
+        '<td class="num"><span class="dias-chip ' + chipClass + '">' + dias + 'd</span></td>' +
+        '</tr>';
+    }).join('');
+  }
+
+  function renderQueda(dados) {
+    document.getElementById('badge-queda').textContent = dados.length;
+    const tbody = document.getElementById('tbody-queda');
+    if (!dados.length) { tbody.innerHTML = emptyRow(7, 'Nenhum cliente com AuC em queda.'); return; }
+    tbody.innerHTML = dados.map(r => {
+      return '<tr>' +
+        '<td><strong>' + (r.Conta||'—') + '</strong></td>' +
+        '<td>' + (r.cliente||'—') + '</td>' +
+        '<td>' + assessorTag(r.assessor) + '</td>' +
+        '<td class="num">' + fmtMoeda(r.auc_atual) + '</td>' +
+        '<td class="num">' + fmtMoeda(r.auc_60d) + '</td>' +
+        '<td class="num val-neg">' + fmtMoeda(r.delta) + '</td>' +
+        '<td class="num val-neg">' + (r.pct_var != null ? r.pct_var.toFixed(1)+'%' : '—') + '</td>' +
+        '</tr>';
+    }).join('');
+  }
+
+  // AUTH
+  firebase.auth().onAuthStateChanged(async user => {
+    if (!user) { window.location.href = 'index.html'; return; }
+    idToken = await user.getIdToken();
+    const claims = (await user.getIdTokenResult()).claims;
+    userRole     = claims.role || 'assessor';
+    userAssessor = claims.assessor_name || '';
+
+    const initials = (user.displayName||user.email||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+    document.getElementById('avatarEl').textContent    = initials;
+    document.getElementById('userNameEl').textContent  = user.displayName || user.email;
+    document.getElementById('userRoleEl').textContent  = userRole === 'admin' ? 'Administrador' : 'Assessor';
+    document.getElementById('userEmailEl').textContent = user.email;
+
+    if (userRole === 'admin') {
+      document.getElementById('filterBar').style.display = 'flex';
+      document.getElementById('sidebarSistema').style.display = 'block';
+      await carregarAssessores();
+    }
+
+    document.getElementById('loadingScreen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    await carregarDados();
+  });
+</script>
+</body>
+</html>

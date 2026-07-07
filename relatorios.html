@@ -808,7 +808,7 @@
         <td class="rank">${i + 1}</td>
         <td><strong>${row.Conta || '—'}</strong></td>
         <td>${row.cliente || '—'}</td>
-        <td>${row.assessor ? `<span class="tag-assessor">${row.assessor}</span>` : '—'}</td>
+        <td>${row.assessor ? '<span class="tag-assessor">' + row.assessor + '</span>' : '—'}</td>
         <td class="num">${fmtMoeda(row.auc_atual)}</td>
         <td class="num">${fmtMoeda(row.auc_ref)}</td>
         <td class="num ${cls}">${sign}${fmtAbrev(row._delta)}</td>
@@ -861,17 +861,20 @@
     tbody.innerHTML = '';
     sorted.forEach((row, i) => {
       const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td class="rank">${i + 1}</td>
-        <td><strong>${row.subclasse || '—'}</strong></td>
-        <td>${row.produto || '—'}</td>
-        <td>${row.Conta || '—'}</td>
-        <td>${row.cliente || '—'}</td>
-        <td>${row.assessor ? '<span class="tag-assessor">' + row.assessor + '</span>' : '—'}</td>
-        <td class="num">${fmtMoeda(row.receita_bruta)}</td>
-        <td class="num">${fmtMoeda(row.receita_liquida)}</td>
-        <td class="num">${fmtMoeda(row.repasse)}</td>
-      `;
+      const dash = '—';
+      const assessorCell = row.assessor
+        ? '<span class="tag-assessor">' + row.assessor + '</span>'
+        : dash;
+      tr.innerHTML =
+        '<td class="rank">' + (i + 1) + '</td>' +
+        '<td><strong>' + (row.subclasse || dash) + '</strong></td>' +
+        '<td>' + (row.produto || dash) + '</td>' +
+        '<td>' + (row.Conta || dash) + '</td>' +
+        '<td>' + (row.cliente || dash) + '</td>' +
+        '<td>' + assessorCell + '</td>' +
+        '<td class="num">' + fmtMoeda(row.receita_bruta) + '</td>' +
+        '<td class="num">' + fmtMoeda(row.receita_liquida) + '</td>' +
+        '<td class="num">' + fmtMoeda(row.repasse) + '</td>';
       tbody.appendChild(tr);
     });
   }

@@ -867,7 +867,7 @@
         <td>${row.produto || '—'}</td>
         <td>${row.Conta || '—'}</td>
         <td>${row.cliente || '—'}</td>
-        <td>${row.assessor ? \`<span class="tag-assessor">${row.assessor}</span>\` : '—'}</td>
+        <td>${row.assessor ? '<span class="tag-assessor">' + row.assessor + '</span>' : '—'}</td>
         <td class="num">${fmtMoeda(row.receita_bruta)}</td>
         <td class="num">${fmtMoeda(row.receita_liquida)}</td>
         <td class="num">${fmtMoeda(row.repasse)}</td>

@@ -514,7 +514,7 @@
   const db   = firebase.firestore();
 
   /* ── Helper: normaliza string para comparação ── */
-  function norm(s) { return (s || '').trim(); }
+  function norm(s) { return (s || '').trim().toUpperCase(); }
 
   /* ── Plugin: labels nas barras (apenas tipo 'bar') ── */
   const barLabelPlugin = {

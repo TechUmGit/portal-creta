@@ -608,7 +608,7 @@ async def posicoes_endpoint(
     qp = []
     if forced_assessor:
         qp.append(ScalarQueryParameter("assessor", "STRING", forced_assessor.strip()))
-        ma_join = f"INNER JOIN {_mapa_assessor_sq()} ma ON SAFE_CAST(TRIM(p.Conta) AS INT64) = ma.Conta AND ma.Assessor = @assessor"
+        ma_join = f"INNER JOIN {_mapa_assessor_sq()} ma ON SAFE_CAST(TRIM(p.Conta) AS INT64) = ma.Conta AND UPPER(ma.Assessor) = UPPER(@assessor)"
     else:
         ma_join = f"LEFT JOIN {_mapa_assessor_sq()} ma ON SAFE_CAST(TRIM(p.Conta) AS INT64) = ma.Conta"
 
@@ -712,7 +712,7 @@ async def opcoes_endpoint(
             INNER JOIN (
                 SELECT CAST(Conta AS STRING) AS cnt
                 FROM {_mapa_assessor_sq()}
-                WHERE Assessor = @assessor
+                WHERE UPPER(Assessor) = UPPER(@assessor)
             ) ma ON TRIM(p.Conta) = ma.cnt
         """
     else:
@@ -1158,7 +1158,7 @@ async def relatorio_historico(
     contas_assessor AS (
         SELECT Conta AS conta_num
         FROM {_mapa_assessor_sq()}
-        WHERE Assessor = @assessor
+        WHERE UPPER(Assessor) = UPPER(@assessor)
     ),"""
         contas_join = "INNER JOIN contas_assessor ca ON SAFE_CAST(TRIM(p.Conta) AS INT64) = ca.conta_num"
     else:
@@ -1377,3 +1377,300 @@ async def limpar_cache(
         raise HTTPException(status_code=403, detail="Apenas administradores podem limpar o cache.")
     _cache.clear()
     return {"ok": True, "message": "Cache limpo."}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# /api/gestao — Oportunidades e gestão de carteira para assessores
+# ══════════════════════════════════════════════════════════════════════════════
+@app.get("/api/gestao")
+async def gestao_carteira(
+    assessor:      Optional[str] = Query(default=None),
+    authorization: Optional[str] = Header(default=None),
+):
+    token_data    = await verificar_token(authorization)
+    role          = token_data.get("role", "assessor")
+    assessor_name = token_data.get("assessor_name")
+    is_admin      = role == "admin"
+
+    filter_assessor = (assessor.strip() if assessor else None) if is_admin else assessor_name
+
+    cache_key = f"gestao:{filter_assessor or 'all'}"
+    cached = cache_get(cache_key)
+    if cached:
+        return cached
+
+    qp = [ScalarQueryParameter("assessor", "STRING", filter_assessor)] if filter_assessor else []
+
+    def rq(sql: str) -> list[dict]:
+        def ser_row(row):
+            return {k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in dict(row).items()}
+        if qp:
+            return [ser_row(r) for r in bq.query(sql, job_config=QueryJobConfig(query_parameters=qp)).result()]
+        return [ser_row(r) for r in bq.query(sql).result()]
+
+    # CTEs de filtro por assessor (via conta_assessor_base + exceções)
+    if filter_assessor:
+        contas_cte  = f"""contas_ass AS (
+            SELECT Conta AS conta_num FROM {_mapa_assessor_sq()}
+            WHERE UPPER(Assessor) = UPPER(@assessor)
+        ),"""
+        contas_join_p = "INNER JOIN contas_ass ca ON SAFE_CAST(TRIM(p.Conta) AS INT64) = ca.conta_num"
+        contas_join   = "INNER JOIN contas_ass ca ON SAFE_CAST(TRIM(Conta) AS INT64) = ca.conta_num"
+    else:
+        contas_cte    = ""
+        contas_join_p = ""
+        contas_join   = ""
+
+    # ── 1. Caixa Parado ───────────────────────────────────────────────────────
+    sql_caixa = f"""
+        WITH ultima_data AS (SELECT MAX(DATE(Data)) AS d FROM {TABLE_POSICAO}),
+        {contas_cte}
+        posicao_total AS (
+            SELECT TRIM(p.Conta) AS Conta, ROUND(SUM(p.ValorBruto),2) AS total_auc
+            FROM {TABLE_POSICAO} p CROSS JOIN ultima_data ud
+            {contas_join_p}
+            WHERE DATE(p.Data) = ud.d AND p.Classe != 'Aluguel de Ações'
+            GROUP BY TRIM(p.Conta)
+        ),
+        caixa AS (
+            SELECT TRIM(p.Conta) AS Conta, ROUND(SUM(p.ValorBruto),2) AS valor_caixa
+            FROM {TABLE_POSICAO} p CROSS JOIN ultima_data ud
+            {contas_join_p}
+            WHERE DATE(p.Data) = ud.d AND p.Classe = 'Caixa'
+            GROUP BY TRIM(p.Conta)
+        ),
+        nomes AS (
+            SELECT Conta AS conta_num, MAX(Cliente) AS cliente
+            FROM {TABLE} WHERE Cliente IS NOT NULL AND Cliente != '' GROUP BY Conta
+        )
+        SELECT
+            c.Conta,
+            COALESCE(n.cliente, '') AS cliente,
+            UPPER(COALESCE(ma.Assessor,'')) AS assessor,
+            c.valor_caixa,
+            t.total_auc,
+            CASE WHEN t.total_auc > 0 THEN ROUND(c.valor_caixa / t.total_auc * 100, 1) ELSE NULL END AS pct_caixa
+        FROM caixa c
+        LEFT JOIN posicao_total t ON c.Conta = t.Conta
+        LEFT JOIN nomes n ON SAFE_CAST(c.Conta AS INT64) = n.conta_num
+        LEFT JOIN {_mapa_assessor_sq()} ma ON SAFE_CAST(c.Conta AS INT64) = ma.Conta
+        WHERE c.valor_caixa >= 5000
+        ORDER BY c.valor_caixa DESC
+        LIMIT 50
+    """
+
+    # ── 2. Vencimentos nos próximos 90 dias ───────────────────────────────────
+    sql_venc = f"""
+        WITH ultima_data AS (SELECT MAX(DATE(Data)) AS d FROM {TABLE_POSICAO}),
+        {contas_cte}
+        nomes AS (
+            SELECT Conta AS conta_num, MAX(Cliente) AS cliente
+            FROM {TABLE} WHERE Cliente IS NOT NULL AND Cliente != '' GROUP BY Conta
+        )
+        SELECT
+            TRIM(p.Conta) AS Conta,
+            COALESCE(n.cliente,'') AS cliente,
+            UPPER(COALESCE(ma.Assessor,'')) AS assessor,
+            p.Classe, p.Subclasse, p.Nome,
+            p.Vencimento,
+            DATE_DIFF(DATE(p.Vencimento), CURRENT_DATE(), DAY) AS dias_para_vencer,
+            ROUND(SUM(p.ValorBruto),2) AS valor
+        FROM {TABLE_POSICAO} p
+        CROSS JOIN ultima_data ud
+        {contas_join_p}
+        LEFT JOIN nomes n ON SAFE_CAST(TRIM(p.Conta) AS INT64) = n.conta_num
+        LEFT JOIN {_mapa_assessor_sq()} ma ON SAFE_CAST(TRIM(p.Conta) AS INT64) = ma.Conta
+        WHERE DATE(p.Data) = ud.d
+          AND p.Vencimento IS NOT NULL AND p.Vencimento != ''
+          AND DATE(p.Vencimento) >= CURRENT_DATE()
+          AND DATE(p.Vencimento) <= DATE_ADD(CURRENT_DATE(), INTERVAL 90 DAY)
+          AND p.Classe NOT IN ('Ação','Caixa','Aluguel de Ações','Derivativo')
+        GROUP BY TRIM(p.Conta), cliente, assessor, p.Classe, p.Subclasse, p.Nome, p.Vencimento
+        ORDER BY p.Vencimento
+        LIMIT 100
+    """
+
+    # ── 3. ROA por Cliente (últimos 12 meses) ─────────────────────────────────
+    sql_roa = f"""
+        WITH {contas_cte}
+        receita_conta AS (
+            SELECT CAST(Conta AS STRING) AS Conta,
+                   ROUND(SUM(Receita_Bruta),2) AS receita_bruta
+            FROM {TABLE}
+            WHERE DATE(Data_De_Referencia) >= DATE_SUB(CURRENT_DATE(), INTERVAL 12 MONTH)
+              AND UPPER(COALESCE(Assessor_Manual,'')) != ''
+              {'AND UPPER(TRIM(Assessor_Manual)) = UPPER(@assessor)' if filter_assessor else ''}
+            GROUP BY Conta
+        ),
+        auc_medio AS (
+            SELECT TRIM(p.Conta) AS Conta, ROUND(AVG(auc_dia),2) AS avg_auc
+            FROM (
+                SELECT DATE(p2.Data) AS d, TRIM(p2.Conta) AS Conta, SUM(p2.ValorBruto) AS auc_dia
+                FROM {TABLE_POSICAO} p2
+                {contas_join_p.replace('p.', 'p2.')}
+                WHERE DATE(p2.Data) >= DATE_SUB(CURRENT_DATE(), INTERVAL 12 MONTH)
+                  AND p2.Classe != 'Aluguel de Ações'
+                GROUP BY d, TRIM(p2.Conta)
+            ) p GROUP BY TRIM(p.Conta)
+        ),
+        nomes AS (
+            SELECT Conta AS conta_num, MAX(Cliente) AS cliente
+            FROM {TABLE} WHERE Cliente IS NOT NULL AND Cliente != '' GROUP BY Conta
+        )
+        SELECT
+            r.Conta,
+            COALESCE(n.cliente,'') AS cliente,
+            UPPER(COALESCE(ma.Assessor,'')) AS assessor,
+            r.receita_bruta,
+            ROUND(COALESCE(a.avg_auc,0),0) AS avg_auc,
+            CASE WHEN COALESCE(a.avg_auc,0) > 0
+                 THEN ROUND(r.receita_bruta / a.avg_auc * 100, 4) ELSE NULL END AS roa_pct
+        FROM receita_conta r
+        LEFT JOIN auc_medio a ON r.Conta = a.Conta
+        LEFT JOIN nomes n ON SAFE_CAST(r.Conta AS INT64) = n.conta_num
+        LEFT JOIN {_mapa_assessor_sq()} ma ON SAFE_CAST(r.Conta AS INT64) = ma.Conta
+        WHERE COALESCE(a.avg_auc,0) > 0
+        ORDER BY roa_pct ASC
+        LIMIT 50
+    """
+
+    # ── 4. Clientes sem receita há 60+ dias ───────────────────────────────────
+    sql_sem_rec = f"""
+        WITH ultima_data AS (SELECT MAX(DATE(Data)) AS d FROM {TABLE_POSICAO}),
+        {contas_cte}
+        contas_ativas AS (
+            SELECT TRIM(p.Conta) AS Conta, ROUND(SUM(p.ValorBruto),2) AS auc_atual
+            FROM {TABLE_POSICAO} p CROSS JOIN ultima_data ud
+            {contas_join_p}
+            WHERE DATE(p.Data) = ud.d AND p.Classe != 'Aluguel de Ações'
+            GROUP BY TRIM(p.Conta)
+        ),
+        ultima_receita AS (
+            SELECT CAST(Conta AS STRING) AS Conta, MAX(DATE(Data_De_Referencia)) AS ultima_data
+            FROM {TABLE}
+            {'WHERE UPPER(TRIM(Assessor_Manual)) = UPPER(@assessor)' if filter_assessor else ''}
+            GROUP BY Conta
+        ),
+        nomes AS (
+            SELECT Conta AS conta_num, MAX(Cliente) AS cliente
+            FROM {TABLE} WHERE Cliente IS NOT NULL AND Cliente != '' GROUP BY Conta
+        )
+        SELECT
+            ca.Conta,
+            COALESCE(n.cliente,'') AS cliente,
+            UPPER(COALESCE(ma.Assessor,'')) AS assessor,
+            ca.auc_atual,
+            ur.ultima_data AS ultima_receita,
+            DATE_DIFF(CURRENT_DATE(), COALESCE(ur.ultima_data, DATE('2020-01-01')), DAY) AS dias_sem_receita
+        FROM contas_ativas ca
+        LEFT JOIN ultima_receita ur ON ca.Conta = ur.Conta
+        LEFT JOIN nomes n ON SAFE_CAST(ca.Conta AS INT64) = n.conta_num
+        LEFT JOIN {_mapa_assessor_sq()} ma ON SAFE_CAST(ca.Conta AS INT64) = ma.Conta
+        WHERE (ur.ultima_data IS NULL OR ur.ultima_data < DATE_SUB(CURRENT_DATE(), INTERVAL 60 DAY))
+          AND ca.auc_atual > 1000
+        ORDER BY dias_sem_receita DESC
+        LIMIT 50
+    """
+
+    # ── 5. AuC em queda (vs 60 dias atrás) ───────────────────────────────────
+    sql_queda = f"""
+        WITH ultima_data AS (SELECT MAX(DATE(Data)) AS d FROM {TABLE_POSICAO}),
+        data_60 AS (
+            SELECT MAX(DATE(p.Data)) AS d
+            FROM {TABLE_POSICAO} p CROSS JOIN ultima_data ud
+            WHERE DATE(p.Data) <= DATE_SUB(ud.d, INTERVAL 60 DAY)
+        ),
+        {contas_cte}
+        auc_atual AS (
+            SELECT TRIM(p.Conta) AS Conta, ROUND(SUM(p.ValorBruto),2) AS auc
+            FROM {TABLE_POSICAO} p CROSS JOIN ultima_data ud
+            {contas_join_p}
+            WHERE DATE(p.Data) = ud.d AND p.Classe != 'Aluguel de Ações'
+            GROUP BY TRIM(p.Conta)
+        ),
+        auc_ant AS (
+            SELECT TRIM(p.Conta) AS Conta, ROUND(SUM(p.ValorBruto),2) AS auc
+            FROM {TABLE_POSICAO} p CROSS JOIN data_60 d60
+            {contas_join_p}
+            WHERE DATE(p.Data) = d60.d AND p.Classe != 'Aluguel de Ações'
+            GROUP BY TRIM(p.Conta)
+        ),
+        nomes AS (
+            SELECT Conta AS conta_num, MAX(Cliente) AS cliente
+            FROM {TABLE} WHERE Cliente IS NOT NULL AND Cliente != '' GROUP BY Conta
+        )
+        SELECT
+            a.Conta,
+            COALESCE(n.cliente,'') AS cliente,
+            UPPER(COALESCE(ma.Assessor,'')) AS assessor,
+            a.auc AS auc_atual,
+            r.auc AS auc_60d,
+            ROUND(a.auc - r.auc, 2) AS delta,
+            CASE WHEN r.auc > 0 THEN ROUND((a.auc - r.auc) / r.auc * 100, 1) ELSE NULL END AS pct_var
+        FROM auc_atual a
+        INNER JOIN auc_ant r ON a.Conta = r.Conta
+        LEFT JOIN nomes n ON SAFE_CAST(a.Conta AS INT64) = n.conta_num
+        LEFT JOIN {_mapa_assessor_sq()} ma ON SAFE_CAST(a.Conta AS INT64) = ma.Conta
+        WHERE a.auc < r.auc
+        ORDER BY delta ASC
+        LIMIT 50
+    """
+
+    log.info(f"BQ gestao: assessor={filter_assessor or 'todos'}")
+    caixa_parado  = rq(sql_caixa)
+    vencimentos   = rq(sql_venc)
+    roa_cliente   = rq(sql_roa)
+    sem_receita   = rq(sql_sem_rec)
+    auc_queda     = rq(sql_queda)
+
+    # ── 6. Lista de prioridades (score combinado) ─────────────────────────────
+    scores: dict[str, dict] = {}
+    for r in caixa_parado:
+        c = r["Conta"]
+        scores.setdefault(c, {"Conta": c, "cliente": r["cliente"], "assessor": r["assessor"], "score": 0, "alertas": []})
+        scores[c]["score"] += 3
+        scores[c]["alertas"].append(f"Caixa R$ {r['valor_caixa']:,.0f}")
+        scores[c]["caixa"] = r["valor_caixa"]
+    # Agrupar vencimentos por conta: pegar o mais próximo + contar total
+    _venc_by_conta: dict[str, dict] = {}
+    for r in vencimentos:
+        c = r["Conta"]
+        d = r["dias_para_vencer"]
+        if c not in _venc_by_conta:
+            _venc_by_conta[c] = {"min_dias": d, "count": 1, "cliente": r["cliente"], "assessor": r["assessor"]}
+        else:
+            _venc_by_conta[c]["count"] += 1
+            if d < _venc_by_conta[c]["min_dias"]:
+                _venc_by_conta[c]["min_dias"] = d
+    for c, v in _venc_by_conta.items():
+        scores.setdefault(c, {"Conta": c, "cliente": v["cliente"], "assessor": v["assessor"], "score": 0, "alertas": []})
+        scores[c]["score"] += 2
+        cnt = f" ({v['count']})" if v["count"] > 1 else ""
+        scores[c]["alertas"].append(f"Vence em {v['min_dias']}d{cnt}")
+    for r in sem_receita:
+        c = r["Conta"]
+        scores.setdefault(c, {"Conta": c, "cliente": r["cliente"], "assessor": r["assessor"], "score": 0, "alertas": []})
+        scores[c]["score"] += 2
+        scores[c]["alertas"].append(f"Sem receita há {r['dias_sem_receita']}d")
+    for r in auc_queda:
+        c = r["Conta"]
+        scores.setdefault(c, {"Conta": c, "cliente": r["cliente"], "assessor": r["assessor"], "score": 0, "alertas": []})
+        scores[c]["score"] += 1
+        scores[c]["alertas"].append(f"AuC -R$ {abs(r['delta']):,.0f}")
+
+    prioridades = sorted(scores.values(), key=lambda x: x["score"], reverse=True)[:20]
+    for p in prioridades:
+        p["alertas"] = " | ".join(p["alertas"])
+
+    resultado = {
+        "gerado_em":    __import__("datetime").datetime.utcnow().isoformat(),
+        "assessor":     filter_assessor,
+        "caixa_parado": caixa_parado,
+        "vencimentos":  vencimentos,
+        "roa_cliente":  roa_cliente,
+        "sem_receita":  sem_receita,
+        "auc_queda":    auc_queda,
+        "prioridades":  prioridades,
+    }
+    cache_set(cache_key, resultado)
+    return resultado

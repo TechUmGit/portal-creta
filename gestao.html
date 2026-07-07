@@ -52,7 +52,7 @@
     .sidebar-footer .nav-item:hover { color: #dc2626; }
     .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 99; }
     /* MAIN */
-    .main { margin-left: 0; padding-top: 60px; min-height: 100vh; }
+    .main { padding-top: 60px; min-height: 100vh; }
     .page-header { background: linear-gradient(135deg, #091525 0%, #0c2040 60%, #0f2e5c 100%); padding: 36px 44px; position: relative; overflow: hidden; }
     .page-header::after { content: ''; position: absolute; width: 380px; height: 380px; border-radius: 50%; border: 1px solid rgba(11,181,213,0.1); right: -60px; top: -80px; pointer-events: none; }
     .page-header-label { font-size: 10px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: rgba(255,255,255,0.3); margin-bottom: 8px; }
@@ -64,8 +64,8 @@
     .filter-select { padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 500; border: 1.5px solid #e8ebf2; background: #fff; color: #374151; cursor: pointer; font-family: inherit; }
     /* CONTENT */
     .content { padding: 28px 44px 48px; display: flex; flex-direction: column; gap: 24px; }
-    /* SECTION */
-    .section-title { font-size: 13px; font-weight: 700; color: #0c1a35; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+    /* SECTION TITLE */
+    .section-title { font-size: 13px; font-weight: 700; color: #0c1a35; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
     .section-badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 20px; }
     .badge-red    { background: #fee2e2; color: #dc2626; }
     .badge-yellow { background: #fef9c3; color: #92400e; }
@@ -74,13 +74,31 @@
     .badge-gray   { background: #f1f5f9; color: #475569; }
     /* CARD */
     .card { background: #fff; border-radius: 12px; border: 1px solid #e8ebf2; padding: 20px 24px; }
-    /* TABELA */
-    .table-wrap { overflow-x: auto; }
+    /* TABELA com scroll */
+    .table-wrap {
+      overflow-x: auto;
+      overflow-y: auto;
+      max-height: 400px;
+      border-radius: 8px;
+      border: 1px solid #e8ebf2;
+    }
     .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    .data-table thead th { padding: 10px 12px; text-align: left; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #6b7280; border-bottom: 1.5px solid #e8ebf2; white-space: nowrap; }
+    .data-table thead { position: sticky; top: 0; z-index: 2; }
+    .data-table thead th {
+      padding: 10px 12px;
+      text-align: left;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: #6b7280;
+      background: #f8fafc;
+      border-bottom: 1.5px solid #e8ebf2;
+      white-space: nowrap;
+    }
     .data-table thead th.num { text-align: right; }
     .data-table thead th.sortable { cursor: pointer; user-select: none; }
-    .data-table thead th.sortable:hover { color: #0c1a35; }
+    .data-table thead th.sortable:hover { color: #0c1a35; background: #f1f5f9; }
     .data-table thead th.sort-asc::after  { content: " ↑"; color: #0bb5d5; }
     .data-table thead th.sort-desc::after { content: " ↓"; color: #0bb5d5; }
     .data-table tbody tr { border-bottom: 1px solid #f0f3f8; transition: background 0.1s; }
@@ -90,7 +108,6 @@
     .data-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
     .data-table td.rank { text-align: center; font-size: 12px; color: #9ca3af; font-weight: 600; }
     .tag-assessor { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 500; background: #eef3ff; color: #0c1a35; }
-    .tag-alert { display: inline-block; padding: 2px 7px; border-radius: 20px; font-size: 11px; font-weight: 500; }
     .empty-msg { text-align: center; padding: 32px; color: #9ca3af; font-size: 13px; }
     .val-neg { color: #ef4444; font-weight: 600; }
     .val-pos { color: #10b981; font-weight: 600; }
@@ -98,10 +115,16 @@
     .dias-urgent { background: #fee2e2; color: #dc2626; }
     .dias-warn   { background: #fef9c3; color: #92400e; }
     .dias-ok     { background: #dcfce7; color: #15803d; }
-    /* Prioridade score */
+    /* Score */
     .score-high { color: #dc2626; font-weight: 700; }
     .score-mid  { color: #92400e; font-weight: 600; }
     .score-low  { color: #374151; }
+    /* Alertas chips */
+    .alert-chip { display: inline-block; padding: 2px 7px; border-radius: 20px; font-size: 11px; font-weight: 500; margin: 1px 2px; }
+    .ac-caixa   { background: #fef9c3; color: #92400e; }
+    .ac-vence   { background: #dbeafe; color: #1d4ed8; }
+    .ac-semrec  { background: #fee2e2; color: #dc2626; }
+    .ac-queda   { background: #f3e8ff; color: #7e22ce; }
     /* modal */
     #custom-modal { display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;align-items:center;justify-content:center; }
     #custom-modal > div { background:#fff;border-radius:12px;padding:28px 32px;max-width:360px;width:90%;box-shadow:0 20px 48px rgba(0,0,0,0.18); }
@@ -117,7 +140,7 @@
 <div id="app" style="display:none">
   <!-- TOPBAR -->
   <header class="topbar">
-    <button class="icon-btn" id="menuBtn" onclick="toggleSidebar()">
+    <button class="icon-btn" onclick="toggleSidebar()">
       <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
     <a href="dashboard.html" class="topbar-logo"><img src="logo-creta.svg" alt="Creta Capital" style="height:60px;display:block;"></a>
@@ -137,7 +160,6 @@
     </div>
   </header>
 
-  <!-- SIDEBAR -->
   <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
   <nav class="sidebar" id="sidebar">
     <div class="sidebar-section">
@@ -174,7 +196,6 @@
     </div>
   </nav>
 
-  <!-- MAIN -->
   <main class="main">
     <div class="page-header">
       <div class="page-header-label">Gestão de Carteira</div>
@@ -182,7 +203,6 @@
       <div class="page-header-sub">Priorize ações com base em dados da carteira</div>
     </div>
 
-    <!-- FILTRO ASSESSOR -->
     <div class="filter-bar" id="filterBar" style="display:none">
       <span class="filter-label">Assessor:</span>
       <select class="filter-select" id="assessorSelect" onchange="carregarDados()">
@@ -194,18 +214,15 @@
 
       <!-- 1. PRIORIDADES -->
       <div class="card">
-        <div class="section-title">
-          🎯 Lista de Prioridades
-          <span class="section-badge badge-red" id="badge-prior">—</span>
-        </div>
+        <div class="section-title">🎯 Lista de Prioridades <span class="section-badge badge-red" id="badge-prior">—</span></div>
         <div class="table-wrap">
-          <table class="data-table">
+          <table class="data-table" id="tbl-prior">
             <thead><tr>
               <th style="width:36px">#</th>
-              <th>Cliente</th>
-              <th>Conta</th>
-              <th>Assessor</th>
-              <th class="num">Score</th>
+              <th class="sortable" onclick="sortTable('prior','cliente')">Cliente</th>
+              <th class="sortable" onclick="sortTable('prior','Conta')">Conta</th>
+              <th class="sortable" onclick="sortTable('prior','assessor')">Assessor</th>
+              <th class="sortable num" onclick="sortTable('prior','score')">Score</th>
               <th>Alertas</th>
             </tr></thead>
             <tbody id="tbody-prior"><tr><td colspan="6" class="empty-msg">Carregando...</td></tr></tbody>
@@ -215,17 +232,16 @@
 
       <!-- 2. CAIXA PARADO -->
       <div class="card">
-        <div class="section-title">
-          💰 Caixa Parado
-          <span class="section-badge badge-yellow" id="badge-caixa">—</span>
-        </div>
+        <div class="section-title">💰 Caixa Parado <span class="section-badge badge-yellow" id="badge-caixa">—</span></div>
         <div class="table-wrap">
-          <table class="data-table">
+          <table class="data-table" id="tbl-caixa">
             <thead><tr>
-              <th>Conta</th><th>Cliente</th><th>Assessor</th>
-              <th class="num">Valor em Caixa</th>
-              <th class="num">AuC Total</th>
-              <th class="num">% do PL</th>
+              <th class="sortable" onclick="sortTable('caixa','Conta')">Conta</th>
+              <th class="sortable" onclick="sortTable('caixa','cliente')">Cliente</th>
+              <th class="sortable" onclick="sortTable('caixa','assessor')">Assessor</th>
+              <th class="sortable num" onclick="sortTable('caixa','valor_caixa')">Valor em Caixa</th>
+              <th class="sortable num" onclick="sortTable('caixa','total_auc')">AuC Total</th>
+              <th class="sortable num" onclick="sortTable('caixa','pct_caixa')">% do PL</th>
             </tr></thead>
             <tbody id="tbody-caixa"><tr><td colspan="6" class="empty-msg">Carregando...</td></tr></tbody>
           </table>
@@ -234,38 +250,37 @@
 
       <!-- 3. VENCIMENTOS -->
       <div class="card">
-        <div class="section-title">
-          📅 Vencimentos nos Próximos 90 Dias
-          <span class="section-badge badge-blue" id="badge-venc">—</span>
-        </div>
+        <div class="section-title">📅 Vencimentos nos Próximos 90 Dias <span class="section-badge badge-blue" id="badge-venc">—</span></div>
         <div class="table-wrap">
-          <table class="data-table">
+          <table class="data-table" id="tbl-venc">
             <thead><tr>
-              <th>Conta</th><th>Cliente</th><th>Assessor</th>
-              <th>Classe</th><th>Produto</th>
-              <th class="num">Vencimento</th>
-              <th class="num">Dias</th>
-              <th class="num">Valor</th>
+              <th class="sortable" onclick="sortTable('venc','Conta')">Conta</th>
+              <th class="sortable" onclick="sortTable('venc','cliente')">Cliente</th>
+              <th class="sortable" onclick="sortTable('venc','assessor')">Assessor</th>
+              <th class="sortable" onclick="sortTable('venc','Classe')">Classe</th>
+              <th>Produto</th>
+              <th class="sortable num" onclick="sortTable('venc','Vencimento')">Vencimento</th>
+              <th class="sortable num" onclick="sortTable('venc','dias_para_vencer')">Dias</th>
+              <th class="sortable num" onclick="sortTable('venc','valor')">Valor</th>
             </tr></thead>
             <tbody id="tbody-venc"><tr><td colspan="8" class="empty-msg">Carregando...</td></tr></tbody>
           </table>
         </div>
       </div>
 
-      <!-- 4. ROA POR CLIENTE -->
+      <!-- 4. ROA -->
       <div class="card">
-        <div class="section-title">
-          📊 Clientes com Menor ROA (últimos 12 meses)
-          <span class="section-badge badge-gray" id="badge-roa">—</span>
-        </div>
+        <div class="section-title">📊 Menor ROA — últimos 12 meses <span class="section-badge badge-gray" id="badge-roa">—</span></div>
         <div class="table-wrap">
-          <table class="data-table">
+          <table class="data-table" id="tbl-roa">
             <thead><tr>
               <th style="width:36px">#</th>
-              <th>Conta</th><th>Cliente</th><th>Assessor</th>
-              <th class="num">AuC Médio</th>
-              <th class="num">Receita Bruta 12m</th>
-              <th class="num">ROA Anualizado</th>
+              <th class="sortable" onclick="sortTable('roa','Conta')">Conta</th>
+              <th class="sortable" onclick="sortTable('roa','cliente')">Cliente</th>
+              <th class="sortable" onclick="sortTable('roa','assessor')">Assessor</th>
+              <th class="sortable num" onclick="sortTable('roa','avg_auc')">AuC Médio</th>
+              <th class="sortable num" onclick="sortTable('roa','receita_bruta')">Receita 12m</th>
+              <th class="sortable num" onclick="sortTable('roa','roa_pct')">ROA</th>
             </tr></thead>
             <tbody id="tbody-roa"><tr><td colspan="7" class="empty-msg">Carregando...</td></tr></tbody>
           </table>
@@ -274,17 +289,16 @@
 
       <!-- 5. SEM RECEITA -->
       <div class="card">
-        <div class="section-title">
-          ⚠️ Clientes sem Receita há 60+ dias
-          <span class="section-badge badge-red" id="badge-semrec">—</span>
-        </div>
+        <div class="section-title">⚠️ Sem Receita há 60+ dias <span class="section-badge badge-red" id="badge-semrec">—</span></div>
         <div class="table-wrap">
-          <table class="data-table">
+          <table class="data-table" id="tbl-semrec">
             <thead><tr>
-              <th>Conta</th><th>Cliente</th><th>Assessor</th>
-              <th class="num">AuC Atual</th>
-              <th class="num">Última Receita</th>
-              <th class="num">Dias sem Receita</th>
+              <th class="sortable" onclick="sortTable('semrec','Conta')">Conta</th>
+              <th class="sortable" onclick="sortTable('semrec','cliente')">Cliente</th>
+              <th class="sortable" onclick="sortTable('semrec','assessor')">Assessor</th>
+              <th class="sortable num" onclick="sortTable('semrec','auc_atual')">AuC Atual</th>
+              <th class="sortable num" onclick="sortTable('semrec','ultima_receita')">Última Receita</th>
+              <th class="sortable num" onclick="sortTable('semrec','dias_sem_receita')">Dias sem Receita</th>
             </tr></thead>
             <tbody id="tbody-semrec"><tr><td colspan="6" class="empty-msg">Carregando...</td></tr></tbody>
           </table>
@@ -293,18 +307,17 @@
 
       <!-- 6. AuC EM QUEDA -->
       <div class="card">
-        <div class="section-title">
-          📉 AuC em Queda (vs 60 dias atrás)
-          <span class="section-badge badge-red" id="badge-queda">—</span>
-        </div>
+        <div class="section-title">📉 AuC em Queda vs 60 dias atrás <span class="section-badge badge-red" id="badge-queda">—</span></div>
         <div class="table-wrap">
-          <table class="data-table">
+          <table class="data-table" id="tbl-queda">
             <thead><tr>
-              <th>Conta</th><th>Cliente</th><th>Assessor</th>
-              <th class="num">AuC Atual</th>
-              <th class="num">AuC 60d atrás</th>
-              <th class="num">Δ Valor</th>
-              <th class="num">% Variação</th>
+              <th class="sortable" onclick="sortTable('queda','Conta')">Conta</th>
+              <th class="sortable" onclick="sortTable('queda','cliente')">Cliente</th>
+              <th class="sortable" onclick="sortTable('queda','assessor')">Assessor</th>
+              <th class="sortable num" onclick="sortTable('queda','auc_atual')">AuC Atual</th>
+              <th class="sortable num" onclick="sortTable('queda','auc_60d')">AuC 60d atrás</th>
+              <th class="sortable num" onclick="sortTable('queda','delta')">Δ Valor</th>
+              <th class="sortable num" onclick="sortTable('queda','pct_var')">% Var.</th>
             </tr></thead>
             <tbody id="tbody-queda"><tr><td colspan="7" class="empty-msg">Carregando...</td></tr></tbody>
           </table>
@@ -316,218 +329,278 @@
 </div>
 
 <script>
-  const API_BASE = 'https://api-creta-978599698367.us-central1.run.app';
-  const firebaseConfig = {
-    apiKey: "AIzaSyDLJrg7Cmaq6DDlDdcLfe4kH9hUukMVuE0",
-    authDomain: "creta-btg-bd3a8.firebaseapp.com",
-    projectId: "creta-btg-bd3a8",
-    storageBucket: "creta-btg-bd3a8.appspot.com",
-    messagingSenderId: "978599698367",
-    appId: "1:978599698367:web:f9e2c8a3b1d4e5f6a7b8c9"
-  };
-  firebase.initializeApp(firebaseConfig);
+const API_BASE = 'https://api-creta-978599698367.us-central1.run.app';
+const firebaseConfig = {
+  apiKey: "AIzaSyDLJrg7Cmaq6DDlDdcLfe4kH9hUukMVuE0",
+  authDomain: "creta-btg-bd3a8.firebaseapp.com",
+  projectId: "creta-btg-bd3a8",
+  storageBucket: "creta-btg-bd3a8.appspot.com",
+  messagingSenderId: "978599698367",
+  appId: "1:978599698367:web:f9e2c8a3b1d4e5f6a7b8c9"
+};
+firebase.initializeApp(firebaseConfig);
 
-  let idToken = null, userRole = null, userAssessor = null;
+let idToken = null, userRole = null, userAssessor = null;
 
-  function fmtMoeda(v) {
-    if (v == null || isNaN(v)) return '—';
-    return 'R$ ' + parseFloat(v).toLocaleString('pt-BR', {minimumFractionDigits:0, maximumFractionDigits:0});
-  }
-  function fmtPct(v) {
-    if (v == null || isNaN(v)) return '—';
-    return parseFloat(v).toFixed(2) + '%';
-  }
-  function showOverlay() { document.getElementById('dataOverlay').style.display = 'flex'; }
-  function hideOverlay() { document.getElementById('dataOverlay').style.display = 'none'; }
-  function showAlert(msg) { document.getElementById('custom-modal-msg').textContent = msg; document.getElementById('custom-modal').style.display = 'flex'; }
+// ─── sort state per table ────────────────────────────────────────────────────
+const _data   = {};
+const _sortSt = {};
 
-  function toggleSidebar() {
-    document.getElementById('sidebar').classList.toggle('open');
-    document.getElementById('sidebarOverlay').style.display =
-      document.getElementById('sidebar').classList.contains('open') ? 'block' : 'none';
+function sortTable(tbl, col) {
+  if (!_data[tbl]) return;
+  if (_sortSt[tbl] && _sortSt[tbl].col === col) {
+    _sortSt[tbl].asc = !_sortSt[tbl].asc;
+  } else {
+    _sortSt[tbl] = { col, asc: true };
   }
-  document.addEventListener('click', e => {
-    const chip = document.getElementById('userChip');
-    if (chip && !chip.contains(e.target)) chip.classList.remove('open');
+  _data[tbl].sort((a, b) => {
+    const av = a[col] ?? '', bv = b[col] ?? '';
+    const cmp = typeof av === 'number' ? av - bv : String(av).localeCompare(String(bv), 'pt-BR');
+    return _sortSt[tbl].asc ? cmp : -cmp;
   });
+  updateSortHeaders(tbl, col, _sortSt[tbl].asc);
+  renders[tbl]();
+}
 
-  async function carregarAssessores() {
-    try {
-      const res = await fetch(`${API_BASE}/api/assessores`, { headers: { Authorization: `Bearer ${idToken}` } });
-      const json = await res.json();
-      const sel = document.getElementById('assessorSelect');
-      (json.assessores || []).forEach(a => {
-        const opt = document.createElement('option'); opt.value = a; opt.textContent = a; sel.appendChild(opt);
-      });
-    } catch(e) { console.warn('assessores:', e); }
-  }
-
-  async function carregarDados() {
-    showOverlay();
-    try {
-      const sel = document.getElementById('assessorSelect');
-      let url = `${API_BASE}/api/gestao`;
-      if (userRole === 'admin' && sel && sel.value) url += `?assessor=${encodeURIComponent(sel.value)}`;
-
-      const res = await fetch(url, { headers: { Authorization: `Bearer ${idToken}` } });
-      if (!res.ok) throw new Error(await res.text());
-      const json = await res.json();
-
-      renderPrioridades(json.prioridades || []);
-      renderCaixa(json.caixa_parado || []);
-      renderVencimentos(json.vencimentos || []);
-      renderRoa(json.roa_cliente || []);
-      renderSemReceita(json.sem_receita || []);
-      renderQueda(json.auc_queda || []);
-    } catch(e) {
-      console.error('gestao:', e);
-      showAlert('Erro ao carregar dados. Tente novamente.');
-    } finally {
-      hideOverlay();
+function updateSortHeaders(tbl, activeCol, asc) {
+  const table = document.getElementById('tbl-' + tbl);
+  if (!table) return;
+  table.querySelectorAll('thead th.sortable').forEach(th => {
+    th.classList.remove('sort-asc', 'sort-desc');
+    const fn = th.getAttribute('onclick') || '';
+    if (fn.includes("'" + activeCol + "'")) {
+      th.classList.add(asc ? 'sort-asc' : 'sort-desc');
     }
-  }
-
-  function assessorTag(a) {
-    return a ? '<span class="tag-assessor">' + a + '</span>' : '—';
-  }
-  function emptyRow(cols, msg) {
-    return '<tr><td colspan="' + cols + '" class="empty-msg">' + (msg || 'Sem dados.') + '</td></tr>';
-  }
-
-  function renderPrioridades(dados) {
-    const el = document.getElementById('badge-prior');
-    el.textContent = dados.length;
-    const tbody = document.getElementById('tbody-prior');
-    if (!dados.length) { tbody.innerHTML = emptyRow(6, 'Nenhuma prioridade identificada.'); return; }
-    tbody.innerHTML = dados.map((r, i) => {
-      const scoreClass = r.score >= 5 ? 'score-high' : r.score >= 3 ? 'score-mid' : 'score-low';
-      return '<tr>' +
-        '<td class="rank">' + (i+1) + '</td>' +
-        '<td><strong>' + (r.cliente || '—') + '</strong></td>' +
-        '<td>' + (r.Conta || '—') + '</td>' +
-        '<td>' + assessorTag(r.assessor) + '</td>' +
-        '<td class="num ' + scoreClass + '">' + r.score + '</td>' +
-        '<td style="font-size:12px;color:#6b7280">' + (r.alertas || '—') + '</td>' +
-        '</tr>';
-    }).join('');
-  }
-
-  function renderCaixa(dados) {
-    document.getElementById('badge-caixa').textContent = dados.length;
-    const tbody = document.getElementById('tbody-caixa');
-    if (!dados.length) { tbody.innerHTML = emptyRow(6); return; }
-    tbody.innerHTML = dados.map(r => {
-      const pct = r.pct_caixa;
-      const pctClass = pct >= 50 ? 'val-neg' : pct >= 20 ? '' : '';
-      return '<tr>' +
-        '<td><strong>' + (r.Conta||'—') + '</strong></td>' +
-        '<td>' + (r.cliente||'—') + '</td>' +
-        '<td>' + assessorTag(r.assessor) + '</td>' +
-        '<td class="num val-neg">' + fmtMoeda(r.valor_caixa) + '</td>' +
-        '<td class="num">' + fmtMoeda(r.total_auc) + '</td>' +
-        '<td class="num ' + pctClass + '">' + (pct != null ? pct.toFixed(1)+'%' : '—') + '</td>' +
-        '</tr>';
-    }).join('');
-  }
-
-  function renderVencimentos(dados) {
-    document.getElementById('badge-venc').textContent = dados.length;
-    const tbody = document.getElementById('tbody-venc');
-    if (!dados.length) { tbody.innerHTML = emptyRow(8, 'Nenhum vencimento nos próximos 90 dias.'); return; }
-    tbody.innerHTML = dados.map(r => {
-      const dias = parseInt(r.dias_para_vencer);
-      const chipClass = dias <= 15 ? 'dias-urgent' : dias <= 45 ? 'dias-warn' : 'dias-ok';
-      return '<tr>' +
-        '<td><strong>' + (r.Conta||'—') + '</strong></td>' +
-        '<td>' + (r.cliente||'—') + '</td>' +
-        '<td>' + assessorTag(r.assessor) + '</td>' +
-        '<td>' + (r.Classe||'—') + '</td>' +
-        '<td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (r.Nome||r.Subclasse||'—') + '</td>' +
-        '<td class="num">' + (r.Vencimento||'—') + '</td>' +
-        '<td class="num"><span class="dias-chip ' + chipClass + '">' + dias + 'd</span></td>' +
-        '<td class="num">' + fmtMoeda(r.valor) + '</td>' +
-        '</tr>';
-    }).join('');
-  }
-
-  function renderRoa(dados) {
-    document.getElementById('badge-roa').textContent = dados.length;
-    const tbody = document.getElementById('tbody-roa');
-    if (!dados.length) { tbody.innerHTML = emptyRow(7); return; }
-    tbody.innerHTML = dados.map((r, i) => {
-      const roa = r.roa_pct;
-      const roaClass = roa != null && roa < 0.5 ? 'val-neg' : '';
-      return '<tr>' +
-        '<td class="rank">' + (i+1) + '</td>' +
-        '<td><strong>' + (r.Conta||'—') + '</strong></td>' +
-        '<td>' + (r.cliente||'—') + '</td>' +
-        '<td>' + assessorTag(r.assessor) + '</td>' +
-        '<td class="num">' + fmtMoeda(r.avg_auc) + '</td>' +
-        '<td class="num">' + fmtMoeda(r.receita_bruta) + '</td>' +
-        '<td class="num ' + roaClass + '">' + (roa != null ? fmtPct(roa) : '—') + '</td>' +
-        '</tr>';
-    }).join('');
-  }
-
-  function renderSemReceita(dados) {
-    document.getElementById('badge-semrec').textContent = dados.length;
-    const tbody = document.getElementById('tbody-semrec');
-    if (!dados.length) { tbody.innerHTML = emptyRow(6, 'Todos os clientes geraram receita recentemente.'); return; }
-    tbody.innerHTML = dados.map(r => {
-      const dias = parseInt(r.dias_sem_receita);
-      const chipClass = dias >= 180 ? 'dias-urgent' : dias >= 90 ? 'dias-warn' : 'dias-ok';
-      return '<tr>' +
-        '<td><strong>' + (r.Conta||'—') + '</strong></td>' +
-        '<td>' + (r.cliente||'—') + '</td>' +
-        '<td>' + assessorTag(r.assessor) + '</td>' +
-        '<td class="num">' + fmtMoeda(r.auc_atual) + '</td>' +
-        '<td class="num">' + (r.ultima_receita||'Nunca') + '</td>' +
-        '<td class="num"><span class="dias-chip ' + chipClass + '">' + dias + 'd</span></td>' +
-        '</tr>';
-    }).join('');
-  }
-
-  function renderQueda(dados) {
-    document.getElementById('badge-queda').textContent = dados.length;
-    const tbody = document.getElementById('tbody-queda');
-    if (!dados.length) { tbody.innerHTML = emptyRow(7, 'Nenhum cliente com AuC em queda.'); return; }
-    tbody.innerHTML = dados.map(r => {
-      return '<tr>' +
-        '<td><strong>' + (r.Conta||'—') + '</strong></td>' +
-        '<td>' + (r.cliente||'—') + '</td>' +
-        '<td>' + assessorTag(r.assessor) + '</td>' +
-        '<td class="num">' + fmtMoeda(r.auc_atual) + '</td>' +
-        '<td class="num">' + fmtMoeda(r.auc_60d) + '</td>' +
-        '<td class="num val-neg">' + fmtMoeda(r.delta) + '</td>' +
-        '<td class="num val-neg">' + (r.pct_var != null ? r.pct_var.toFixed(1)+'%' : '—') + '</td>' +
-        '</tr>';
-    }).join('');
-  }
-
-  // AUTH
-  firebase.auth().onAuthStateChanged(async user => {
-    if (!user) { window.location.href = 'index.html'; return; }
-    idToken = await user.getIdToken();
-    const claims = (await user.getIdTokenResult()).claims;
-    userRole     = claims.role || 'assessor';
-    userAssessor = claims.assessor_name || '';
-
-    const initials = (user.displayName||user.email||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
-    document.getElementById('avatarEl').textContent    = initials;
-    document.getElementById('userNameEl').textContent  = user.displayName || user.email;
-    document.getElementById('userRoleEl').textContent  = userRole === 'admin' ? 'Administrador' : 'Assessor';
-    document.getElementById('userEmailEl').textContent = user.email;
-
-    if (userRole === 'admin') {
-      document.getElementById('filterBar').style.display = 'flex';
-      document.getElementById('sidebarSistema').style.display = 'block';
-      await carregarAssessores();
-    }
-
-    document.getElementById('loadingScreen').style.display = 'none';
-    document.getElementById('app').style.display = 'block';
-    await carregarDados();
   });
+}
+
+// ─── helpers ────────────────────────────────────────────────────────────────
+function fmtMoeda(v) {
+  if (v == null || isNaN(v)) return '—';
+  return 'R$ ' + parseFloat(v).toLocaleString('pt-BR', {minimumFractionDigits:0, maximumFractionDigits:0});
+}
+function fmtPct(v) {
+  if (v == null || isNaN(v)) return '—';
+  return parseFloat(v).toFixed(2) + '%';
+}
+function showOverlay() { document.getElementById('dataOverlay').style.display='flex'; }
+function hideOverlay() { document.getElementById('dataOverlay').style.display='none'; }
+function showAlert(msg) { document.getElementById('custom-modal-msg').textContent=msg; document.getElementById('custom-modal').style.display='flex'; }
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebarOverlay').style.display =
+    document.getElementById('sidebar').classList.contains('open') ? 'block' : 'none';
+}
+document.addEventListener('click', e => {
+  const chip = document.getElementById('userChip');
+  if (chip && !chip.contains(e.target)) chip.classList.remove('open');
+});
+function assessorTag(a) { return a ? '<span class="tag-assessor">' + a + '</span>' : '—'; }
+function emptyRow(cols, msg) { return '<tr><td colspan="' + cols + '" class="empty-msg">' + (msg||'Sem dados.') + '</td></tr>'; }
+
+// ─── render functions ────────────────────────────────────────────────────────
+const renders = {
+  prior: renderPrioridades,
+  caixa: renderCaixa,
+  venc:  renderVencimentos,
+  roa:   renderRoa,
+  semrec: renderSemReceita,
+  queda: renderQueda,
+};
+
+function renderPrioridades() {
+  const dados = _data['prior'] || [];
+  document.getElementById('badge-prior').textContent = dados.length;
+  const tbody = document.getElementById('tbody-prior');
+  if (!dados.length) { tbody.innerHTML = emptyRow(6, 'Nenhuma prioridade identificada.'); return; }
+  tbody.innerHTML = dados.map((r, i) => {
+    const sc = r.score;
+    const scoreClass = sc >= 5 ? 'score-high' : sc >= 3 ? 'score-mid' : 'score-low';
+    const chips = buildAlertChips(r.alertas_raw || r.alertas || '');
+    return '<tr>' +
+      '<td class="rank">' + (i+1) + '</td>' +
+      '<td><strong>' + (r.cliente || r.Conta || '—') + '</strong></td>' +
+      '<td style="color:#6b7280;font-size:12px">' + (r.Conta||'—') + '</td>' +
+      '<td>' + assessorTag(r.assessor) + '</td>' +
+      '<td class="num ' + scoreClass + '">' + sc + '</td>' +
+      '<td style="white-space:normal">' + chips + '</td>' +
+      '</tr>';
+  }).join('');
+}
+
+function buildAlertChips(alertas) {
+  if (!alertas) return '—';
+  // alertas é string separada por |
+  return alertas.split('|').map(a => {
+    a = a.trim();
+    if (!a) return '';
+    let cls = 'ac-queda';
+    if (a.startsWith('Caixa'))   cls = 'ac-caixa';
+    else if (a.startsWith('Vence'))  cls = 'ac-vence';
+    else if (a.startsWith('Sem'))    cls = 'ac-semrec';
+    return '<span class="alert-chip ' + cls + '">' + a + '</span>';
+  }).join('');
+}
+
+function renderCaixa() {
+  const dados = _data['caixa'] || [];
+  document.getElementById('badge-caixa').textContent = dados.length;
+  const tbody = document.getElementById('tbody-caixa');
+  if (!dados.length) { tbody.innerHTML = emptyRow(6); return; }
+  tbody.innerHTML = dados.map(r => {
+    const pct = r.pct_caixa;
+    return '<tr>' +
+      '<td><strong>' + (r.Conta||'—') + '</strong></td>' +
+      '<td>' + (r.cliente||'—') + '</td>' +
+      '<td>' + assessorTag(r.assessor) + '</td>' +
+      '<td class="num val-neg">' + fmtMoeda(r.valor_caixa) + '</td>' +
+      '<td class="num">' + fmtMoeda(r.total_auc) + '</td>' +
+      '<td class="num">' + (pct!=null ? pct.toFixed(1)+'%' : '—') + '</td>' +
+      '</tr>';
+  }).join('');
+}
+
+function renderVencimentos() {
+  const dados = _data['venc'] || [];
+  document.getElementById('badge-venc').textContent = dados.length;
+  const tbody = document.getElementById('tbody-venc');
+  if (!dados.length) { tbody.innerHTML = emptyRow(8, 'Nenhum vencimento nos próximos 90 dias.'); return; }
+  tbody.innerHTML = dados.map(r => {
+    const dias = parseInt(r.dias_para_vencer);
+    const chipClass = dias<=15 ? 'dias-urgent' : dias<=45 ? 'dias-warn' : 'dias-ok';
+    return '<tr>' +
+      '<td><strong>' + (r.Conta||'—') + '</strong></td>' +
+      '<td>' + (r.cliente||'—') + '</td>' +
+      '<td>' + assessorTag(r.assessor) + '</td>' +
+      '<td>' + (r.Classe||'—') + '</td>' +
+      '<td style="max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (r.Nome||r.Subclasse||'—') + '</td>' +
+      '<td class="num">' + (r.Vencimento||'—') + '</td>' +
+      '<td class="num"><span class="dias-chip ' + chipClass + '">' + dias + 'd</span></td>' +
+      '<td class="num">' + fmtMoeda(r.valor) + '</td>' +
+      '</tr>';
+  }).join('');
+}
+
+function renderRoa() {
+  const dados = _data['roa'] || [];
+  document.getElementById('badge-roa').textContent = dados.length;
+  const tbody = document.getElementById('tbody-roa');
+  if (!dados.length) { tbody.innerHTML = emptyRow(7); return; }
+  tbody.innerHTML = dados.map((r, i) => {
+    const roa = r.roa_pct;
+    const roaClass = roa!=null && roa<0.5 ? 'val-neg' : '';
+    return '<tr>' +
+      '<td class="rank">' + (i+1) + '</td>' +
+      '<td><strong>' + (r.Conta||'—') + '</strong></td>' +
+      '<td>' + (r.cliente||'—') + '</td>' +
+      '<td>' + assessorTag(r.assessor) + '</td>' +
+      '<td class="num">' + fmtMoeda(r.avg_auc) + '</td>' +
+      '<td class="num">' + fmtMoeda(r.receita_bruta) + '</td>' +
+      '<td class="num ' + roaClass + '">' + (roa!=null ? fmtPct(roa) : '—') + '</td>' +
+      '</tr>';
+  }).join('');
+}
+
+function renderSemReceita() {
+  const dados = _data['semrec'] || [];
+  document.getElementById('badge-semrec').textContent = dados.length;
+  const tbody = document.getElementById('tbody-semrec');
+  if (!dados.length) { tbody.innerHTML = emptyRow(6, 'Todos os clientes geraram receita recentemente.'); return; }
+  tbody.innerHTML = dados.map(r => {
+    const dias = parseInt(r.dias_sem_receita);
+    const chipClass = dias>=180 ? 'dias-urgent' : dias>=90 ? 'dias-warn' : 'dias-ok';
+    return '<tr>' +
+      '<td><strong>' + (r.Conta||'—') + '</strong></td>' +
+      '<td>' + (r.cliente||'—') + '</td>' +
+      '<td>' + assessorTag(r.assessor) + '</td>' +
+      '<td class="num">' + fmtMoeda(r.auc_atual) + '</td>' +
+      '<td class="num">' + (r.ultima_receita||'Nunca') + '</td>' +
+      '<td class="num"><span class="dias-chip ' + chipClass + '">' + dias + 'd</span></td>' +
+      '</tr>';
+  }).join('');
+}
+
+function renderQueda() {
+  const dados = _data['queda'] || [];
+  document.getElementById('badge-queda').textContent = dados.length;
+  const tbody = document.getElementById('tbody-queda');
+  if (!dados.length) { tbody.innerHTML = emptyRow(7, 'Nenhum cliente com AuC em queda.'); return; }
+  tbody.innerHTML = dados.map(r => {
+    return '<tr>' +
+      '<td><strong>' + (r.Conta||'—') + '</strong></td>' +
+      '<td>' + (r.cliente||'—') + '</td>' +
+      '<td>' + assessorTag(r.assessor) + '</td>' +
+      '<td class="num">' + fmtMoeda(r.auc_atual) + '</td>' +
+      '<td class="num">' + fmtMoeda(r.auc_60d) + '</td>' +
+      '<td class="num val-neg">' + fmtMoeda(r.delta) + '</td>' +
+      '<td class="num val-neg">' + (r.pct_var!=null ? r.pct_var.toFixed(1)+'%' : '—') + '</td>' +
+      '</tr>';
+  }).join('');
+}
+
+// ─── load assessores ────────────────────────────────────────────────────────
+async function carregarAssessores() {
+  try {
+    const res = await fetch(API_BASE + '/api/assessores', { headers: { Authorization: 'Bearer ' + idToken } });
+    const json = await res.json();
+    const sel = document.getElementById('assessorSelect');
+    (json.assessores || []).forEach(a => {
+      const opt = document.createElement('option'); opt.value = a; opt.textContent = a; sel.appendChild(opt);
+    });
+  } catch(e) { console.warn('assessores:', e); }
+}
+
+// ─── load dados ─────────────────────────────────────────────────────────────
+async function carregarDados() {
+  showOverlay();
+  try {
+    const sel = document.getElementById('assessorSelect');
+    let url = API_BASE + '/api/gestao';
+    if (userRole === 'admin' && sel && sel.value) url += '?assessor=' + encodeURIComponent(sel.value);
+    const res = await fetch(url, { headers: { Authorization: 'Bearer ' + idToken } });
+    if (!res.ok) throw new Error(await res.text());
+    const json = await res.json();
+
+    _data['prior']  = json.prioridades  || [];
+    _data['caixa']  = json.caixa_parado || [];
+    _data['venc']   = json.vencimentos  || [];
+    _data['roa']    = json.roa_cliente  || [];
+    _data['semrec'] = json.sem_receita  || [];
+    _data['queda']  = json.auc_queda    || [];
+
+    Object.keys(renders).forEach(k => { _sortSt[k] = null; renders[k](); });
+  } catch(e) {
+    console.error('gestao:', e);
+    showAlert('Erro ao carregar dados. Tente novamente.');
+  } finally {
+    hideOverlay();
+  }
+}
+
+// ─── auth ────────────────────────────────────────────────────────────────────
+firebase.auth().onAuthStateChanged(async user => {
+  if (!user) { window.location.href = 'index.html'; return; }
+  idToken = await user.getIdToken();
+  const claims = (await user.getIdTokenResult()).claims;
+  userRole     = claims.role || 'assessor';
+  userAssessor = claims.assessor_name || '';
+
+  const initials = (user.displayName||user.email||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+  document.getElementById('avatarEl').textContent    = initials;
+  document.getElementById('userNameEl').textContent  = user.displayName || user.email;
+  document.getElementById('userRoleEl').textContent  = userRole === 'admin' ? 'Administrador' : 'Assessor';
+  document.getElementById('userEmailEl').textContent = user.email;
+
+  if (userRole === 'admin') {
+    document.getElementById('filterBar').style.display = 'flex';
+    document.getElementById('sidebarSistema').style.display = 'block';
+    await carregarAssessores();
+  }
+
+  document.getElementById('loadingScreen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  await carregarDados();
+});
 </script>
 </body>
 </html>

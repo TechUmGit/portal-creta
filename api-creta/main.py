@@ -1573,7 +1573,7 @@ async def gestao_carteira(
             r.receita_bruta,
             ROUND(COALESCE(a.avg_auc,0),0) AS avg_auc,
             CASE WHEN COALESCE(a.avg_auc,0) > 0
-                 THEN ROUND(r.receita_bruta / a.avg_auc * 100, 4) ELSE NULL END AS roa_pct
+                 THEN ROUND(r.receita_bruta / a.avg_auc * 12 * 100, 4) ELSE NULL END AS roa_pct
         FROM receita_conta r
         LEFT JOIN auc_medio a ON r.Conta = a.Conta
         LEFT JOIN nomes n ON SAFE_CAST(r.Conta AS INT64) = n.conta_num

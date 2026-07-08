@@ -868,28 +868,29 @@
       else if (isNonAdminAssessor && pcPorAss.length > 0) pc = pcPorAss;
     }
 
-    /* ── Filtro de mês (clique na barra do gráfico) ── */
-    let mesRow = null;
-    if (mesFiltrado) {
-      mesRow = evFiltrada.find(function(r){ return r.mes === mesFiltrado; });
-      evFiltrada = mesRow ? [mesRow] : evFiltrada;
-    }
-
     /* ── Filtro de categoria (clique na tabela) ── */
     if (categoriaFiltrada) {
       pc = pc.filter(function(r){ return r.categoria === categoriaFiltrada; });
+      // Atualiza pa com dados por assessor filtrados pela categoria
+      const pcCat = pcPorAss.filter(function(r){ return r.categoria === categoriaFiltrada; });
+      if (pcCat.length > 0) {
+        // Agrega por assessor (pode haver múltiplas linhas por assessor se API retornar assim)
+        const paMap = {};
+        pcCat.forEach(function(r){
+          const k = norm(r.assessor);
+          if (!paMap[k]) paMap[k] = { assessor: r.assessor, comissao_bruta: 0, comissao_liquida: 0, repasse_liquido: 0 };
+          paMap[k].comissao_bruta  += parseFloat(r.comissao_bruta  || 0);
+          paMap[k].comissao_liquida+= parseFloat(r.comissao_liquida|| 0);
+          paMap[k].repasse_liquido += parseFloat(r.repasse         || 0);
+        });
+        pa = Object.values(paMap).sort(function(a,b){ return b.repasse_liquido - a.repasse_liquido; });
+      }
     }
 
     atualizarChips();
 
-    /* KPIs — prioridade: mês > categoria > cliente > assessor > total */
-    if (mesRow && !filtradoCli) {
-      // Mês selecionado: usa os valores daquele mês da evolução
-      document.getElementById('kpiComBruta').textContent = fmt(mesRow.comissao_bruta);
-      document.getElementById('kpiComLiq').textContent   = fmt(mesRow.comissao_liquida);
-      document.getElementById('kpiRepLiq').textContent   = fmt(mesRow.repasse_liquido);
-      document.getElementById('kpiRepEsc').textContent   = fmt(mesRow.receita_escritorio);
-    } else if (categoriaFiltrada && pc.length > 0 && !filtradoCli) {
+    /* KPIs — prioridade: categoria > cliente > assessor > total */
+    if (categoriaFiltrada && pc.length > 0 && !filtradoCli) {
       // Categoria selecionada: usa os valores da categoria
       const catRow = pc[0];
       document.getElementById('kpiComBruta').textContent = fmt(catRow.comissao_bruta);
@@ -998,7 +999,8 @@
         opts.onClick = function(evt, elements) {
           if (!elements || !elements.length) return;
           var idx = elements[0].index;
-          selecionarMes(evFiltrada[idx] ? evFiltrada[idx].mes : null);
+          var row = evFiltrada[idx];
+          if (row) selecionarMes(row.mes, row.data_ref);
         };
         opts.plugins = opts.plugins || {};
         opts.plugins.tooltip = opts.plugins.tooltip || {};
@@ -1222,6 +1224,8 @@
       document.querySelectorAll('.filter-btn').forEach(function(b){
         b.classList.toggle('active', b.getAttribute('onclick') && b.getAttribute('onclick').includes("'" + periodoAtual + "'"));
       });
+      carregarDados(periodoAtual);
+      return; // carregarDados já chama renderizar
     } else if (tipo === 'categoria') {
       categoriaFiltrada = null;
     }
@@ -1232,12 +1236,18 @@
     const ehAdmin = perfilUsuario && perfilUsuario.role === 'admin';
     if (ehAdmin) { assessorAtual = 'todos'; document.getElementById('filtroAssessor').value = 'todos'; }
     clienteAtual = 'todos'; evolucaoClienteAtual = null; categoriaClienteAtual = null;
-    mesFiltrado = null; categoriaFiltrada = null;
+    categoriaFiltrada = null;
     document.getElementById('filtroCliente').value = 'todos';
     document.querySelectorAll('.filter-btn').forEach(function(b){
       b.classList.toggle('active', b.getAttribute('onclick') && b.getAttribute('onclick').includes("'" + periodoAtual + "'"));
     });
-    if (dadosCompletos) renderizar(dadosCompletos);
+    if (mesFiltrado) {
+      // Se havia filtro de mês, precisa recarregar da API com o período completo
+      mesFiltrado = null;
+      carregarDados(periodoAtual);
+    } else {
+      if (dadosCompletos) renderizar(dadosCompletos);
+    }
   }
 
   /* ── Filtro de período ── */
@@ -1256,11 +1266,23 @@
     }
   }
 
-  /* ── Click em mês do gráfico ── */
-  function selecionarMes(mes) {
-    mesFiltrado = (mesFiltrado === mes) ? null : mes;
-    atualizarChips();
-    if (dadosCompletos) renderizar(dadosCompletos);
+  /* ── Click em mês do gráfico — re-busca API para aquele mês ── */
+  function selecionarMes(mes, dataRef) {
+    if (mesFiltrado === mes) {
+      // Toggle off: volta ao período completo
+      mesFiltrado = null;
+      document.querySelectorAll('.filter-btn').forEach(function(b){
+        b.classList.toggle('active', !!b.getAttribute('onclick') && b.getAttribute('onclick').includes("'" + periodoAtual + "'"));
+      });
+      carregarDados(periodoAtual);
+    } else {
+      mesFiltrado = mes;
+      // Calcula primeiro e último dia do mês
+      var d = new Date(dataRef + 'T00:00:00');
+      var ultimo = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+      var endDate = ultimo.toISOString().split('T')[0];
+      carregarDados('custom', dataRef, endDate);
+    }
   }
 
   /* ── Click em categoria da tabela ── */

@@ -10,15 +10,17 @@ Endpoints:
 import io
 import os
 import re
+import json
 import time
 import logging
+import requests
 from datetime import datetime
 from typing import Optional
 from urllib.parse import quote
 import pandas as pd
 import yfinance as yf
 
-from fastapi import FastAPI, Depends, HTTPException, Header, Query, UploadFile, File, status
+from fastapi import FastAPI, Depends, HTTPException, Header, Query, UploadFile, File, Request, status
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -48,6 +50,7 @@ TABLE_POSICAO     = f"`{GCP_PROJECT}.{DATASET}.posicao_das_contas`"
 TABLE_SUITABILITY = f"`{GCP_PROJECT}.{DATASET}.suitability_contas`"
 TABLE_EXCECOES      = f"`{GCP_PROJECT}.{DATASET}.conta_assessor_excecoes`"
 TABLE_ASSESSOR_BASE = f"`{GCP_PROJECT}.{DATASET}.conta_assessor_base`"
+TABLE_WEBHOOK_RAW   = f"{GCP_PROJECT}.{DATASET}.webhook_btg_raw"
 
 # ── GCS ───────────────────────────────────────────────────────────────────────
 GCS_BUCKET  = os.getenv("GCS_BUCKET", "creta-btg-pipeline")
@@ -1426,6 +1429,91 @@ async def limpar_cache_pipeline(x_pipeline_key: Optional[str] = Header(default=N
     _cache.clear()
     log.info("Cache limpo via pipeline API key.")
     return {"ok": True, "mensagem": f"Cache limpo. {len(_cache)} entradas removidas."}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# /api/webhook/btg — Recebe payloads do BTG, baixa arquivo S3 e salva no GCS
+# ══════════════════════════════════════════════════════════════════════════════
+@app.post("/api/webhook/btg")
+async def webhook_btg(request: Request, token: Optional[str] = Query(default=None)):
+    """
+    Recebe webhooks do BTG Pactual (cadastrados no portal de desenvolvedor).
+    Valida o token, grava o payload no BigQuery, baixa o arquivo S3 imediatamente
+    e salva no GCS antes que a URL assinada expire (TTL = 1h).
+
+    Tipos tratados:
+    - account-advisor  → gs://creta-btg-pipeline/entradas/
+    - partner-report   → gs://creta-btg-pipeline/carteira-recomendada/
+    """
+    # ── 1. Valida token ───────────────────────────────────────────────────────
+    expected_token = os.getenv("WEBHOOK_TOKEN", "creta-btg-webhook-2024")
+    if token != expected_token:
+        log.warning("Webhook BTG: token inválido recebido.")
+        raise HTTPException(status_code=403, detail="Token inválido.")
+
+    # ── 2. Lê payload ─────────────────────────────────────────────────────────
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Payload JSON inválido.")
+
+    received_at = datetime.utcnow().isoformat() + "Z"
+    log.info(f"Webhook BTG recebido: keys={list(payload.keys())}")
+
+    # ── 3. Grava raw no BigQuery ──────────────────────────────────────────────
+    try:
+        erros_bq = bq.insert_rows_json(
+            TABLE_WEBHOOK_RAW,
+            [{"payload": json.dumps(payload, ensure_ascii=False), "received_at": received_at}],
+        )
+        if erros_bq:
+            log.error(f"Webhook: erro ao gravar BigQuery: {erros_bq}")
+    except Exception as e:
+        log.error(f"Webhook: exceção ao gravar BigQuery: {e}")
+
+    # ── 4. Extrai URL S3 ──────────────────────────────────────────────────────
+    # Formato A (account-advisor):  {"url": "...", "fileSize": ..., ...}
+    # Formato B (partner-report):   {"errors": [], "response": {"url": "...", ...}}
+    erros_payload = payload.get("errors") or []
+    if erros_payload:
+        # BTG reportou erro — sem arquivo para baixar
+        log.warning(f"Webhook BTG com erros: {erros_payload}")
+        return {"ok": True, "arquivo": None, "aviso": "Payload com erros — sem arquivo."}
+
+    resp   = payload.get("response") or {}
+    s3_url = payload.get("url") or resp.get("url")
+
+    if not s3_url:
+        log.info("Webhook BTG sem URL S3 — nenhum arquivo para baixar.")
+        return {"ok": True, "arquivo": None}
+
+    # ── 5. Determina pasta GCS e nome do arquivo ──────────────────────────────
+    if "account-advisor" in s3_url:
+        gcs_folder = "entradas/"
+    else:
+        gcs_folder = "carteira-recomendada/"
+
+    # Pega o nome do arquivo da URL (antes dos query params)
+    filename = s3_url.split("?")[0].split("/")[-1]
+    gcs_path = gcs_folder + filename
+
+    # ── 6. Baixa arquivo S3 e salva no GCS ───────────────────────────────────
+    try:
+        log.info(f"Webhook: baixando {filename} ...")
+        r = requests.get(s3_url, timeout=30)
+        r.raise_for_status()
+
+        bucket = gcs_client.bucket(GCS_BUCKET)
+        blob   = bucket.blob(gcs_path)
+        blob.upload_from_string(r.content, content_type="application/octet-stream")
+
+        log.info(f"Webhook: salvo em gs://{GCS_BUCKET}/{gcs_path} ({len(r.content)} bytes)")
+    except Exception as e:
+        # Não levanta erro para o BTG não retentar — o payload já está no BQ
+        log.error(f"Webhook: falha ao baixar/salvar arquivo: {e}")
+        return {"ok": True, "arquivo": None, "aviso": str(e)}
+
+    return {"ok": True, "arquivo": f"gs://{GCS_BUCKET}/{gcs_path}"}
 
 
 # ══════════════════════════════════════════════════════════════════════════════

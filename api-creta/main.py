@@ -252,6 +252,12 @@ def run_query(sql: str) -> list[dict]:
     rows = bq.query(sql).result()
     return [dict(row) for row in rows]
 
+def fmt_brl(v: float, decimais: int = 2) -> str:
+    """Formata valor no padrão brasileiro: 1.234.567,89"""
+    s = f"{abs(v):,.{decimais}f}"          # "1,234,567.89" (en)
+    s = s.replace(',', 'X').replace('.', ',').replace('X', '.')  # "1.234.567,89"
+    return s
+
 def _mapa_assessor_sq() -> str:
     """
     Subquery SQL que devolve (Conta INT64, Assessor STRING) para todas as contas.
@@ -1192,23 +1198,55 @@ async def relatorio_historico(
         ORDER BY dia
     """
 
-    # ── 2. Novas contas por mês (primeira aparição na posicao_das_contas) ───────
+    # ── 2. Novas contas e retiradas por mês (via posicao_das_contas) ────────────
+    # Nova    = conta cuja primeira aparição histórica cai no período.
+    # Retirada = conta cuja última aparição histórica cai no período,
+    #            mas antes do mês mais recente da tabela (evita falso positivo
+    #            quando dados do mês atual ainda não foram carregados).
     sql_novas = f"""
         WITH{contas_cte}
+        max_mes AS (
+            SELECT DATE_TRUNC(MAX(DATE(Data)), MONTH) AS mes_atual
+            FROM {TABLE_POSICAO}
+        ),
         primeira_aparicao AS (
-            SELECT TRIM(p.Conta) AS Conta, MIN(DATE(p.Data)) AS primeira_data
+            SELECT TRIM(p.Conta) AS Conta,
+                   DATE_TRUNC(MIN(DATE(p.Data)), MONTH) AS mes_entrada
             FROM {TABLE_POSICAO} p
             {contas_join}
             GROUP BY TRIM(p.Conta)
+        ),
+        ultima_aparicao AS (
+            SELECT TRIM(p.Conta) AS Conta,
+                   DATE_TRUNC(MAX(DATE(p.Data)), MONTH) AS mes_saida
+            FROM {TABLE_POSICAO} p
+            {contas_join}
+            GROUP BY TRIM(p.Conta)
+        ),
+        novas AS (
+            SELECT mes_entrada AS mes, COUNT(*) AS novas_contas
+            FROM primeira_aparicao
+            WHERE mes_entrada >= DATE_TRUNC({data_inicio}, MONTH)
+              AND mes_entrada <= DATE_TRUNC({data_fim},   MONTH)
+            GROUP BY mes_entrada
+        ),
+        retiradas AS (
+            SELECT u.mes_saida AS mes, COUNT(*) AS contas_retiradas
+            FROM ultima_aparicao u
+            CROSS JOIN max_mes m
+            WHERE u.mes_saida >= DATE_TRUNC({data_inicio}, MONTH)
+              AND u.mes_saida <= DATE_TRUNC({data_fim},   MONTH)
+              AND u.mes_saida <  m.mes_atual
+            GROUP BY u.mes_saida
         )
         SELECT
-            FORMAT_DATE('%Y-%m', DATE_TRUNC(primeira_data, MONTH)) AS mes,
-            COUNT(*) AS novas_contas
-        FROM primeira_aparicao
-        WHERE primeira_data >= {data_inicio}
-          AND primeira_data <= {data_fim}
-        GROUP BY mes
-        ORDER BY mes
+            FORMAT_DATE('%Y-%m', COALESCE(n.mes, r.mes))   AS mes,
+            COALESCE(n.novas_contas,     0)                 AS novas_contas,
+            COALESCE(r.contas_retiradas, 0)                 AS contas_retiradas,
+            COALESCE(n.novas_contas, 0) - COALESCE(r.contas_retiradas, 0) AS saldo_liquido
+        FROM novas n
+        FULL OUTER JOIN retiradas r ON n.mes = r.mes
+        ORDER BY COALESCE(n.mes, r.mes)
     """
 
     # ── 3. Receita + ROA mensal ────────────────────────────────────────────────
@@ -1341,7 +1379,7 @@ async def relatorio_historico(
     delta_auc         = round(
         float(auc_diario[-1]["auc"]) - float(auc_diario[0]["auc"]), 2
     ) if len(auc_diario) >= 2 else 0
-    novas_total       = sum(int(r.get("novas_contas") or 0) for r in novas_contas)
+    novas_total       = sum(int(r.get("saldo_liquido") or 0) for r in novas_contas)
     receita_total     = round(sum(float(r.get("receita_liquida") or 0) for r in receita_roa), 2)
     roa_ultimo        = float(receita_roa[-1]["roa_anualizado_pct"]) if receita_roa and receita_roa[-1].get("roa_anualizado_pct") is not None else None
 
@@ -1377,6 +1415,17 @@ async def limpar_cache(
         raise HTTPException(status_code=403, detail="Apenas administradores podem limpar o cache.")
     _cache.clear()
     return {"ok": True, "message": "Cache limpo."}
+
+
+@app.post("/api/cache/clear")
+async def limpar_cache_pipeline(x_pipeline_key: Optional[str] = Header(default=None)):
+    """Limpa cache via API key — chamado pelo pipeline Python após carga de novos dados."""
+    expected = os.getenv("PIPELINE_API_KEY", "")
+    if not expected or x_pipeline_key != expected:
+        raise HTTPException(status_code=403, detail="Chave inválida.")
+    _cache.clear()
+    log.info("Cache limpo via pipeline API key.")
+    return {"ok": True, "mensagem": f"Cache limpo. {len(_cache)} entradas removidas."}
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1629,7 +1678,7 @@ async def gestao_carteira(
         c = r["Conta"]
         scores.setdefault(c, {"Conta": c, "cliente": r["cliente"], "assessor": r["assessor"], "score": 0, "alertas": []})
         scores[c]["score"] += 3
-        scores[c]["alertas"].append(f"Caixa R$ {r['valor_caixa']:,.0f}")
+        scores[c]["alertas"].append(f"Caixa R$ {fmt_brl(r['valor_caixa'])}")
         scores[c]["caixa"] = r["valor_caixa"]
     # Agrupar vencimentos por conta: pegar o mais próximo + contar total
     _venc_by_conta: dict[str, dict] = {}
@@ -1656,7 +1705,7 @@ async def gestao_carteira(
         c = r["Conta"]
         scores.setdefault(c, {"Conta": c, "cliente": r["cliente"], "assessor": r["assessor"], "score": 0, "alertas": []})
         scores[c]["score"] += 1
-        scores[c]["alertas"].append(f"AuC -R$ {abs(r['delta']):,.0f}")
+        scores[c]["alertas"].append(f"AuC -R$ {fmt_brl(r['delta'])}")
 
     prioridades = sorted(scores.values(), key=lambda x: x["score"], reverse=True)[:20]
     for p in prioridades:

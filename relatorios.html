@@ -302,9 +302,9 @@
         <div class="kpi-card-sub">vs. início do período</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-card-label">Novas Contas</div>
+        <div class="kpi-card-label">Saldo de Contas</div>
         <div class="kpi-card-value" id="kpi-novas"><span class="skel skel-kpi-val" style="width:60px"></span></div>
-        <div class="kpi-card-sub">abertas no período</div>
+        <div class="kpi-card-sub">entradas − saídas no período</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-card-label">Receita Líquida</div>
@@ -339,7 +339,7 @@
         </div>
       </div>
       <div class="chart-card">
-        <div class="chart-card-title">Novas Contas por Mês</div>
+        <div class="chart-card-title">Entradas & Saídas de Contas por Mês</div>
         <div class="chart-half" style="position:relative">
           <span class="skel skel-chart" id="skel-novas"></span>
           <canvas id="chart-novas"></canvas>
@@ -646,8 +646,8 @@
         datasets: [
           {
             type: 'bar',
-            label: 'Receita Líquida',
-            data: dados.map(r => parseFloat(r.receita_liquida) || 0),
+            label: 'Receita Bruta',
+            data: dados.map(r => parseFloat(r.receita_bruta) || 0),
             backgroundColor: '#0c1a35',
             borderRadius: 4,
             yAxisID: 'y',
@@ -718,7 +718,7 @@
     });
   }
 
-  /* ── RENDER: Novas Contas ── */
+  /* ── RENDER: Entradas & Saídas de Contas ── */
   function renderNovasContas(dados) {
     if (chartNovas) { chartNovas.destroy(); chartNovas = null; }
     document.getElementById('skel-novas').style.display = 'none';
@@ -728,28 +728,42 @@
       type: 'bar',
       data: {
         labels: dados.map(r => fmtMes(r.mes)),
-        datasets: [{
-          label: 'Novas contas',
-          data: dados.map(r => parseInt(r.novas_contas) || 0),
-          backgroundColor: '#1a3a6c',
-          borderRadius: 4,
-        }]
+        datasets: [
+          {
+            label: 'Entradas',
+            data: dados.map(r => parseInt(r.novas_contas) || 0),
+            backgroundColor: '#1a3a6c',
+            borderRadius: 4,
+            stack: 'contas',
+          },
+          {
+            label: 'Saídas',
+            data: dados.map(r => -(parseInt(r.contas_retiradas) || 0)),
+            backgroundColor: '#ef4444',
+            borderRadius: 4,
+            stack: 'contas',
+          }
+        ]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-          legend: { display: false },
+          legend: { display: true, labels: { font: { size: 11 }, boxWidth: 12, padding: 14 } },
           tooltip: {
             callbacks: {
-              label: item => `${item.raw} conta${item.raw !== 1 ? 's' : ''} nova${item.raw !== 1 ? 's' : ''}`
+              label: item => {
+                const v = Math.abs(item.raw);
+                const label = item.dataset.label;
+                return `${label}: ${v} conta${v !== 1 ? 's' : ''}`;
+              }
             }
           }
         },
         scales: {
-          x: { grid: { display: false }, ticks: { font: { size: 11 } } },
+          x: { grid: { display: false }, ticks: { font: { size: 11 } }, stacked: true },
           y: {
-            beginAtZero: true,
+            stacked: true,
             ticks: { precision: 0, font: { size: 11 } },
             grid: { color: '#f0f3f8' }
           }

@@ -382,7 +382,7 @@
         <div class="kpi-card-value" id="kpiRepLiq">R$ —</div>
         <div class="kpi-card-sub">Total repassado</div>
       </div>
-      <div class="kpi-card">
+      <div class="kpi-card admin-only">
         <div class="kpi-card-label">Repasse Escritório</div>
         <div class="kpi-card-value" id="kpiRepEsc">R$ —</div>
         <div class="kpi-card-sub">Para o escritório</div>
@@ -417,7 +417,7 @@
         <div class="chart-card-title">Repasse Total Líquido</div>
         <div class="chart-half"><canvas id="chartRepLiq"></canvas></div>
       </div>
-      <div class="chart-card">
+      <div class="chart-card admin-only">
         <div class="chart-card-title">Repasse Total Para o Escritório</div>
         <div class="chart-half">
           <canvas id="chartRepEsc"></canvas>
@@ -478,7 +478,7 @@
     </div>
 
     <!-- Tabela: por Assessor -->
-    <div class="table-card">
+    <div class="table-card admin-only">
       <div class="table-header">
         <div class="table-title">Repasse Líquido por Assessor</div>
         <div class="table-total"><span>Total:</span> <span id="totalAssessor">—</span></div>
@@ -606,6 +606,11 @@
     const ehAdmin = perfilUsuario.role === 'admin';
 
     if (ehAdmin) document.getElementById('sidebarSistema').style.display = 'block';
+
+    /* Esconde seções exclusivas de admin para assessores */
+    if (!ehAdmin) {
+      document.querySelectorAll('.admin-only').forEach(function(el){ el.style.display = 'none'; });
+    }
 
     /* Atualiza badge de papel */
     document.querySelector('.user-role').textContent = ehAdmin ? 'Administrador' : 'Assessor BTG';

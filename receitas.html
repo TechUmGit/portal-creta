@@ -352,6 +352,14 @@
       <span id="chipClienteLabel"></span>
       <button class="filter-chip-x" onclick="limparFiltro('cliente')" title="Remover">×</button>
     </span>
+    <span class="filter-chip" id="chipMes" style="display:none">
+      <span id="chipMesLabel"></span>
+      <button class="filter-chip-x" onclick="limparFiltro('mes')" title="Remover">×</button>
+    </span>
+    <span class="filter-chip" id="chipCategoria" style="display:none">
+      <span id="chipCategoriaLabel"></span>
+      <button class="filter-chip-x" onclick="limparFiltro('categoria')" title="Remover">×</button>
+    </span>
     <button class="btn-limpar" onclick="limparTodosFiltros()">Limpar todos os filtros</button>
   </div>
 
@@ -634,6 +642,8 @@
   let evolucaoClienteAtual  = null;   // evolução mensal do cliente selecionado
   let categoriaClienteAtual = null;   // categorias do cliente selecionado
   let isNonAdminAssessor   = false;  // true quando assessor logado (API já filtrou por JWT)
+  let mesFiltrado          = null;   // mês clicado no gráfico de evolução (ex: 'jun/26')
+  let categoriaFiltrada    = null;   // categoria clicada na tabela de categorias
 
   /* ── Overlay ── */
 
@@ -858,8 +868,35 @@
       else if (isNonAdminAssessor && pcPorAss.length > 0) pc = pcPorAss;
     }
 
-    /* KPIs — prioridade: cliente > assessor > total */
-    if (filtradoCli && cliRow) {
+    /* ── Filtro de mês (clique na barra do gráfico) ── */
+    let mesRow = null;
+    if (mesFiltrado) {
+      mesRow = evFiltrada.find(function(r){ return r.mes === mesFiltrado; });
+      evFiltrada = mesRow ? [mesRow] : evFiltrada;
+    }
+
+    /* ── Filtro de categoria (clique na tabela) ── */
+    if (categoriaFiltrada) {
+      pc = pc.filter(function(r){ return r.categoria === categoriaFiltrada; });
+    }
+
+    atualizarChips();
+
+    /* KPIs — prioridade: mês > categoria > cliente > assessor > total */
+    if (mesRow && !filtradoCli) {
+      // Mês selecionado: usa os valores daquele mês da evolução
+      document.getElementById('kpiComBruta').textContent = fmt(mesRow.comissao_bruta);
+      document.getElementById('kpiComLiq').textContent   = fmt(mesRow.comissao_liquida);
+      document.getElementById('kpiRepLiq').textContent   = fmt(mesRow.repasse_liquido);
+      document.getElementById('kpiRepEsc').textContent   = fmt(mesRow.receita_escritorio);
+    } else if (categoriaFiltrada && pc.length > 0 && !filtradoCli) {
+      // Categoria selecionada: usa os valores da categoria
+      const catRow = pc[0];
+      document.getElementById('kpiComBruta').textContent = fmt(catRow.comissao_bruta);
+      document.getElementById('kpiComLiq').textContent   = fmt(catRow.comissao_liquida);
+      document.getElementById('kpiRepLiq').textContent   = fmt(catRow.repasse);
+      document.getElementById('kpiRepEsc').textContent   = '—';
+    } else if (filtradoCli && cliRow) {
       const repEsc = (cliRow.comissao_liquida || 0) - (cliRow.repasse || 0);
       document.getElementById('kpiComBruta').textContent = fmt(cliRow.comissao_bruta);
       document.getElementById('kpiComLiq').textContent   = fmt(cliRow.comissao_liquida);
@@ -942,17 +979,35 @@
     const kRepLiq   = filtradoCli && cliRow ? cliRow.repasse          : (filtrado && afDonut ? afDonut.repasse_liquido  : k.repasse_liquido);
 
     /* 1. Evolução Mensal */
+    const evLabels = evFiltrada.map(function(r){ return r.mes; });
     charts.evolucao = new Chart(document.getElementById('chartEvolucao'), {
       type: 'bar',
       data: {
-        labels: evFiltrada.map(function(r){ return r.mes; }),
+        labels: evLabels,
         datasets: [{
           label: 'Comissão Bruta',
           data:  evFiltrada.map(function(r){ return r.comissao_bruta; }),
-          backgroundColor: '#0c1a35', borderRadius: 4, borderSkipped: false,
+          backgroundColor: evFiltrada.map(function(r){
+            return mesFiltrado && r.mes !== mesFiltrado ? 'rgba(12,26,53,0.25)' : '#0c1a35';
+          }),
+          borderRadius: 4, borderSkipped: false,
         }]
       },
-      options: barOpts()
+      options: (function(){
+        var opts = barOpts();
+        opts.onClick = function(evt, elements) {
+          if (!elements || !elements.length) return;
+          var idx = elements[0].index;
+          selecionarMes(evFiltrada[idx] ? evFiltrada[idx].mes : null);
+        };
+        opts.plugins = opts.plugins || {};
+        opts.plugins.tooltip = opts.plugins.tooltip || {};
+        var origCbs = opts.plugins.tooltip.callbacks || {};
+        opts.plugins.tooltip.callbacks = Object.assign({}, origCbs, {
+          footer: function(){ return mesFiltrado ? '' : 'Clique para filtrar por este mês'; }
+        });
+        return opts;
+      })()
     });
 
     /* 2. Donut — Comissão Bruta */
@@ -1011,8 +1066,9 @@
     document.getElementById('totalCategoria').textContent = fmtTable(totalCat);
     document.getElementById('bodyCategoria').innerHTML = pc.length
       ? pc.map(function(r){
-          return '<tr>' +
-            '<td class="bold">' + r.categoria + '</td>' +
+          var ativa = categoriaFiltrada === r.categoria;
+          return '<tr style="cursor:pointer' + (ativa ? ';background:#eef3ff' : '') + '" onclick="selecionarCategoria(\'' + r.categoria.replace(/'/g,"\\'") + '\')" title="Clique para filtrar">' +
+            '<td class="bold" style="' + (ativa ? 'color:#0c1a35;font-weight:700' : '') + '">' + r.categoria + (ativa ? ' ✓' : '') + '</td>' +
             '<td class="right">' + fmtTable(r.comissao_bruta) + '</td>' +
             '<td class="right">' + fmtTable(r.comissao_liquida) + '</td>' +
             '<td class="right' + (r.repasse < 0 ? ' negative' : '') + '">' + fmtTable(r.repasse) + '</td>' +
@@ -1109,59 +1165,78 @@
 
   /* ── Chips de filtros ativos ── */
   function atualizarChips() {
-    const bar      = document.getElementById('activeFilters');
-    const chipAss  = document.getElementById('chipAssessor');
-    const chipCli  = document.getElementById('chipCliente');
-    const ehAdmin  = perfilUsuario && perfilUsuario.role === 'admin';
+    const bar     = document.getElementById('activeFilters');
+    const ehAdmin = perfilUsuario && perfilUsuario.role === 'admin';
 
-    // Chip de assessor: só aparece para admins (assessores têm filtro automático)
     const mostrarAss = ehAdmin && assessorAtual !== 'todos';
     const mostrarCli = clienteAtual !== 'todos';
+    const mostrarMes = !!mesFiltrado;
+    const mostrarCat = !!categoriaFiltrada;
 
-    bar.classList.toggle('visible', mostrarAss || mostrarCli);
+    bar.classList.toggle('visible', mostrarAss || mostrarCli || mostrarMes || mostrarCat);
 
+    const chipAss = document.getElementById('chipAssessor');
     if (mostrarAss) {
       chipAss.style.display = '';
       document.getElementById('chipAssessorLabel').textContent = 'Assessor: ' + assessorAtual.split(' ')[0];
-    } else {
-      chipAss.style.display = 'none';
-    }
+    } else { chipAss.style.display = 'none'; }
+
+    const chipCli = document.getElementById('chipCliente');
     if (mostrarCli) {
       chipCli.style.display = '';
       document.getElementById('chipClienteLabel').textContent = 'Cliente: ' + clienteAtual;
-    } else {
-      chipCli.style.display = 'none';
+    } else { chipCli.style.display = 'none'; }
+
+    const chipMes = document.getElementById('chipMes');
+    if (mostrarMes) {
+      chipMes.style.display = '';
+      document.getElementById('chipMesLabel').textContent = 'Mês: ' + mesFiltrado;
+    } else { chipMes.style.display = 'none'; }
+
+    const chipCat = document.getElementById('chipCategoria');
+    if (mostrarCat) {
+      chipCat.style.display = '';
+      document.getElementById('chipCategoriaLabel').textContent = 'Categoria: ' + categoriaFiltrada;
+    } else { chipCat.style.display = 'none'; }
+
+    // Remove destaque dos botões de período quando mês está selecionado
+    if (mostrarMes) {
+      document.querySelectorAll('.filter-btn').forEach(function(b){ b.classList.remove('active'); });
     }
   }
 
   function limparFiltro(tipo) {
     const ehAdmin = perfilUsuario && perfilUsuario.role === 'admin';
     if (tipo === 'assessor' && ehAdmin) {
-      assessorAtual = 'todos';
-      clienteAtual  = 'todos';
-      evolucaoClienteAtual  = null;
-      categoriaClienteAtual = null;
+      assessorAtual = 'todos'; clienteAtual = 'todos';
+      evolucaoClienteAtual = null; categoriaClienteAtual = null;
       document.getElementById('filtroAssessor').value = 'todos';
       document.getElementById('filtroCliente').value  = 'todos';
-    } else {
+    } else if (tipo === 'cliente') {
       clienteAtual = 'todos';
-      evolucaoClienteAtual  = null;
-      categoriaClienteAtual = null;
+      evolucaoClienteAtual = null; categoriaClienteAtual = null;
       document.getElementById('filtroCliente').value = 'todos';
+    } else if (tipo === 'mes') {
+      mesFiltrado = null;
+      // Restaura destaque do botão de período atual
+      document.querySelectorAll('.filter-btn').forEach(function(b){
+        b.classList.toggle('active', b.getAttribute('onclick') && b.getAttribute('onclick').includes("'" + periodoAtual + "'"));
+      });
+    } else if (tipo === 'categoria') {
+      categoriaFiltrada = null;
     }
     if (dadosCompletos) renderizar(dadosCompletos);
   }
 
   function limparTodosFiltros() {
     const ehAdmin = perfilUsuario && perfilUsuario.role === 'admin';
-    if (ehAdmin) {
-      assessorAtual = 'todos';
-      document.getElementById('filtroAssessor').value = 'todos';
-    }
-    clienteAtual = 'todos';
-    evolucaoClienteAtual  = null;
-    categoriaClienteAtual = null;
+    if (ehAdmin) { assessorAtual = 'todos'; document.getElementById('filtroAssessor').value = 'todos'; }
+    clienteAtual = 'todos'; evolucaoClienteAtual = null; categoriaClienteAtual = null;
+    mesFiltrado = null; categoriaFiltrada = null;
     document.getElementById('filtroCliente').value = 'todos';
+    document.querySelectorAll('.filter-btn').forEach(function(b){
+      b.classList.toggle('active', b.getAttribute('onclick') && b.getAttribute('onclick').includes("'" + periodoAtual + "'"));
+    });
     if (dadosCompletos) renderizar(dadosCompletos);
   }
 
@@ -1170,6 +1245,8 @@
     document.querySelectorAll('.filter-btn').forEach(function(b){ b.classList.remove('active'); });
     btn.classList.add('active');
     periodoAtual = period;
+    mesFiltrado = null;       // limpa filtro de mês ao trocar período
+    categoriaFiltrada = null; // limpa filtro de categoria ao trocar período
     const wrap = document.getElementById('custom-period-wrap');
     if (period === 'custom') {
       wrap.style.display = 'flex';
@@ -1177,6 +1254,20 @@
       wrap.style.display = 'none';
       carregarDados(period);
     }
+  }
+
+  /* ── Click em mês do gráfico ── */
+  function selecionarMes(mes) {
+    mesFiltrado = (mesFiltrado === mes) ? null : mes;
+    atualizarChips();
+    if (dadosCompletos) renderizar(dadosCompletos);
+  }
+
+  /* ── Click em categoria da tabela ── */
+  function selecionarCategoria(cat) {
+    categoriaFiltrada = (categoriaFiltrada === cat) ? null : cat;
+    atualizarChips();
+    if (dadosCompletos) renderizar(dadosCompletos);
   }
 
   function aplicarCustom() {

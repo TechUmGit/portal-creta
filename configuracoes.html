@@ -602,6 +602,26 @@
     }
   }
 
+  // ── Deletar exceção ───────────────────────────────────────────────────────
+  async function deletarExcecao(conta, dataInicio) {
+    if (!confirm(`Remover exceção da conta ${conta}?`)) return;
+    try {
+      const token = await getIdToken();
+      const res = await fetch(
+        `${API_URL}/api/config/excecoes?conta=${conta}&data_inicio=${dataInicio}`,
+        { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || 'Erro ao remover');
+      }
+      showToast('Exceção removida com sucesso.');
+      await carregarExcecoes();
+    } catch (err) {
+      showToast(err.message, 'err');
+    }
+  }
+
   // ── Arquivos do Pipeline ──────────────────────────────────────────────────
 
   let arquivoSelecionado = null;

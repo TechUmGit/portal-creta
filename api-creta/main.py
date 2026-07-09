@@ -466,12 +466,15 @@ async def receitas(
 async def detalhe(
     periodo: str = "12m",
     assessor: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     authorization: Optional[str] = Header(default=None),
 ):
     """
     Retorna dados linha a linha para o relatório de detalhe Excel.
     Parâmetros:
-      periodo: "3m" | "6m" | "12m" | "ytd" | "all"
+      periodo: "3m" | "6m" | "12m" | "ytd" | "all" | "custom"
+      start_date / end_date: obrigatórios quando periodo="custom" (formato YYYY-MM-DD)
       assessor: nome exato do assessor (apenas admins podem especificar um diferente do seu)
     """
     token_data    = await verificar_token(authorization)
@@ -483,12 +486,12 @@ async def detalhe(
     if not is_admin:
         assessor = assessor_name  # ignora parâmetro da URL
 
-    cache_key = f"detalhe:{periodo}:{assessor or 'todos'}"
+    cache_key = f"detalhe:{periodo}:{start_date}:{end_date}:{assessor or 'todos'}"
     cached = cache_get(cache_key)
     if cached:
         return cached
 
-    where = where_periodo(periodo)
+    where = where_periodo(periodo, start_date, end_date)
     query_params = []
 
     if assessor:

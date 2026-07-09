@@ -309,7 +309,7 @@
   let _portfolio    = [];
   let _carteiras    = [];
   let _ativa        = null;
-  let _comiteRec    = {};  // { "Carteira": ["TICK1", "TICK2"] }
+  let _comiteRec    = new Set();  // Set de nomes de carteiras recomendadas pelo comitê
   let _filtroComite = false;
 
   // ── Auth ──────────────────────────────────────────────────────────────────
@@ -345,7 +345,10 @@
       const res = await fetch(`${API_URL}/api/comite/recomendacoes`, {
         headers: { Authorization: `Bearer ${_token}` }
       });
-      if (res.ok) _comiteRec = await res.json();
+      if (res.ok) {
+        const json = await res.json();
+        _comiteRec = new Set(json.recomendadas || []);
+      }
     } catch(e) { /* não bloqueia a página */ }
   }
 
@@ -386,20 +389,24 @@
   // ── Resumo comparativo ────────────────────────────────────────────────────
   function renderResumo() {
     const carteirasVisiveis = _filtroComite
-      ? _carteiras.filter(c => (_comiteRec[c] || []).length > 0)
+      ? _carteiras.filter(c => _comiteRec.has(c))
       : _carteiras;
     const tbody = carteirasVisiveis.map((c, i) => {
       const meta   = _allocation.find(r => r.Carteira === c) || {};
-      const ativos = _filtroComite
-        ? _allocation.filter(r => r.Carteira === c && (_comiteRec[c] || []).includes(r.Ticker))
-        : _allocation.filter(r => r.Carteira === c);
+      const ativos = _allocation.filter(r => r.Carteira === c);
+      const isRec  = _comiteRec.has(c);
       const ra = meta.Rentab_Anterior;
       const ru = meta.Rentab_Acumulada;
       const ia = meta.Indice_Anterior;
       const iu = meta.Indice_Acumulado;
       const clsRa = parseFloat(ra) >= 0 ? 'rent-pos' : 'rent-neg';
       const clsRu = parseFloat(ru) >= 0 ? 'rent-pos' : 'rent-neg';
+      const starEl = _isAdmin
+        ? `<button class="comite-star${isRec ? ' ativo' : ''}" title="${isRec ? 'Remover recomendação' : 'Recomendar ao Comitê'}"
+             onclick="event.stopPropagation();toggleComite('${esc(c)}',this)">${isRec ? '★' : '☆'}</button>`
+        : (isRec ? `<span class="comite-star ativo static" title="Recomendado pelo Comitê">★</span>` : '');
       return `<tr style="cursor:pointer" onclick="selecionarTabPorNome('${esc(c)}')">
+        <td style="text-align:center;width:36px">${starEl}</td>
         <td style="font-weight:600;color:#0c1a35">${c}</td>
         <td>${fmtData(meta.Inicio)} – ${fmtData(meta.Fim)}</td>
         <td class="num ${clsRa}">${fmtRent(ra)}</td>
@@ -416,6 +423,7 @@
         <table class="data-table">
           <thead>
             <tr>
+              <th style="width:36px;text-align:center" title="Recomendado pelo Comitê">★</th>
               <th>Carteira</th>
               <th>Vigência</th>
               <th class="num">Rentab. Anterior</th>
@@ -440,7 +448,7 @@
     }
 
     const carteirasVisiveis = _filtroComite
-      ? _carteiras.filter(c => (_comiteRec[c] || []).length > 0)
+      ? _carteiras.filter(c => _comiteRec.has(c))
       : _carteiras;
 
     // Injeta tabela resumo antes do tabsHeader
@@ -487,14 +495,10 @@
 
   // ── Renderizar carteira ───────────────────────────────────────────────────
   function renderCarteira(carteira) {
-    const recSet = new Set(_comiteRec[carteira] || []);
-    const todosAtivos = _allocation.filter(r => r.Carteira === carteira)
-                                   .sort((a, b) => (b.Peso || 0) - (a.Peso || 0));
-    const ativos = _filtroComite ? todosAtivos.filter(r => recSet.has(r.Ticker)) : todosAtivos;
-    const meta   = todosAtivos[0] || {};  // info panel sempre vem do meta da carteira completa
-    const fund   = _filtroComite
-      ? _portfolio.filter(r => r.Carteira === carteira && recSet.has(r.Empresa))
-      : _portfolio.filter(r => r.Carteira === carteira);
+    const ativos = _allocation.filter(r => r.Carteira === carteira)
+                              .sort((a, b) => (b.Peso || 0) - (a.Peso || 0));
+    const meta = ativos[0] || {};
+    const fund = _portfolio.filter(r => r.Carteira === carteira);
 
     let html = '';
 
@@ -532,14 +536,12 @@
     </div>`;
 
     // Tabela de ativos
-    const recAtivos = recSet;  // já calculado acima
     html += `<div class="section-title">Composição da Carteira — ${ativos.length} ativo${ativos.length !== 1 ? 's' : ''}</div>
     <div class="table-card">
       <div class="table-wrap">
         <table class="data-table">
           <thead>
             <tr>
-              <th style="width:36px;text-align:center" title="Recomendado pelo Comitê">★</th>
               <th>Ticker</th>
               <th>Empresa</th>
               <th>Setor</th>
@@ -549,16 +551,9 @@
           <tbody>`;
 
     ativos.forEach(r => {
-      const peso   = parseFloat(r.Peso || 0);
-      const ticker = r.Ticker || '';
-      const isRec  = recAtivos.has(ticker);
-      const starEl = _isAdmin
-        ? `<button class="comite-star${isRec ? ' ativo' : ''}" title="${isRec ? 'Remover recomendação' : 'Recomendar ao Comitê'}"
-             onclick="toggleComite('${esc(carteira)}','${esc(ticker)}',this)" aria-label="Toggle comitê">${isRec ? '★' : '☆'}</button>`
-        : (isRec ? `<span class="comite-star ativo static" title="Recomendado pelo Comitê">★</span>` : `<span class="comite-star static"></span>`);
+      const peso = parseFloat(r.Peso || 0);
       html += `<tr>
-        <td style="text-align:center">${starEl}</td>
-        <td><span class="ticker-badge">${ticker || '—'}</span></td>
+        <td><span class="ticker-badge">${r.Ticker || '—'}</span></td>
         <td style="font-weight:500;color:#0c1a35">${r.Empresa || '—'}</td>
         <td>${r.Setor ? `<span class="setor-badge">${r.Setor}</span>` : '—'}</td>
         <td class="num">
@@ -626,29 +621,26 @@
   }
   function esc(s) { return (s || '').replace(/'/g, "\\'"); }
 
-  // ── Comitê: toggle recomendação ──────────────────────────────────────────
-  async function toggleComite(carteira, ticker, btn) {
+  // ── Comitê: toggle recomendação de carteira ─────────────────────────────
+  async function toggleComite(carteira, btn) {
     if (!_isAdmin) return;
-    const ativos = new Set(_comiteRec[carteira] || []);
-    const novoEstado = !ativos.has(ticker);
+    const novoEstado = !_comiteRec.has(carteira);
 
     // Otimista: atualiza UI antes da resposta
-    if (novoEstado) { ativos.add(ticker); btn.textContent = '★'; btn.classList.add('ativo'); btn.title = 'Remover recomendação'; }
-    else            { ativos.delete(ticker); btn.textContent = '☆'; btn.classList.remove('ativo'); btn.title = 'Recomendar ao Comitê'; }
-    _comiteRec[carteira] = [...ativos];
+    if (novoEstado) { _comiteRec.add(carteira);    btn.textContent = '★'; btn.classList.add('ativo'); btn.title = 'Remover recomendação'; }
+    else            { _comiteRec.delete(carteira); btn.textContent = '☆'; btn.classList.remove('ativo'); btn.title = 'Recomendar ao Comitê'; }
 
     try {
       const res = await fetch(`${API_URL}/api/comite/recomendacoes`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${_token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ carteira, ticker, recomendado: novoEstado }),
+        body: JSON.stringify({ carteira, recomendado: novoEstado }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
     } catch(e) {
       // Reverte em caso de erro
-      if (novoEstado) { ativos.delete(ticker); btn.textContent = '☆'; btn.classList.remove('ativo'); }
-      else            { ativos.add(ticker);    btn.textContent = '★'; btn.classList.add('ativo'); }
-      _comiteRec[carteira] = [...ativos];
+      if (novoEstado) { _comiteRec.delete(carteira); btn.textContent = '☆'; btn.classList.remove('ativo'); }
+      else            { _comiteRec.add(carteira);    btn.textContent = '★'; btn.classList.add('ativo'); }
       alert('Erro ao salvar recomendação: ' + e.message);
     }
   }

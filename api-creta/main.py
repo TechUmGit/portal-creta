@@ -1872,12 +1872,11 @@ async def produtos(authorization: Optional[str] = Header(default=None)):
 # ══════════════════════════════════════════════════════════════════════════════
 # /api/comite/recomendacoes — Recomendações do Comitê de Produtos
 # Firestore: collection "comite", document "recomendacoes"
-# Estrutura: { "Nome da Carteira": ["TICK1", "TICK2", ...], ... }
+# Estrutura: { "recomendadas": ["Nome Carteira A", "Nome Carteira B"] }
 # ══════════════════════════════════════════════════════════════════════════════
 
 class ComiteRecomendacaoBody(BaseModel):
     carteira: str
-    ticker: str
     recomendado: bool
 
 
@@ -1885,11 +1884,12 @@ class ComiteRecomendacaoBody(BaseModel):
 async def get_comite_recomendacoes(
     authorization: Optional[str] = Header(default=None),
 ):
-    """Retorna todos os ativos marcados como recomendados pelo comitê."""
+    """Retorna lista de carteiras recomendadas pelo comitê."""
     await verificar_token(authorization)
     try:
         doc = get_fs().collection("comite").document("recomendacoes").get()
-        return doc.to_dict() or {}
+        data = doc.to_dict() or {}
+        return {"recomendadas": data.get("recomendadas", [])}
     except Exception as e:
         log.error(f"Firestore get recomendacoes: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -1900,7 +1900,7 @@ async def set_comite_recomendacao(
     body: ComiteRecomendacaoBody,
     authorization: Optional[str] = Header(default=None),
 ):
-    """Marca ou desmarca um ativo como recomendado pelo comitê — apenas admins."""
+    """Marca ou desmarca uma carteira como recomendada pelo comitê — apenas admins."""
     token_data = await verificar_token(authorization)
     if token_data.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Apenas administradores.")
@@ -1910,15 +1910,15 @@ async def set_comite_recomendacao(
         doc = ref.get()
         data = doc.to_dict() or {}
 
-        ativos = set(data.get(body.carteira, []))
+        carteiras = set(data.get("recomendadas", []))
         if body.recomendado:
-            ativos.add(body.ticker)
+            carteiras.add(body.carteira)
         else:
-            ativos.discard(body.ticker)
+            carteiras.discard(body.carteira)
 
-        ref.set({body.carteira: sorted(ativos)}, merge=True)
-        log.info(f"Comitê [{body.carteira}] {body.ticker} → recomendado={body.recomendado}")
-        return {"ok": True, "carteira": body.carteira, "ticker": body.ticker, "recomendado": body.recomendado}
+        ref.set({"recomendadas": sorted(carteiras)})
+        log.info(f"Comitê: {body.carteira} → recomendado={body.recomendado}")
+        return {"ok": True, "carteira": body.carteira, "recomendado": body.recomendado}
     except Exception as e:
         log.error(f"Firestore set recomendacao: {e}")
         raise HTTPException(status_code=500, detail=str(e))

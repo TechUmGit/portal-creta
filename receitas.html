@@ -433,6 +433,16 @@
       </div>
     </div>
 
+    <!-- Evolução Mensal Repasse Líquido -->
+    <div class="section">
+      <div class="chart-card">
+        <div class="chart-card-title">Evolução Mensal — Repasse Líquido</div>
+        <div class="chart-full">
+          <canvas id="chartEvolucaoRepasse"></canvas>
+        </div>
+      </div>
+    </div>
+
     <!-- Tabela: por Categoria -->
     <div class="table-card">
       <div class="table-header">
@@ -1080,7 +1090,39 @@
       : k.receita_escritorio;
     document.getElementById('totalRepEsc').textContent = fmt(totalRepEscVal);
 
-    /* 6. Tabela por Categoria */
+    /* 6. Evolução Mensal — Repasse Líquido */
+    charts.evolucaoRepasse = new Chart(document.getElementById('chartEvolucaoRepasse'), {
+      type: 'bar',
+      data: {
+        labels: evLabels,
+        datasets: [{
+          label: 'Repasse Líquido',
+          data:  evFiltrada.map(function(r){ return r.repasse_liquido; }),
+          backgroundColor: evFiltrada.map(function(r){
+            return mesFiltrado && r.mes !== mesFiltrado ? 'rgba(11,181,213,0.25)' : '#0bb5d5';
+          }),
+          borderRadius: 4, borderSkipped: false,
+        }]
+      },
+      options: (function(){
+        var opts = barOpts();
+        opts.onClick = function(evt, elements) {
+          if (!elements || !elements.length) return;
+          var idx = elements[0].index;
+          var row = evFiltrada[idx];
+          if (row) selecionarMes(row.mes, row.data_ref);
+        };
+        opts.plugins = opts.plugins || {};
+        opts.plugins.tooltip = opts.plugins.tooltip || {};
+        var origCbs = opts.plugins.tooltip.callbacks || {};
+        opts.plugins.tooltip.callbacks = Object.assign({}, origCbs, {
+          footer: function(){ return mesFiltrado ? '' : 'Clique para filtrar por este mês'; }
+        });
+        return opts;
+      })()
+    });
+
+    /* 7. Tabela por Categoria */
     const totalCat = pc.reduce(function(s,r){ return s+(r.repasse||0); }, 0);
     document.getElementById('totalCategoria').textContent = fmtTable(totalCat);
     document.getElementById('bodyCategoria').innerHTML = pc.length

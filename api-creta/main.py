@@ -51,6 +51,8 @@ TABLE_SUITABILITY = f"`{GCP_PROJECT}.{DATASET}.suitability_contas`"
 TABLE_EXCECOES      = f"`{GCP_PROJECT}.{DATASET}.conta_assessor_excecoes`"
 TABLE_ASSESSOR_BASE = f"`{GCP_PROJECT}.{DATASET}.conta_assessor_base`"
 TABLE_WEBHOOK_RAW   = f"{GCP_PROJECT}.{DATASET}.webhook_btg_raw"
+TABLE_CR_ALLOCATION = f"`{GCP_PROJECT}.{DATASET}.carteira_recomendada_allocation`"
+TABLE_CR_PORTFOLIO  = f"`{GCP_PROJECT}.{DATASET}.carteira_recomendada_portfolio`"
 
 # ── GCS ───────────────────────────────────────────────────────────────────────
 GCS_BUCKET  = os.getenv("GCS_BUCKET", "creta-btg-pipeline")
@@ -1212,6 +1214,10 @@ async def relatorio_historico(
             SELECT DATE_TRUNC(MAX(DATE(Data)), MONTH) AS mes_atual
             FROM {TABLE_POSICAO}
         ),
+        min_mes AS (
+            SELECT DATE_TRUNC(MIN(DATE(Data)), MONTH) AS mes_inicio
+            FROM {TABLE_POSICAO}
+        ),
         primeira_aparicao AS (
             SELECT TRIM(p.Conta) AS Conta,
                    DATE_TRUNC(MIN(DATE(p.Data)), MONTH) AS mes_entrada
@@ -1229,8 +1235,10 @@ async def relatorio_historico(
         novas AS (
             SELECT mes_entrada AS mes, COUNT(*) AS novas_contas
             FROM primeira_aparicao
+            CROSS JOIN min_mes
             WHERE mes_entrada >= DATE_TRUNC({data_inicio}, MONTH)
               AND mes_entrada <= DATE_TRUNC({data_fim},   MONTH)
+              AND mes_entrada >  min_mes.mes_inicio
             GROUP BY mes_entrada
         ),
         retiradas AS (
@@ -1808,6 +1816,54 @@ async def gestao_carteira(
         "sem_receita":  sem_receita,
         "auc_queda":    auc_queda,
         "prioridades":  prioridades,
+    }
+    cache_set(cache_key, resultado)
+    return resultado
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# /api/produtos — Carteira recomendada de ações (allocation + portfolio)
+# ══════════════════════════════════════════════════════════════════════════════
+@app.get("/api/produtos")
+async def produtos(authorization: Optional[str] = Header(default=None)):
+    """Retorna carteira recomendada de equities (allocation + portfolio detalhado)."""
+    await verificar_token(authorization)
+
+    cache_key = "produtos:carteira_recomendada"
+    cached = cache_get(cache_key)
+    if cached:
+        return cached
+
+    def ser(rows):
+        return [{k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in dict(r).items()} for r in rows]
+
+    sql_allocation = f"""
+        SELECT Carteira, Tipo, Inicio, Fim,
+               Rentab_Anterior, Rentab_Acumulada,
+               Indice_Anterior, Indice_Acumulado,
+               Ticker, Empresa, Setor, Peso
+        FROM {TABLE_CR_ALLOCATION}
+        WHERE DataExtracao = (SELECT MAX(DataExtracao) FROM {TABLE_CR_ALLOCATION})
+        ORDER BY Carteira, Peso DESC
+    """
+
+    sql_portfolio = f"""
+        SELECT Carteira, Benchmark, Indice_Acumulado, Rentab_Acumulada,
+               Empresa, Setor, EV_EBITDA, PL, PVP
+        FROM {TABLE_CR_PORTFOLIO}
+        WHERE DataExtracao = (SELECT MAX(DataExtracao) FROM {TABLE_CR_PORTFOLIO})
+        ORDER BY Carteira, Empresa
+    """
+
+    try:
+        allocation = ser(bq.query(sql_allocation).result())
+        portfolio  = ser(bq.query(sql_portfolio).result())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    resultado = {
+        "allocation": allocation,
+        "portfolio":  portfolio,
     }
     cache_set(cache_key, resultado)
     return resultado

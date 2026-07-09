@@ -727,7 +727,7 @@
   }
 
   async function deletarArquivo(nome) {
-    if (!await showConfirm(`Remover "${nome}" do bucket?`)) return;
+    if (!confirm(`Remover "${nome}" do bucket?`)) return;
     try {
       const token = await getIdToken();
       const res   = await fetch(

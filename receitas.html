@@ -654,6 +654,8 @@
   let isNonAdminAssessor   = false;  // true quando assessor logado (API já filtrou por JWT)
   let mesFiltrado          = null;   // mês clicado no gráfico de evolução (ex: 'jun/26')
   let categoriaFiltrada    = null;   // categoria clicada na tabela de categorias
+  let customStartAtual     = null;   // data inicial do período custom ativo
+  let customEndAtual       = null;   // data final do período custom ativo
 
   /* ── Overlay ── */
 
@@ -754,6 +756,9 @@
     try {
       const token = await getIdToken();
       let url = API_URL + '/api/detalhe?periodo=' + periodoAtual;
+      if (periodoAtual === 'custom' && customStartAtual && customEndAtual) {
+        url += '&start_date=' + customStartAtual + '&end_date=' + customEndAtual;
+      }
       // Só admins passam assessor na URL; para assessores a API já filtra via token
       const ehAdmin = perfilUsuario && perfilUsuario.role === 'admin';
       if (ehAdmin && assessorAtual !== 'todos') url += '&assessor=' + encodeURIComponent(assessorAtual);
@@ -783,7 +788,9 @@
       const ws = XLSX.utils.aoa_to_sheet(wsData);
       ws['!cols'] = [10,10,32,20,22,22,14,12,12,12,12,14,16].map(function(w){ return { wch: w }; });
 
-      const nomePeriodo = { '3m':'3meses','6m':'6meses','12m':'12meses','ytd':'AnoAtual','all':'Tudo' }[periodoAtual] || periodoAtual;
+      const nomePeriodo = mesFiltrado
+        ? mesFiltrado.replace('/', '-')
+        : ({ '3m':'3meses','6m':'6meses','12m':'12meses','ytd':'AnoAtual','all':'Tudo' }[periodoAtual] || periodoAtual);
       const nomeAss = assessorAtual !== 'todos' ? '_' + assessorAtual.split(' ')[0] : '';
       XLSX.utils.book_append_sheet(wb, ws, 'Detalhe');
       XLSX.writeFile(wb, 'Detalhamento' + nomeAss + '_' + nomePeriodo + '.xlsx');
@@ -1267,6 +1274,8 @@
     periodoAtual = period;
     mesFiltrado = null;       // limpa filtro de mês ao trocar período
     categoriaFiltrada = null; // limpa filtro de categoria ao trocar período
+    customStartAtual = null;
+    customEndAtual   = null;
     const wrap = document.getElementById('custom-period-wrap');
     if (period === 'custom') {
       wrap.style.display = 'flex';
@@ -1281,6 +1290,8 @@
     if (mesFiltrado === mes) {
       // Toggle off: volta ao período completo
       mesFiltrado = null;
+      customStartAtual = null;
+      customEndAtual   = null;
       document.querySelectorAll('.filter-btn').forEach(function(b){
         b.classList.toggle('active', !!b.getAttribute('onclick') && b.getAttribute('onclick').includes("'" + periodoAtual + "'"));
       });
@@ -1291,6 +1302,8 @@
       var d = new Date(dataRef + 'T00:00:00');
       var ultimo = new Date(d.getFullYear(), d.getMonth() + 1, 0);
       var endDate = ultimo.toISOString().split('T')[0];
+      customStartAtual = dataRef;
+      customEndAtual   = endDate;
       carregarDados('custom', dataRef, endDate);
     }
   }

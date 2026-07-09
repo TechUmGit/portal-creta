@@ -260,6 +260,7 @@
     </div>
 
     <div class="tabs-wrap" id="carteirasTabs">
+      <div id="resumoCarteiras"></div>
       <div class="tabs-header" id="tabsHeader"></div>
       <div class="tab-content" id="tabContent">
         <div class="empty-state">
@@ -354,6 +355,49 @@
     }
   }
 
+  // ── Resumo comparativo ────────────────────────────────────────────────────
+  function renderResumo() {
+    const tbody = _carteiras.map((c, i) => {
+      const meta   = _allocation.find(r => r.Carteira === c) || {};
+      const ativos = _allocation.filter(r => r.Carteira === c);
+      const ra = meta.Rentab_Anterior;
+      const ru = meta.Rentab_Acumulada;
+      const ia = meta.Indice_Anterior;
+      const iu = meta.Indice_Acumulado;
+      const clsRa = parseFloat(ra) >= 0 ? 'rent-pos' : 'rent-neg';
+      const clsRu = parseFloat(ru) >= 0 ? 'rent-pos' : 'rent-neg';
+      return `<tr style="cursor:pointer" onclick="selecionarTabPorNome('${esc(c)}')">
+        <td style="font-weight:600;color:#0c1a35">${c}</td>
+        <td>${fmtData(meta.Inicio)} – ${fmtData(meta.Fim)}</td>
+        <td class="num ${clsRa}">${fmtRent(ra)}</td>
+        <td class="num ${clsRu}">${fmtRent(ru)}</td>
+        <td class="num">${fmtRent(ia)}</td>
+        <td class="num">${fmtRent(iu)}</td>
+        <td class="num">${ativos.length}</td>
+      </tr>`;
+    }).join('');
+
+    return `<div class="table-card" style="margin-bottom:24px">
+      <div class="section-title" style="padding:16px 20px 0">Comparativo de Carteiras</div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Carteira</th>
+              <th>Vigência</th>
+              <th class="num">Rentab. Anterior</th>
+              <th class="num">Rentab. Acumulada</th>
+              <th class="num">Índice Anterior</th>
+              <th class="num">Índice Acumulado</th>
+              <th class="num">N° Ativos</th>
+            </tr>
+          </thead>
+          <tbody>${tbody}</tbody>
+        </table>
+      </div>
+    </div>`;
+  }
+
   // ── Tabs ──────────────────────────────────────────────────────────────────
   function renderTabs() {
     if (!_carteiras.length) {
@@ -362,12 +406,24 @@
       return;
     }
 
+    // Injeta tabela resumo antes do tabsHeader
+    const resumoEl = document.getElementById('resumoCarteiras');
+    if (resumoEl) resumoEl.innerHTML = renderResumo();
+
     const header = document.getElementById('tabsHeader');
     header.innerHTML = _carteiras.map((c, i) =>
       `<button class="tab-btn${i === 0 ? ' active' : ''}" onclick="selecionarTab('${esc(c)}', this)">${c}</button>`
     ).join('');
 
     selecionarTab(_carteiras[0], header.querySelector('.tab-btn'));
+  }
+
+  function selecionarTabPorNome(carteira) {
+    const btns = document.querySelectorAll('.tab-btn');
+    let btn = null;
+    btns.forEach(b => { if (b.textContent === carteira) btn = b; });
+    selecionarTab(carteira, btn);
+    document.getElementById('tabsHeader').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
   function selecionarTab(carteira, btn) {
@@ -403,19 +459,19 @@
       </div>
       <div class="info-item">
         <div class="info-label">Rentab. Anterior</div>
-        <div class="info-value ${fmtRentClass(rentAnt)}">${fmtPct(rentAnt)}</div>
+        <div class="info-value ${fmtRentClass(rentAnt)}">${fmtRent(rentAnt)}</div>
       </div>
       <div class="info-item">
         <div class="info-label">Rentab. Acumulada</div>
-        <div class="info-value ${fmtRentClass(rentAcu)}">${fmtPct(rentAcu)}</div>
+        <div class="info-value ${fmtRentClass(rentAcu)}">${fmtRent(rentAcu)}</div>
       </div>
       <div class="info-item">
         <div class="info-label">Índice Anterior</div>
-        <div class="info-value">${fmtPct(idxAnt)}</div>
+        <div class="info-value">${fmtRent(idxAnt)}</div>
       </div>
       <div class="info-item">
         <div class="info-label">Índice Acumulado</div>
-        <div class="info-value">${fmtPct(idxAcu)}</div>
+        <div class="info-value">${fmtRent(idxAcu)}</div>
       </div>
     </div>`;
 
@@ -489,6 +545,11 @@
   function fmtPct(v) {
     if (v == null || isNaN(v)) return '—';
     return parseFloat(v).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 }) + '%';
+  }
+  // Valores de rentabilidade/índice vêm da BTG × 100 (180 = 1,80%)
+  function fmtRent(v) {
+    if (v == null || isNaN(v)) return '—';
+    return (parseFloat(v) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
   }
   function fmtRentClass(v) {
     if (v == null) return '';

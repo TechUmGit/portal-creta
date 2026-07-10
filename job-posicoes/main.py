@@ -33,7 +33,8 @@ URL_AUTH     = "https://api.btgpactual.com/iaas-auth/api/v1/authorization/oauth2
 BASE         = "https://api.btgpactual.com/iaas-api-position"
 BASE_ADVISOR = "https://api.btgpactual.com/iaas-account-advisor"
 
-TABELA_POSICAO = f"{GCP_PROJECT}.{DATASET}.posicao_das_contas"
+TABELA_POSICAO           = f"{GCP_PROJECT}.{DATASET}.posicao_das_contas"
+TABELA_PRIMEIRA_APARICAO = f"{GCP_PROJECT}.{DATASET}.conta_primeira_aparicao"
 
 CONFIG = {"project_id": GCP_PROJECT, "dataset_id": DATASET}
 
@@ -365,6 +366,32 @@ def consolidar_historico(token, lista_contas: list):
     return erros_total
 
 
+# ── Primeira aparição de contas ───────────────────────────────────────────────
+
+def atualizar_primeira_aparicao():
+    """
+    Insere na tabela conta_primeira_aparicao as contas que ainda não estão lá,
+    usando a data mínima de aparição em posicao_das_contas.
+    """
+    client = bigquery.Client(project=GCP_PROJECT)
+    sql = f"""
+        INSERT INTO `{TABELA_PRIMEIRA_APARICAO}` (Conta, DataPrimeiraAparicao)
+        SELECT
+            TRIM(p.Conta) AS Conta,
+            MIN(DATE(p.Data)) AS DataPrimeiraAparicao
+        FROM `{TABELA_POSICAO}` p
+        WHERE TRIM(p.Conta) NOT IN (
+            SELECT Conta FROM `{TABELA_PRIMEIRA_APARICAO}`
+        )
+        GROUP BY 1
+    """
+    try:
+        result = client.query(sql).result()
+        log.info(f"conta_primeira_aparicao atualizada — {result.num_dml_affected_rows} nova(s) conta(s) inserida(s)")
+    except Exception as e:
+        log.error(f"Erro ao atualizar conta_primeira_aparicao: {e}")
+
+
 # ── Entrypoint ────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
@@ -378,6 +405,8 @@ if __name__ == "__main__":
         raise SystemExit(1)
 
     erros = consolidar_historico(token, contas)
+
+    atualizar_primeira_aparicao()
 
     if erros:
         log.warning(f"Job concluído com {len(erros)} erros.")

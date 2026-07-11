@@ -336,10 +336,13 @@
         </div>
       </div>
 
-      <!-- Filtros de tipo -->
-      <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
-        <span style="font-size:12px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em">Filtrar:</span>
-        <div id="rfFiltros" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+      <!-- Filtros de tipo + comitê -->
+      <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;align-items:center;justify-content:space-between">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <span style="font-size:12px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em">Filtrar:</span>
+          <div id="rfFiltros" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+        </div>
+        <button id="btnFiltroRF" class="comite-filtro-btn ativo" onclick="toggleFiltroRF(this)">★ Só recomendadas</button>
       </div>
 
       <!-- Tabela RF -->
@@ -348,6 +351,7 @@
           <table class="data-table">
             <thead>
               <tr>
+                <th style="width:36px;text-align:center" title="Recomendado pelo Comitê">★</th>
                 <th>Tipo</th>
                 <th>Emissor</th>
                 <th>Risco</th>
@@ -397,6 +401,8 @@
   let _filtroComite = false;
   let _rfData       = [];
   let _rfTipoAtivo  = '';
+  let _rfRec        = new Set();
+  let _rfFiltroRec  = true;
   let _segmento     = 'rv';
 
   // ── Auth ──────────────────────────────────────────────────────────────────
@@ -452,10 +458,15 @@
   // ── Renda Fixa ───────────────────────────────────────────────────────────
   async function carregarRendaFixa() {
     try {
-      const res = await fetch(`${API_URL}/api/renda-fixa`, { headers: { Authorization: `Bearer ${_token}` } });
+      const [res, resRec] = await Promise.all([
+        fetch(`${API_URL}/api/renda-fixa`,              { headers: { Authorization: `Bearer ${_token}` } }),
+        fetch(`${API_URL}/api/comite/recomendacoes-rf`, { headers: { Authorization: `Bearer ${_token}` } }),
+      ]);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
+      const json    = await res.json();
+      const jsonRec = resRec.ok ? await resRec.json() : { recomendadas: [] };
       _rfData = json.cdb_lca || [];
+      _rfRec  = new Set(jsonRec.recomendadas || []);
 
       // KPIs
       const emissores = new Set(_rfData.map(r => r.issuerName)).size;
@@ -472,7 +483,7 @@
       renderRF();
     } catch(e) {
       document.getElementById('rfTbody').innerHTML =
-        `<tr><td colspan="12" style="text-align:center;padding:40px;color:#9ca3af">Erro ao carregar dados: ${e.message}</td></tr>`;
+        `<tr><td colspan="13" style="text-align:center;padding:40px;color:#9ca3af">Erro ao carregar dados: ${e.message}</td></tr>`;
     }
   }
 
@@ -483,17 +494,45 @@
     renderRF();
   }
 
+  function toggleFiltroRF(btn) {
+    _rfFiltroRec = !_rfFiltroRec;
+    btn.classList.toggle('ativo', _rfFiltroRec);
+    btn.textContent = _rfFiltroRec ? '★ Só recomendadas' : '★ Recomendadas pelo Comitê';
+    renderRF();
+  }
+
+  async function toggleComiteRF(productId, btn) {
+    const atual = _rfRec.has(productId);
+    const novo  = !atual;
+    try {
+      const res = await fetch(`${API_URL}/api/comite/recomendacoes-rf`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ product_id: productId, recomendado: novo }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (novo) _rfRec.add(productId); else _rfRec.delete(productId);
+      btn.classList.toggle('ativo', novo);
+      btn.textContent = novo ? '★' : '☆';
+    } catch(e) { alert('Erro ao atualizar recomendação: ' + e.message); }
+  }
+
   function renderRF() {
-    const dados = _rfTipoAtivo ? _rfData.filter(r => r.productName === _rfTipoAtivo) : _rfData;
+    let dados = _rfTipoAtivo ? _rfData.filter(r => r.productName === _rfTipoAtivo) : _rfData;
+    if (_rfFiltroRec) dados = dados.filter(r => _rfRec.has(r.productID));
     if (!dados.length) {
       document.getElementById('rfTbody').innerHTML =
-        `<tr><td colspan="12" style="text-align:center;padding:40px;color:#9ca3af">Nenhum produto encontrado</td></tr>`;
+        `<tr><td colspan="13" style="text-align:center;padding:40px;color:#9ca3af">Nenhum produto encontrado</td></tr>`;
       return;
     }
     document.getElementById('rfTbody').innerHTML = dados.map(r => {
-      const tipo     = r.productName || '—';
-      const tipoKey  = ['CDB','LCA','LCI','LF'].includes(tipo) ? tipo : '';
+      const tipo      = r.productName || '—';
+      const tipoKey   = ['CDB','LCA','LCI','LF'].includes(tipo) ? tipo : '';
       const tipoBadge = `<span class="tipo-badge${tipoKey ? ' tipo-'+tipoKey : ''}">${tipo}</span>`;
+      const isRec     = _rfRec.has(r.productID);
+      const starEl    = _isAdmin
+        ? `<button class="comite-star${isRec ? ' ativo' : ''}" onclick="event.stopPropagation();toggleComiteRF('${r.productID}',this)">${isRec ? '★' : '☆'}</button>`
+        : (isRec ? `<span class="comite-star ativo static">★</span>` : '');
 
       // Rentabilidade: PRE → taxValue; outros → percentIndexValue % do indexador
       let rentStr = '—';
@@ -518,6 +557,7 @@
       const risco  = r.riskName ? `<span class="risco-badge">${r.riskName}</span>` : '—';
 
       return `<tr>
+        <td style="text-align:center;width:36px">${starEl}</td>
         <td>${tipoBadge}</td>
         <td style="font-weight:500;color:#0c1a35">${r.issuerName || '—'}</td>
         <td>${risco}</td>

@@ -200,6 +200,49 @@
     .admin-filter.visible { display: flex; }
     .filter-label { font-size: 12px; font-weight: 600; color: #9ca3af; }
     .filter-select { padding: 6px 10px; border: 1.5px solid #e8ebf2; border-radius: 7px; font-size: 13px; font-family: inherit; color: #374151; cursor: pointer; outline: none; }
+
+    /* PAGE TABS */
+    .page-tabs { display: flex; gap: 4px; padding: 0 44px; background: #fff; border-bottom: 1px solid #e8ebf2; }
+    .page-tab { padding: 14px 20px; font-size: 13px; font-weight: 600; color: #9ca3af; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; background: none; border-top: none; border-left: none; border-right: none; font-family: inherit; }
+    .page-tab:hover { color: #374151; }
+    .page-tab.active { color: #0c1a35; border-bottom-color: #0bb5d5; }
+
+    /* KANBAN */
+    .kanban-wrap { overflow-x: auto; padding-bottom: 20px; }
+    .kanban-board { display: flex; gap: 14px; min-width: max-content; }
+    .kanban-col { width: 260px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; }
+    .kanban-col-header { padding: 10px 14px; border-radius: 10px 10px 0 0; display: flex; align-items: center; justify-content: space-between; }
+    .kanban-col-title { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+    .kanban-col-count { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
+    .kanban-col-body { display: flex; flex-direction: column; gap: 8px; min-height: 80px; }
+
+    .col-vencido  .kanban-col-header { background: #fee2e2; }
+    .col-vencido  .kanban-col-title  { color: #991b1b; }
+    .col-vencido  .kanban-col-count  { background: #fecaca; color: #991b1b; }
+    .col-hoje     .kanban-col-header { background: #ffedd5; }
+    .col-hoje     .kanban-col-title  { color: #c2410c; }
+    .col-hoje     .kanban-col-count  { background: #fed7aa; color: #c2410c; }
+    .col-semana   .kanban-col-header { background: #fef9c3; }
+    .col-semana   .kanban-col-title  { color: #92400e; }
+    .col-semana   .kanban-col-count  { background: #fde68a; color: #92400e; }
+    .col-embreve  .kanban-col-header { background: #dbeafe; }
+    .col-embreve  .kanban-col-title  { color: #1e40af; }
+    .col-embreve  .kanban-col-count  { background: #bfdbfe; color: #1e40af; }
+    .col-futuro   .kanban-col-header { background: #f1f5f9; }
+    .col-futuro   .kanban-col-title  { color: #475569; }
+    .col-futuro   .kanban-col-count  { background: #e2e8f0; color: #475569; }
+
+    .fup-card { background: #fff; border-radius: 10px; border: 1px solid #e8ebf2; padding: 14px; cursor: pointer; transition: all 0.15s; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+    .fup-card:hover { border-color: #0bb5d5; box-shadow: 0 4px 12px rgba(11,181,213,0.12); transform: translateY(-1px); }
+    .fup-card-nome { font-size: 13px; font-weight: 600; color: #0c1a35; margin-bottom: 8px; }
+    .fup-card-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+    .fup-card-date { display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; margin-top: 2px; }
+    .fup-card-obs { font-size: 11px; color: #9ca3af; margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .date-vencido { color: #dc2626; }
+    .date-hoje    { color: #f97316; }
+    .date-semana  { color: #ca8a04; }
+    .date-ok      { color: #6b7280; }
+    .kanban-empty { text-align: center; padding: 24px 12px; color: #d1d5db; font-size: 12px; font-weight: 500; background: #fafafa; border-radius: 8px; border: 1.5px dashed #e8ebf2; }
   </style>
 </head>
 <body>
@@ -309,7 +352,19 @@
     </select>
   </div>
 
+  <!-- PAGE TABS -->
+  <div class="page-tabs">
+    <button class="page-tab active" id="tabPipeline" onclick="switchTab('pipeline')">Pipeline</button>
+    <button class="page-tab" id="tabFups" onclick="switchTab('fups')">
+      FUPs
+      <span id="fupBadge" style="margin-left:6px;background:#fee2e2;color:#991b1b;font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;display:none"></span>
+    </button>
+  </div>
+
   <div class="content">
+
+  <!-- VIEW: PIPELINE -->
+  <div id="viewPipeline">
     <!-- KPIs -->
     <div class="kpi-grid">
       <div class="kpi">
@@ -404,7 +459,58 @@
         </table>
       </div>
     </div>
-  </div>
+  </div><!-- /viewPipeline -->
+
+  <!-- VIEW: FUPs KANBAN -->
+  <div id="viewFups" style="display:none">
+    <div class="kanban-wrap">
+      <div class="kanban-board">
+
+        <div class="kanban-col col-vencido">
+          <div class="kanban-col-header">
+            <span class="kanban-col-title">⚠️ Vencidos</span>
+            <span class="kanban-col-count" id="cnt-vencido">0</span>
+          </div>
+          <div class="kanban-col-body" id="col-vencido"><div class="kanban-empty">Nenhum</div></div>
+        </div>
+
+        <div class="kanban-col col-hoje">
+          <div class="kanban-col-header">
+            <span class="kanban-col-title">🔴 Hoje</span>
+            <span class="kanban-col-count" id="cnt-hoje">0</span>
+          </div>
+          <div class="kanban-col-body" id="col-hoje"><div class="kanban-empty">Nenhum</div></div>
+        </div>
+
+        <div class="kanban-col col-semana">
+          <div class="kanban-col-header">
+            <span class="kanban-col-title">🟡 Esta semana</span>
+            <span class="kanban-col-count" id="cnt-semana">0</span>
+          </div>
+          <div class="kanban-col-body" id="col-semana"><div class="kanban-empty">Nenhum</div></div>
+        </div>
+
+        <div class="kanban-col col-embreve">
+          <div class="kanban-col-header">
+            <span class="kanban-col-title">🔵 Em breve</span>
+            <span class="kanban-col-count" id="cnt-embreve">0</span>
+          </div>
+          <div class="kanban-col-body" id="col-embreve"><div class="kanban-empty">Nenhum</div></div>
+        </div>
+
+        <div class="kanban-col col-futuro">
+          <div class="kanban-col-header">
+            <span class="kanban-col-title">⬜ Futuro</span>
+            <span class="kanban-col-count" id="cnt-futuro">0</span>
+          </div>
+          <div class="kanban-col-body" id="col-futuro"><div class="kanban-empty">Nenhum</div></div>
+        </div>
+
+      </div>
+    </div>
+  </div><!-- /viewFups -->
+
+  </div><!-- /content -->
 </main>
 </div>
 
@@ -798,6 +904,12 @@
     document.getElementById('kpiPipeQuente').textContent = fmtMoeda(pipeQ);
     document.getElementById('heroSub').textContent =
       `${lista.length} prospect${lista.length !== 1 ? 's' : ''} · AuC potencial ${fmtMoeda(aucPot)}`;
+
+    // Atualiza badge de vencidos na aba FUPs
+    const hoje2 = new Date(); hoje2.setHours(0,0,0,0);
+    const nVenc2 = lista.filter(c => c.proximo_fup && new Date(c.proximo_fup + 'T00:00:00') <= hoje2).length;
+    const badge2 = document.getElementById('fupBadge');
+    if (badge2) { badge2.textContent = nVenc2; badge2.style.display = nVenc2 > 0 ? '' : 'none'; }
   }
 
   // ── Render tabela ────────────────────────────────────────────────────────
@@ -1078,6 +1190,91 @@
     el.className = 'toast' + (type === 'err' ? ' err' : '') + ' show';
     clearTimeout(_toastTimer);
     _toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+  }
+
+  // ── Tabs ─────────────────────────────────────────────────────────────────
+  function switchTab(tab) {
+    const isPipeline = tab === 'pipeline';
+    document.getElementById('tabPipeline').classList.toggle('active', isPipeline);
+    document.getElementById('tabFups').classList.toggle('active', !isPipeline);
+    document.getElementById('viewPipeline').style.display = isPipeline ? '' : 'none';
+    document.getElementById('viewFups').style.display     = isPipeline ? 'none' : '';
+    if (!isPipeline) renderKanban();
+  }
+
+  // ── Kanban de FUPs ───────────────────────────────────────────────────────
+  function renderKanban() {
+    const hoje   = new Date(); hoje.setHours(0,0,0,0);
+    const fim7   = new Date(hoje); fim7.setDate(hoje.getDate() + 7);
+    const fim30  = new Date(hoje); fim30.setDate(hoje.getDate() + 30);
+
+    const buckets = { vencido: [], hoje: [], semana: [], embreve: [], futuro: [] };
+
+    // Filtra pelo assessor selecionado (admin)
+    const lista = _clientes.filter(c => {
+      if (!c.proximo_fup) return false;
+      if (_filtroAssessor && (c.assessor_name || '').toUpperCase() !== _filtroAssessor.toUpperCase()) return false;
+      return true;
+    });
+
+    // Clientes sem FUP vão para uma lista separada (não aparecem no kanban)
+    let semFup = _clientes.filter(c => !c.proximo_fup).length;
+
+    lista.forEach(c => {
+      const fup = new Date(c.proximo_fup + 'T00:00:00');
+      if      (fup < hoje)   buckets.vencido.push(c);
+      else if (+fup === +hoje) buckets.hoje.push(c);
+      else if (fup < fim7)   buckets.semana.push(c);
+      else if (fup < fim30)  buckets.embreve.push(c);
+      else                   buckets.futuro.push(c);
+    });
+
+    // Ordena cada bucket por data
+    Object.values(buckets).forEach(b => b.sort((a, b) =>
+      new Date(a.proximo_fup) - new Date(b.proximo_fup)));
+
+    // Atualiza badge de vencidos na aba
+    const nVenc = buckets.vencido.length + buckets.hoje.length;
+    const badge = document.getElementById('fupBadge');
+    badge.textContent = nVenc;
+    badge.style.display = nVenc > 0 ? '' : 'none';
+
+    const cols = {
+      vencido: { id: 'col-vencido', cntId: 'cnt-vencido', dateCls: 'date-vencido' },
+      hoje:    { id: 'col-hoje',    cntId: 'cnt-hoje',    dateCls: 'date-hoje'    },
+      semana:  { id: 'col-semana',  cntId: 'cnt-semana',  dateCls: 'date-semana'  },
+      embreve: { id: 'col-embreve', cntId: 'cnt-embreve', dateCls: 'date-ok'      },
+      futuro:  { id: 'col-futuro',  cntId: 'cnt-futuro',  dateCls: 'date-ok'      },
+    };
+
+    Object.entries(cols).forEach(([key, cfg]) => {
+      const items = buckets[key];
+      document.getElementById(cfg.cntId).textContent = items.length;
+      const el = document.getElementById(cfg.id);
+      if (!items.length) {
+        el.innerHTML = '<div class="kanban-empty">Nenhum FUP aqui</div>';
+        return;
+      }
+      el.innerHTML = items.map(c => {
+        const fupFmt = new Date(c.proximo_fup + 'T00:00:00').toLocaleDateString('pt-BR');
+        const diff   = Math.round((new Date(c.proximo_fup + 'T00:00:00') - hoje) / 86400000);
+        const diffLabel = diff === 0 ? 'Hoje' : diff < 0 ? `${Math.abs(diff)}d atraso` : `em ${diff}d`;
+        const pipeCls   = 'pipe-' + (c.pipe || 'LEAD');
+        const rankCls   = rankClass(c.ranking);
+        return `<div class="fup-card" onclick="abrirModal('${c.id}')">
+          <div class="fup-card-nome">${esc(c.nome)}</div>
+          <div class="fup-card-meta">
+            <span class="pipe-badge ${pipeCls}">${c.pipe || 'LEAD'}</span>
+            ${c.ranking ? `<span class="rank-badge ${rankCls}">${c.ranking}</span>` : ''}
+          </div>
+          <div class="fup-card-date ${cfg.dateCls}">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            ${fupFmt} · ${diffLabel}
+          </div>
+          ${c.status ? `<div class="fup-card-obs">${esc(c.status)}</div>` : ''}
+        </div>`;
+      }).join('');
+    });
   }
 
   // ── Log de Contatos ──────────────────────────────────────────────────────

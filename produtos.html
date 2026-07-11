@@ -146,6 +146,27 @@
     .empty-state { padding: 60px; text-align: center; color: #9ca3af; }
     .empty-state-icon { font-size: 40px; margin-bottom: 12px; }
     .empty-state-title { font-size: 15px; font-weight: 600; color: #374151; margin-bottom: 6px; }
+
+    /* SEGMENTO */
+    .seg-bar { display: flex; gap: 0; margin-bottom: 28px; background: #fff; border-radius: 10px; border: 1px solid #e8ebf2; padding: 4px; width: fit-content; }
+    .seg-btn { padding: 8px 22px; border-radius: 7px; border: none; background: none; font-size: 13px; font-weight: 600; color: #6b7280; cursor: pointer; font-family: inherit; transition: all 0.15s; white-space: nowrap; }
+    .seg-btn.active { background: #0c1a35; color: #fff; }
+    .seg-btn:hover:not(.active) { color: #0c1a35; background: #f4f6fb; }
+
+    /* RF tipo filtro */
+    .rf-tipo-btn { padding: 5px 14px; border-radius: 20px; border: 1.5px solid #d1d5db; background: #fff; color: #6b7280; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; transition: all 0.15s; }
+    .rf-tipo-btn:hover { border-color: #0c1a35; color: #0c1a35; }
+    .rf-tipo-btn.active { border-color: #0c1a35; background: #0c1a35; color: #fff; }
+
+    /* RF badges */
+    .tipo-badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 5px; letter-spacing: 0.05em; }
+    .tipo-CDB { background: #eff6ff; color: #1d4ed8; }
+    .tipo-LCA { background: #f0fdf4; color: #15803d; }
+    .tipo-LCI { background: #fefce8; color: #a16207; }
+    .tipo-LF  { background: #fdf4ff; color: #7e22ce; }
+    .ir-badge { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 5px; background: #f0fdf4; color: #15803d; }
+    .ir-badge.nao { background: #f9fafb; color: #9ca3af; }
+    .risco-badge { font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 5px; background: #f8f9fc; color: #374151; }
   </style>
 </head>
 <body>
@@ -245,41 +266,104 @@
   </div>
 
   <div class="content">
-    <!-- KPIs -->
-    <div class="kpi-grid">
-      <div class="kpi">
-        <div class="kpi-label">Carteiras Disponíveis</div>
-        <div class="kpi-value" id="kpiCarteiras">—</div>
-        <div class="kpi-sub">carteira recomendada de ações</div>
+
+    <!-- SELETOR DE SEGMENTO -->
+    <div class="seg-bar">
+      <button class="seg-btn active" id="segBtnRV" onclick="switchSegmento('rv')">Renda Variável</button>
+      <button class="seg-btn"        id="segBtnRF" onclick="switchSegmento('rf')">Renda Fixa</button>
+    </div>
+
+    <!-- ═══ RENDA VARIÁVEL ═══ -->
+    <div id="secaoRV">
+      <!-- KPIs -->
+      <div class="kpi-grid">
+        <div class="kpi">
+          <div class="kpi-label">Carteiras Disponíveis</div>
+          <div class="kpi-value" id="kpiCarteiras">—</div>
+          <div class="kpi-sub">carteira recomendada de ações</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Total de Ativos</div>
+          <div class="kpi-value" id="kpiAtivos">—</div>
+          <div class="kpi-sub">somando todas as carteiras</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Atualizado em</div>
+          <div class="kpi-value" id="kpiData" style="font-size:18px">—</div>
+          <div class="kpi-sub">última extração</div>
+        </div>
       </div>
-      <div class="kpi">
-        <div class="kpi-label">Total de Ativos</div>
-        <div class="kpi-value" id="kpiAtivos">—</div>
-        <div class="kpi-sub">somando todas as carteiras</div>
+
+      <!-- CARTEIRA RECOMENDADA DE AÇÕES -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;gap:12px">
+        <div>
+          <div style="font-size:16px;font-weight:700;color:#0c1a35;margin-bottom:4px">Carteira Recomendada de Ações</div>
+          <div style="font-size:13px;color:#6b7280">Selecione uma carteira para ver a alocação detalhada</div>
+        </div>
+        <button id="btnFiltroComite" class="comite-filtro-btn" onclick="toggleFiltroComite(this)">★ Recomendadas pelo Comitê</button>
       </div>
-      <div class="kpi">
-        <div class="kpi-label">Atualizado em</div>
-        <div class="kpi-value" id="kpiData" style="font-size:18px">—</div>
-        <div class="kpi-sub">última extração</div>
+
+      <div class="tabs-wrap" id="carteirasTabs">
+        <div id="resumoCarteiras"></div>
+        <div class="tabs-header" id="tabsHeader"></div>
+        <div class="tab-content" id="tabContent">
+          <div class="empty-state">
+            <div class="empty-state-icon">📊</div>
+            <div class="empty-state-title">Carregando carteiras...</div>
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- CARTEIRA RECOMENDADA DE AÇÕES -->
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;gap:12px">
-      <div>
-        <div style="font-size:16px;font-weight:700;color:#0c1a35;margin-bottom:4px">Carteira Recomendada de Ações</div>
-        <div style="font-size:13px;color:#6b7280">Selecione uma carteira para ver a alocação detalhada</div>
+    <!-- ═══ RENDA FIXA ═══ -->
+    <div id="secaoRF" style="display:none">
+      <!-- KPIs RF -->
+      <div class="kpi-grid">
+        <div class="kpi">
+          <div class="kpi-label">Produtos Disponíveis</div>
+          <div class="kpi-value" id="kpiRfTotal">—</div>
+          <div class="kpi-sub">CDB · LCA · LCI · LF</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Emissores</div>
+          <div class="kpi-value" id="kpiRfEmissores">—</div>
+          <div class="kpi-sub">instituições disponíveis</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Atualizado em</div>
+          <div class="kpi-value" id="kpiRfData" style="font-size:18px">—</div>
+          <div class="kpi-sub">última extração do banco</div>
+        </div>
       </div>
-      <button id="btnFiltroComite" class="comite-filtro-btn" onclick="toggleFiltroComite(this)">★ Recomendadas pelo Comitê</button>
-    </div>
 
-    <div class="tabs-wrap" id="carteirasTabs">
-      <div id="resumoCarteiras"></div>
-      <div class="tabs-header" id="tabsHeader"></div>
-      <div class="tab-content" id="tabContent">
-        <div class="empty-state">
-          <div class="empty-state-icon">📊</div>
-          <div class="empty-state-title">Carregando carteiras...</div>
+      <!-- Filtros de tipo -->
+      <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
+        <span style="font-size:12px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em">Filtrar:</span>
+        <div id="rfFiltros" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+      </div>
+
+      <!-- Tabela RF -->
+      <div class="table-card">
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Tipo</th>
+                <th>Emissor</th>
+                <th>Risco</th>
+                <th>Indexador</th>
+                <th class="num">Rentabilidade</th>
+                <th class="num">CDI Equiv.</th>
+                <th class="num">Taxa a.a.</th>
+                <th class="num">Prazo (meses)</th>
+                <th>Vencimento</th>
+                <th class="num">Mín. Aplic. (R$)</th>
+                <th>Liquidez</th>
+                <th>IR Isento</th>
+              </tr>
+            </thead>
+            <tbody id="rfTbody"></tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -309,8 +393,11 @@
   let _portfolio    = [];
   let _carteiras    = [];
   let _ativa        = null;
-  let _comiteRec    = new Set();  // Set de nomes de carteiras recomendadas pelo comitê
+  let _comiteRec    = new Set();
   let _filtroComite = false;
+  let _rfData       = [];
+  let _rfTipoAtivo  = '';
+  let _segmento     = 'rv';
 
   // ── Auth ──────────────────────────────────────────────────────────────────
   auth.onAuthStateChanged(async function(user) {
@@ -350,6 +437,106 @@
         _comiteRec = new Set(json.recomendadas || []);
       }
     } catch(e) { /* não bloqueia a página */ }
+  }
+
+  // ── Segmento switcher ────────────────────────────────────────────────────
+  function switchSegmento(seg) {
+    _segmento = seg;
+    document.getElementById('secaoRV').style.display = seg === 'rv' ? '' : 'none';
+    document.getElementById('secaoRF').style.display = seg === 'rf' ? '' : 'none';
+    document.getElementById('segBtnRV').classList.toggle('active', seg === 'rv');
+    document.getElementById('segBtnRF').classList.toggle('active', seg === 'rf');
+    if (seg === 'rf' && _rfData.length === 0) carregarRendaFixa();
+  }
+
+  // ── Renda Fixa ───────────────────────────────────────────────────────────
+  async function carregarRendaFixa() {
+    try {
+      const res = await fetch(`${API_URL}/api/renda-fixa`, { headers: { Authorization: `Bearer ${_token}` } });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      _rfData = json.cdb_lca || [];
+
+      // KPIs
+      const emissores = new Set(_rfData.map(r => r.issuerName)).size;
+      document.getElementById('kpiRfTotal').textContent    = _rfData.length;
+      document.getElementById('kpiRfEmissores').textContent = emissores;
+      document.getElementById('kpiRfData').textContent     = json.data_extracao ? fmtData(json.data_extracao) : '—';
+
+      // Filtros de tipo
+      const tipos = [...new Set(_rfData.map(r => r.productName))].sort();
+      const filtrosEl = document.getElementById('rfFiltros');
+      filtrosEl.innerHTML = `<button class="rf-tipo-btn active" onclick="filtrarRF(this,'')">Todos</button>` +
+        tipos.map(t => `<button class="rf-tipo-btn" onclick="filtrarRF(this,'${t}')">${t}</button>`).join('');
+
+      renderRF();
+    } catch(e) {
+      document.getElementById('rfTbody').innerHTML =
+        `<tr><td colspan="12" style="text-align:center;padding:40px;color:#9ca3af">Erro ao carregar dados: ${e.message}</td></tr>`;
+    }
+  }
+
+  function filtrarRF(btn, tipo) {
+    _rfTipoAtivo = tipo;
+    document.querySelectorAll('.rf-tipo-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderRF();
+  }
+
+  function renderRF() {
+    const dados = _rfTipoAtivo ? _rfData.filter(r => r.productName === _rfTipoAtivo) : _rfData;
+    if (!dados.length) {
+      document.getElementById('rfTbody').innerHTML =
+        `<tr><td colspan="12" style="text-align:center;padding:40px;color:#9ca3af">Nenhum produto encontrado</td></tr>`;
+      return;
+    }
+    document.getElementById('rfTbody').innerHTML = dados.map(r => {
+      const tipo     = r.productName || '—';
+      const tipoKey  = ['CDB','LCA','LCI','LF'].includes(tipo) ? tipo : '';
+      const tipoBadge = `<span class="tipo-badge${tipoKey ? ' tipo-'+tipoKey : ''}">${tipo}</span>`;
+
+      // Rentabilidade: PRE → taxValue; outros → percentIndexValue % do indexador
+      let rentStr = '—';
+      if (r.indexCaptureName === 'PRE' && r.taxValue != null) {
+        rentStr = fmtNum(r.taxValue) + '% a.a.';
+      } else if (r.percentIndexValue != null && r.percentIndexValue > 0) {
+        rentStr = fmtNum(r.percentIndexValue) + '% do ' + (r.indexCaptureName || '');
+      } else if (r.taxValue != null && r.taxValue > 0) {
+        rentStr = fmtNum(r.taxValue) + '% a.a.';
+      }
+
+      const cdiEq  = r.cdbCdiIndexEquivalent  != null ? fmtNum(r.cdbCdiIndexEquivalent)  + '%' : '—';
+      const taxaAa = r.cdbYearIndexEquivalent  != null ? fmtNum(r.cdbYearIndexEquivalent) + '%' : '—';
+      const prazo  = r.amountTimeMonth         != null ? r.amountTimeMonth + ' meses'          : (r.amountTimeDay ? r.amountTimeDay + ' dias' : '—');
+      const venc   = r.applicationDeadline     ? fmtData(r.applicationDeadline)                : '—';
+      const minApl = r.minAplicationValue      != null ? 'R$ ' + fmtMoeda(r.minAplicationValue) : '—';
+      const liq    = r.typeLiquidityName       || '—';
+      const isIR   = r.incomeTaxFree === 'S' || r.incomeTaxFree === true;
+      const irBadge = isIR
+        ? `<span class="ir-badge">Isento</span>`
+        : `<span class="ir-badge nao">IR</span>`;
+      const risco  = r.riskName ? `<span class="risco-badge">${r.riskName}</span>` : '—';
+
+      return `<tr>
+        <td>${tipoBadge}</td>
+        <td style="font-weight:500;color:#0c1a35">${r.issuerName || '—'}</td>
+        <td>${risco}</td>
+        <td style="font-weight:600">${r.indexCaptureName || '—'}</td>
+        <td class="num" style="font-weight:700;color:#0c1a35">${rentStr}</td>
+        <td class="num">${cdiEq}</td>
+        <td class="num">${taxaAa}</td>
+        <td class="num">${prazo}</td>
+        <td>${venc}</td>
+        <td class="num">${minApl}</td>
+        <td style="font-size:12px;color:#4b5563">${liq}</td>
+        <td style="text-align:center">${irBadge}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  function fmtMoeda(v) {
+    if (v == null) return '—';
+    return Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
   }
 
   async function carregarProdutos() {

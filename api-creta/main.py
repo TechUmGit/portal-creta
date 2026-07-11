@@ -51,8 +51,10 @@ TABLE_SUITABILITY = f"`{GCP_PROJECT}.{DATASET}.suitability_contas`"
 TABLE_EXCECOES      = f"`{GCP_PROJECT}.{DATASET}.conta_assessor_excecoes`"
 TABLE_ASSESSOR_BASE = f"`{GCP_PROJECT}.{DATASET}.conta_assessor_base`"
 TABLE_WEBHOOK_RAW   = f"{GCP_PROJECT}.{DATASET}.webhook_btg_raw"
-TABLE_CR_ALLOCATION = f"`{GCP_PROJECT}.{DATASET}.carteira_recomendada_allocation`"
-TABLE_CR_PORTFOLIO  = f"`{GCP_PROJECT}.{DATASET}.carteira_recomendada_portfolio`"
+TABLE_CR_ALLOCATION      = f"`{GCP_PROJECT}.{DATASET}.carteira_recomendada_allocation`"
+TABLE_CR_PORTFOLIO       = f"`{GCP_PROJECT}.{DATASET}.carteira_recomendada_portfolio`"
+TABLE_PRIMEIRA_APARICAO  = f"`{GCP_PROJECT}.{DATASET}.conta_primeira_aparicao`"
+TABLE_CDB_LCA            = f"`{GCP_PROJECT}.{DATASET}.partner_report_cdb_lca_lci_lf`"
 
 # ── GCS ───────────────────────────────────────────────────────────────────────
 GCS_BUCKET  = os.getenv("GCS_BUCKET", "creta-btg-pipeline")
@@ -1174,10 +1176,14 @@ async def relatorio_historico(
         FROM {_mapa_assessor_sq()}
         WHERE UPPER(Assessor) = UPPER(@assessor)
     ),"""
-        contas_join = "INNER JOIN contas_assessor ca ON SAFE_CAST(TRIM(p.Conta) AS INT64) = ca.conta_num"
+        contas_join          = "INNER JOIN contas_assessor ca ON SAFE_CAST(TRIM(p.Conta) AS INT64) = ca.conta_num"
+        contas_join_primeira = "INNER JOIN contas_assessor ca ON SAFE_CAST(pa.Conta AS INT64) = ca.conta_num"
+        contas_join_p2       = "INNER JOIN contas_assessor ca ON SAFE_CAST(TRIM(p2.Conta) AS INT64) = ca.conta_num"
     else:
-        contas_cte  = ""
-        contas_join = ""
+        contas_cte           = ""
+        contas_join          = ""
+        contas_join_primeira = ""
+        contas_join_p2       = ""
 
     assessor_where = "AND UPPER(TRIM(Assessor_Manual)) = UPPER(@assessor)" if filter_assessor else ""
 
@@ -1206,27 +1212,25 @@ async def relatorio_historico(
         ORDER BY dia
     """
 
-    # ── 2. Novas contas e retiradas por mês (via posicao_das_contas) ────────────
-    # Nova    = conta cuja primeira aparição histórica cai no período.
-    # Retirada = conta cuja última aparição histórica cai no período,
-    #            mas antes do mês mais recente da tabela (evita falso positivo
-    #            quando dados do mês atual ainda não foram carregados).
+    # ── 2. Novas contas e retiradas por mês ──────────────────────────────────────
+    # Nova    = conta cuja DataPrimeiraAparicao (tabela pré-calculada) cai no período.
+    # Retirada = conta cuja última aparição em posicao_das_contas cai no período,
+    #            mas antes do mês mais recente da tabela (evita falso positivo).
     sql_novas = f"""
         WITH{contas_cte}
         max_mes AS (
             SELECT DATE_TRUNC(MAX(DATE(Data)), MONTH) AS mes_atual
             FROM {TABLE_POSICAO}
         ),
-        min_mes AS (
-            SELECT DATE_TRUNC(MIN(DATE(Data)), MONTH) AS mes_inicio
-            FROM {TABLE_POSICAO}
-        ),
-        primeira_aparicao AS (
-            SELECT TRIM(p.Conta) AS Conta,
-                   DATE_TRUNC(MIN(DATE(p.Data)), MONTH) AS mes_entrada
-            FROM {TABLE_POSICAO} p
-            {contas_join}
-            GROUP BY TRIM(p.Conta)
+        novas AS (
+            SELECT
+                DATE_TRUNC(pa.DataPrimeiraAparicao, MONTH) AS mes,
+                COUNT(*) AS novas_contas
+            FROM {TABLE_PRIMEIRA_APARICAO} pa
+            {contas_join_primeira}
+            WHERE pa.DataPrimeiraAparicao >= {data_inicio}
+              AND pa.DataPrimeiraAparicao <= {data_fim}
+            GROUP BY 1
         ),
         ultima_aparicao AS (
             SELECT TRIM(p.Conta) AS Conta,
@@ -1234,15 +1238,6 @@ async def relatorio_historico(
             FROM {TABLE_POSICAO} p
             {contas_join}
             GROUP BY TRIM(p.Conta)
-        ),
-        novas AS (
-            SELECT mes_entrada AS mes, COUNT(*) AS novas_contas
-            FROM primeira_aparicao
-            CROSS JOIN min_mes
-            WHERE mes_entrada >= DATE_TRUNC({data_inicio}, MONTH)
-              AND mes_entrada <= DATE_TRUNC({data_fim},   MONTH)
-              AND mes_entrada >  min_mes.mes_inicio
-            GROUP BY mes_entrada
         ),
         retiradas AS (
             SELECT u.mes_saida AS mes, COUNT(*) AS contas_retiradas
@@ -1265,7 +1260,8 @@ async def relatorio_historico(
 
     # ── 3. Receita + ROA mensal ────────────────────────────────────────────────
     sql_receita = f"""
-        WITH receita_mensal AS (
+        WITH{contas_cte}
+        receita_mensal AS (
             SELECT
                 FORMAT_DATE('%Y-%m', DATE_TRUNC(DATE(Data_De_Referencia), MONTH)) AS mes,
                 ROUND(SUM(Receita_Liquida),       2) AS receita_liquida,
@@ -1285,6 +1281,7 @@ async def relatorio_historico(
             FROM (
                 SELECT DATE(p2.Data) AS dia_data, SUM(p2.ValorBruto) AS auc_dia
                 FROM {TABLE_POSICAO} p2
+                {contas_join_p2}
                 WHERE DATE(p2.Data) >= {data_inicio}
                   AND DATE(p2.Data) <= {data_fim}
                   AND p2.Classe != 'Aluguel de Ações'
@@ -1393,7 +1390,7 @@ async def relatorio_historico(
     delta_auc         = round(
         float(auc_diario[-1]["auc"]) - float(auc_diario[0]["auc"]), 2
     ) if len(auc_diario) >= 2 else 0
-    novas_total       = sum(int(r.get("saldo_liquido") or 0) for r in novas_contas)
+    novas_total       = sum(int(r.get("novas_contas") or 0) for r in novas_contas)
     receita_total     = round(sum(float(r.get("receita_liquida") or 0) for r in receita_roa), 2)
     roa_ultimo        = float(receita_roa[-1]["roa_anualizado_pct"]) if receita_roa and receita_roa[-1].get("roa_anualizado_pct") is not None else None
 
@@ -1873,6 +1870,67 @@ async def produtos(authorization: Optional[str] = Header(default=None)):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# /api/renda-fixa — CDB / LCA / LCI / LF (partner_report_cdb_lca_lci_lf)
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/renda-fixa")
+async def renda_fixa(authorization: Optional[str] = Header(default=None)):
+    """Retorna produtos de renda fixa (CDB/LCA/LCI/LF) da última extração."""
+    await verificar_token(authorization)
+
+    cache_key = "renda-fixa"
+    cached = cache_get(cache_key)
+    if cached:
+        return cached
+
+    sql = f"""
+        SELECT
+            productID,
+            productName,
+            issuerName,
+            riskLevel,
+            riskName,
+            indexCaptureName,
+            percentIndexValue,
+            taxValue,
+            cdbCdiIndexEquivalent,
+            cdbYearIndexEquivalent,
+            typeInterests,
+            typeAmortization,
+            typeLiquidityName,
+            minAplicationValue,
+            maxApplicationValue,
+            amountTimeMonth,
+            amountTimeDay,
+            puValue,
+            availableBallast,
+            ballastAvailableValue,
+            incomeTaxFree,
+            secondary,
+            isHighlighted,
+            applicationDate,
+            applicationDeadline,
+            settlementDate,
+            descriptionTimeLimit,
+            DataExtracao
+        FROM {TABLE_CDB_LCA}
+        WHERE DataExtracao = (SELECT MAX(DataExtracao) FROM {TABLE_CDB_LCA})
+        ORDER BY productName, riskLevel, taxValue DESC
+    """
+
+    try:
+        rows = [{k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in dict(r).items()}
+                for r in bq.query(sql).result()]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    data_extracao = rows[0]["DataExtracao"] if rows else None
+    resultado = {"cdb_lca": rows, "data_extracao": data_extracao, "total": len(rows)}
+    cache_set(cache_key, resultado)
+    return resultado
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # /api/comite/recomendacoes — Recomendações do Comitê de Produtos
 # Firestore: collection "comite", document "recomendacoes"
 # Estrutura: { "recomendadas": ["Nome Carteira A", "Nome Carteira B"] }
@@ -1924,4 +1982,212 @@ async def set_comite_recomendacao(
         return {"ok": True, "carteira": body.carteira, "recomendado": body.recomendado}
     except Exception as e:
         log.error(f"Firestore set recomendacao: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Comitê RF: recomendações de Renda Fixa (por productID) ───────────────────
+# Firestore: collection "comite", document "recomendacoes_rf"
+# Estrutura: { "recomendadas": ["productID1", "productID2", ...] }
+
+class ComiteRFBody(BaseModel):
+    product_id: str
+    recomendado: bool
+
+
+@app.get("/api/comite/recomendacoes-rf")
+async def get_comite_rf(authorization: Optional[str] = Header(default=None)):
+    """Retorna IDs dos produtos de renda fixa recomendados pelo comitê."""
+    await verificar_token(authorization)
+    try:
+        doc = get_fs().collection("comite").document("recomendacoes_rf").get()
+        data = doc.to_dict() or {}
+        return {"recomendadas": data.get("recomendadas", [])}
+    except Exception as e:
+        log.error(f"Firestore get recomendacoes_rf: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/comite/recomendacoes-rf")
+async def set_comite_rf(
+    body: ComiteRFBody,
+    authorization: Optional[str] = Header(default=None),
+):
+    """Marca ou desmarca um produto de RF como recomendado pelo comitê — apenas admins."""
+    token_data = await verificar_token(authorization)
+    if token_data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Apenas administradores.")
+    try:
+        ref = get_fs().collection("comite").document("recomendacoes_rf")
+        doc = ref.get()
+        data = doc.to_dict() or {}
+        ids = set(data.get("recomendadas", []))
+        if body.recomendado:
+            ids.add(body.product_id)
+        else:
+            ids.discard(body.product_id)
+        ref.set({"recomendadas": sorted(ids)})
+        log.info(f"Comitê RF: {body.product_id} → recomendado={body.recomendado}")
+        return {"ok": True, "product_id": body.product_id, "recomendado": body.recomendado}
+    except Exception as e:
+        log.error(f"Firestore set recomendacoes_rf: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# /api/pipeline — Pipeline de clientes (Firestore: pipeline_clientes)
+# Admin vê todos; assessor vê apenas os próprios.
+# ══════════════════════════════════════════════════════════════════════════════
+
+class PipelineCliente(BaseModel):
+    nome:               str
+    conta_antiga:       Optional[str]  = None
+    origem:             Optional[str]  = None
+    telefone:           Optional[str]  = None
+    email:              Optional[str]  = None
+    auc_global:         Optional[float] = None
+    rf:                 Optional[float] = None
+    rv:                 Optional[float] = None
+    fundos:             Optional[float] = None
+    prev:               Optional[float] = None
+    coe:                Optional[float] = None
+    ranking:            Optional[str]  = None   # Com certeza | Possivelmente | Stand By | Desafio | Não Vem
+    pipe:               Optional[str]  = None   # Quente | Morno | Frio | LEAD
+    primeiro_contato:   Optional[str]  = None   # ISO date
+    retorno_positivo:   Optional[str]  = None   # Sim | Não
+    status:             Optional[str]  = None
+    conta_btg:          Optional[str]  = None
+    pipe_quente:        Optional[float] = None
+    auc_btg:            Optional[float] = None
+    plano_acao:         Optional[str]  = None
+    cliente_revertido:  Optional[str]  = None   # Sim | Não
+    produtos:           Optional[list]  = None  # até 5 strings
+    ultimo_contato:     Optional[str]  = None   # ISO date
+    proximo_fup:        Optional[str]  = None   # ISO date
+    observacoes:        Optional[str]  = None
+
+
+def _pipeline_col():
+    return get_fs().collection("pipeline_clientes")
+
+
+def _ser_pipeline(doc) -> dict:
+    d = doc.to_dict() or {}
+    d["id"] = doc.id
+    # Converte timestamps Firestore → ISO string
+    for k, v in d.items():
+        if hasattr(v, "isoformat"):
+            d[k] = v.isoformat()
+    return d
+
+
+@app.get("/api/pipeline")
+async def pipeline_listar(
+    authorization: Optional[str] = Header(default=None),
+):
+    """Lista clientes do pipeline. Admin vê todos; assessor vê só os seus."""
+    token_data    = await verificar_token(authorization)
+    role          = token_data.get("role", "assessor")
+    assessor_uid  = token_data.get("uid")
+    assessor_name = token_data.get("assessor_name", "")
+
+    try:
+        col = _pipeline_col()
+        if role == "admin":
+            docs = col.stream()
+        else:
+            docs = col.where("assessor_uid", "==", assessor_uid).stream()
+        clientes = [_ser_pipeline(d) for d in docs]
+        return {"clientes": clientes, "total": len(clientes)}
+    except Exception as e:
+        log.error(f"pipeline_listar: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/pipeline")
+async def pipeline_criar(
+    body: PipelineCliente,
+    authorization: Optional[str] = Header(default=None),
+):
+    """Cria novo cliente no pipeline."""
+    token_data    = await verificar_token(authorization)
+    assessor_uid  = token_data.get("uid")
+    assessor_name = token_data.get("assessor_name", "") or token_data.get("email", "")
+
+    dados = body.dict()
+    dados["assessor_uid"]  = assessor_uid
+    dados["assessor_name"] = assessor_name
+    dados["created_at"]    = datetime.utcnow().isoformat()
+    dados["updated_at"]    = datetime.utcnow().isoformat()
+
+    # AuC potencial calculado
+    auc_global = dados.get("auc_global") or 0
+    auc_btg    = dados.get("auc_btg")    or 0
+    dados["auc_potencial"] = round(auc_global - auc_btg, 2)
+
+    try:
+        ref = _pipeline_col().add(dados)
+        return {"ok": True, "id": ref[1].id}
+    except Exception as e:
+        log.error(f"pipeline_criar: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/pipeline/{doc_id}")
+async def pipeline_atualizar(
+    doc_id: str,
+    body: PipelineCliente,
+    authorization: Optional[str] = Header(default=None),
+):
+    """Atualiza cliente do pipeline — apenas o dono ou admin."""
+    token_data   = await verificar_token(authorization)
+    role         = token_data.get("role", "assessor")
+    assessor_uid = token_data.get("uid")
+
+    try:
+        ref = _pipeline_col().document(doc_id)
+        doc = ref.get()
+        if not doc.exists:
+            raise HTTPException(status_code=404, detail="Cliente não encontrado.")
+        if role != "admin" and doc.to_dict().get("assessor_uid") != assessor_uid:
+            raise HTTPException(status_code=403, detail="Sem permissão.")
+
+        dados = {k: v for k, v in body.dict().items() if v is not None}
+        dados["updated_at"] = datetime.utcnow().isoformat()
+
+        auc_global = body.auc_global or doc.to_dict().get("auc_global") or 0
+        auc_btg    = body.auc_btg    or doc.to_dict().get("auc_btg")    or 0
+        dados["auc_potencial"] = round(auc_global - auc_btg, 2)
+
+        ref.update(dados)
+        return {"ok": True, "id": doc_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"pipeline_atualizar: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/pipeline/{doc_id}")
+async def pipeline_deletar(
+    doc_id: str,
+    authorization: Optional[str] = Header(default=None),
+):
+    """Remove cliente do pipeline — apenas o dono ou admin."""
+    token_data   = await verificar_token(authorization)
+    role         = token_data.get("role", "assessor")
+    assessor_uid = token_data.get("uid")
+
+    try:
+        ref = _pipeline_col().document(doc_id)
+        doc = ref.get()
+        if not doc.exists:
+            raise HTTPException(status_code=404, detail="Cliente não encontrado.")
+        if role != "admin" and doc.to_dict().get("assessor_uid") != assessor_uid:
+            raise HTTPException(status_code=403, detail="Sem permissão.")
+        ref.delete()
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"pipeline_deletar: {e}")
         raise HTTPException(status_code=500, detail=str(e))

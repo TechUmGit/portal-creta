@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Creta Capital — Pipeline de Clientes</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; font-family: 'Inter', -apple-system, sans-serif; -webkit-font-smoothing: antialiased; background: #f0f3f8; }
+    .loading-screen { position: fixed; inset: 0; background: #f0f3f8; display: flex; align-items: center; justify-content: center; z-index: 999; }
+    .spinner { width: 26px; height: 26px; border: 3px solid rgba(11,181,213,0.2); border-top-color: #0bb5d5; border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* TOPBAR */
+    .topbar { height: 60px; background: #fff; border-bottom: 1px solid #e8ebf2; display: flex; align-items: center; padding: 0 24px; gap: 16px; position: fixed; top: 0; left: 0; right: 0; z-index: 200; }
+    .topbar-logo { text-decoration: none; flex-shrink: 0; display: flex; align-items: center; }
+    .topbar-divider { width: 1px; height: 28px; background: #e2e6ef; margin: 0 4px; flex-shrink: 0; }
+    .topbar-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+    .icon-btn { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: none; border: none; cursor: pointer; color: #6b7280; transition: background 0.15s; }
+    .icon-btn:hover { background: #f4f6fb; }
+    .user-chip { display: flex; align-items: center; gap: 10px; padding: 4px 10px 4px 4px; border-radius: 8px; cursor: pointer; background: none; border: none; font-family: inherit; transition: background 0.15s; position: relative; }
+    .user-chip:hover { background: #f4f6fb; }
+    .avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #0c1a35, #1a3a6c); color: #fff; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .user-name { font-size: 13px; font-weight: 600; color: #1a202c; white-space: nowrap; }
+    .user-role { font-size: 11px; color: #9ca3af; }
+    .user-info { text-align: left; }
+    .user-dropdown { display: none; position: absolute; top: calc(100% + 8px); right: 0; background: #fff; border: 1px solid #e8ebf2; border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.12); min-width: 200px; padding: 6px; z-index: 300; }
+    .user-chip.open .user-dropdown { display: block; }
+    .user-email-dd { padding: 10px 12px 8px; font-size: 12px; color: #9ca3af; border-bottom: 1px solid #f0f3f8; margin-bottom: 4px; }
+    .dd-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 6px; font-size: 13px; color: #374151; cursor: pointer; transition: background 0.12s; text-decoration: none; }
+    .dd-item:hover { background: #f4f6fb; }
+    .dd-item.danger { color: #dc2626; }
+    .dd-item.danger:hover { background: #fff5f5; }
+    .dd-sep { height: 1px; background: #f0f3f8; margin: 4px 0; }
+
+    /* SIDEBAR */
+    .sidebar { position: fixed; top: 60px; left: 0; bottom: 0; width: 240px; background: #fff; border-right: 1px solid #e8ebf2; display: flex; flex-direction: column; overflow-y: auto; z-index: 100; transform: translateX(-100%); transition: transform 0.25s cubic-bezier(0.25,0,0.25,1); }
+    .sidebar.open { transform: translateX(0); }
+    .sidebar-section { padding: 20px 12px 8px; }
+    .sidebar-label { font-size: 9.5px; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; color: #9ca3af; padding: 0 10px; margin-bottom: 6px; }
+    .nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px; font-size: 13.5px; font-weight: 500; color: #4b5563; cursor: pointer; transition: all 0.15s; text-decoration: none; position: relative; }
+    .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; opacity: 0.7; }
+    .nav-item:hover { background: #f4f6fb; color: #0c1a35; }
+    .nav-item:hover svg { opacity: 1; }
+    .nav-item.active { background: #eef3ff; color: #0c1a35; font-weight: 600; }
+    .nav-item.active svg { opacity: 1; color: #0bb5d5; }
+    .nav-item.active::before { content: ''; position: absolute; left: 0; top: 6px; bottom: 6px; width: 3px; background: #0bb5d5; border-radius: 0 3px 3px 0; }
+    .sidebar-footer { margin-top: auto; padding: 16px 12px; border-top: 1px solid #f0f3f8; }
+    .sidebar-footer .nav-item { color: #9ca3af; }
+    .sidebar-footer .nav-item:hover { color: #dc2626; }
+    .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 99; }
+
+    /* MAIN */
+    .main { padding-top: 60px; min-height: 100vh; }
+    .hero { background: linear-gradient(135deg, #091525 0%, #0c2040 60%, #0f2e5c 100%); padding: 36px 44px; position: relative; overflow: hidden; }
+    .hero::after { content: ''; position: absolute; width: 420px; height: 420px; border-radius: 50%; border: 1px solid rgba(11,181,213,0.12); right: -80px; top: -100px; pointer-events: none; }
+    .hero-label { font-size: 10px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: rgba(255,255,255,0.3); margin-bottom: 10px; }
+    .hero-name { font-size: 28px; font-weight: 700; color: #fff; letter-spacing: -0.03em; margin-bottom: 6px; position: relative; z-index: 1; }
+    .hero-sub { font-size: 14px; color: rgba(255,255,255,0.45); position: relative; z-index: 1; }
+
+    .content { padding: 32px 44px; }
+
+    /* KPIs */
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px; margin-bottom: 28px; }
+    .kpi { background: #fff; border-radius: 12px; padding: 20px; border: 1px solid #e8ebf2; }
+    .kpi-label { font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: #9ca3af; margin-bottom: 8px; }
+    .kpi-value { font-size: 24px; font-weight: 700; color: #0c1a35; letter-spacing: -0.02em; margin-bottom: 2px; }
+    .kpi-sub { font-size: 11px; color: #9ca3af; }
+    .kpi.quente  { border-left: 4px solid #ef4444; }
+    .kpi.morno   { border-left: 4px solid #f97316; }
+    .kpi.frio    { border-left: 4px solid #3b82f6; }
+    .kpi.lead    { border-left: 4px solid #8b5cf6; }
+
+    /* TOOLBAR */
+    .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+    .search-box { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid #e8ebf2; border-radius: 8px; padding: 8px 14px; flex: 1; min-width: 200px; max-width: 320px; }
+    .search-box input { border: none; outline: none; font-size: 13px; font-family: inherit; color: #374151; background: none; width: 100%; }
+    .search-box svg { color: #9ca3af; flex-shrink: 0; }
+    .filter-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+    .chip { padding: 5px 14px; border-radius: 20px; border: 1.5px solid #d1d5db; background: #fff; color: #6b7280; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; transition: all 0.15s; white-space: nowrap; }
+    .chip:hover { border-color: #0c1a35; color: #0c1a35; }
+    .chip.active { background: #0c1a35; border-color: #0c1a35; color: #fff; }
+    .chip.quente.active  { background: #ef4444; border-color: #ef4444; }
+    .chip.morno.active   { background: #f97316; border-color: #f97316; }
+    .chip.frio.active    { background: #3b82f6; border-color: #3b82f6; }
+    .chip.lead.active    { background: #8b5cf6; border-color: #8b5cf6; }
+    .btn-primary { display: inline-flex; align-items: center; gap: 8px; padding: 9px 18px; background: #0c1a35; color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; transition: background 0.15s; white-space: nowrap; margin-left: auto; }
+    .btn-primary:hover { background: #1a3a6c; }
+
+    /* TABLE */
+    .table-card { background: #fff; border-radius: 12px; border: 1px solid #e8ebf2; overflow: hidden; }
+    .table-wrap { overflow-x: auto; }
+    .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .data-table thead tr { background: #f8f9fc; }
+    .data-table th { padding: 11px 14px; text-align: left; font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #9ca3af; border-bottom: 1px solid #e8ebf2; white-space: nowrap; }
+    .data-table th.num { text-align: right; }
+    .data-table td { padding: 12px 14px; border-bottom: 1px solid #f5f7fb; vertical-align: middle; }
+    .data-table td.num { text-align: right; }
+    .data-table tbody tr:last-child td { border-bottom: none; }
+    .data-table tbody tr:hover { background: #f8f9fc; cursor: pointer; }
+
+    /* PIPE BADGES */
+    .pipe-badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; white-space: nowrap; }
+    .pipe-Quente { background: #fee2e2; color: #991b1b; }
+    .pipe-Morno  { background: #ffedd5; color: #c2410c; }
+    .pipe-Frio   { background: #dbeafe; color: #1e40af; }
+    .pipe-LEAD   { background: #ede9fe; color: #6d28d9; }
+
+    /* RANKING BADGE */
+    .rank-badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 5px; background: #f1f5f9; color: #475569; white-space: nowrap; }
+    .rank-certeza    { background: #d1fae5; color: #065f46; }
+    .rank-poss       { background: #e0f2fe; color: #0369a1; }
+    .rank-standby    { background: #fef9c3; color: #92400e; }
+    .rank-desafio    { background: #fee2e2; color: #991b1b; }
+    .rank-naovem     { background: #f1f5f9; color: #94a3b8; }
+
+    /* ACTIONS */
+    .action-btn { width: 30px; height: 30px; border-radius: 6px; border: none; background: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: #9ca3af; transition: all 0.15s; }
+    .action-btn:hover { background: #f4f6fb; color: #0c1a35; }
+    .action-btn.del:hover { background: #fee2e2; color: #dc2626; }
+
+    /* FUP urgency */
+    .fup-vencido  { color: #dc2626; font-weight: 600; }
+    .fup-hoje     { color: #f97316; font-weight: 600; }
+    .fup-ok       { color: #16a34a; }
+
+    /* EMPTY */
+    .empty-state { padding: 60px; text-align: center; color: #9ca3af; }
+    .empty-icon { font-size: 40px; margin-bottom: 12px; }
+    .empty-title { font-size: 15px; font-weight: 600; color: #374151; margin-bottom: 6px; }
+
+    /* MODAL */
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 500; align-items: center; justify-content: center; padding: 20px; }
+    .modal-overlay.open { display: flex; }
+    .modal { background: #fff; border-radius: 14px; width: 100%; max-width: 780px; max-height: 90vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
+    .modal-header { padding: 22px 28px 18px; border-bottom: 1px solid #f0f3f8; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+    .modal-title { font-size: 17px; font-weight: 700; color: #0c1a35; }
+    .modal-close { width: 32px; height: 32px; border-radius: 8px; border: none; background: none; cursor: pointer; font-size: 18px; color: #9ca3af; display: flex; align-items: center; justify-content: center; }
+    .modal-close:hover { background: #f4f6fb; color: #374151; }
+    .modal-body { padding: 24px 28px; overflow-y: auto; flex: 1; }
+    .modal-footer { padding: 16px 28px; border-top: 1px solid #f0f3f8; display: flex; justify-content: flex-end; gap: 10px; flex-shrink: 0; }
+
+    /* FORM */
+    .form-section { margin-bottom: 24px; }
+    .form-section-title { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #9ca3af; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid #f0f3f8; }
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
+    .form-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+    .form-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+    .form-group { display: flex; flex-direction: column; gap: 5px; }
+    .form-group.full { grid-column: 1 / -1; }
+    .form-label { font-size: 11px; font-weight: 600; color: #6b7280; letter-spacing: 0.05em; text-transform: uppercase; }
+    .form-control { padding: 9px 12px; border: 1.5px solid #e8ebf2; border-radius: 8px; font-size: 13px; font-family: inherit; color: #374151; background: #fff; transition: border-color 0.15s; outline: none; }
+    .form-control:focus { border-color: #0bb5d5; }
+    select.form-control { cursor: pointer; }
+    textarea.form-control { resize: vertical; min-height: 72px; }
+    .produtos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+
+    .btn-secondary { padding: 9px 18px; background: #f4f6fb; color: #374151; border: 1px solid #e8ebf2; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
+    .btn-secondary:hover { background: #e8ebf2; }
+    .btn-danger { padding: 9px 18px; background: #fee2e2; color: #dc2626; border: 1px solid #fecaca; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
+    .btn-danger:hover { background: #fecaca; }
+
+    /* TOAST */
+    .toast { position: fixed; bottom: 24px; right: 24px; background: #0c1a35; color: #fff; padding: 12px 20px; border-radius: 10px; font-size: 13px; font-weight: 500; z-index: 9999; transform: translateY(100px); opacity: 0; transition: all 0.3s; pointer-events: none; }
+    .toast.show { transform: translateY(0); opacity: 1; }
+    .toast.err { background: #dc2626; }
+
+    /* ADMIN FILTER */
+    .admin-filter { display: none; background: #fff; border-bottom: 1px solid #e8ebf2; padding: 12px 44px; gap: 12px; align-items: center; }
+    .admin-filter.visible { display: flex; }
+    .filter-label { font-size: 12px; font-weight: 600; color: #9ca3af; }
+    .filter-select { padding: 6px 10px; border: 1.5px solid #e8ebf2; border-radius: 7px; font-size: 13px; font-family: inherit; color: #374151; cursor: pointer; outline: none; }
+  </style>
+</head>
+<body>
+
+<div id="loadingScreen" class="loading-screen"><div class="spinner"></div></div>
+<div id="app" style="display:none">
+
+<!-- TOPBAR -->
+<nav class="topbar">
+  <button class="icon-btn" onclick="document.getElementById('sidebar').classList.toggle('open');document.getElementById('sidebarOverlay').style.display='block'">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+  </button>
+  <a href="dashboard.html" class="topbar-logo"><img src="logo-creta.svg" alt="Creta Capital" style="height:60px;display:block;"></a>
+  <div class="topbar-divider"></div>
+  <span style="font-size:13px;font-weight:600;color:#374151;">Pipeline de Clientes</span>
+  <div class="topbar-actions">
+    <button class="user-chip" id="userChip" onclick="this.classList.toggle('open')">
+      <div class="avatar" id="avatarEl">?</div>
+      <div class="user-info">
+        <div class="user-name" id="userNameEl">—</div>
+        <div class="user-role" id="userRoleEl">—</div>
+      </div>
+      <div class="user-dropdown">
+        <div class="user-email-dd" id="userEmailEl"></div>
+        <div class="dd-sep"></div>
+        <div class="dd-item danger" onclick="firebase.auth().signOut()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Sair
+        </div>
+      </div>
+    </button>
+  </div>
+</nav>
+
+<!-- SIDEBAR -->
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="document.getElementById('sidebar').classList.remove('open');this.style.display='none'"></div>
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-section">
+    <div class="sidebar-label">Início</div>
+    <a class="nav-item" href="dashboard.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      Visão Geral
+    </a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-label">Dados</div>
+    <a class="nav-item" href="posicoes.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      Posições
+    </a>
+    <a class="nav-item" href="opcoes.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+      Opções
+    </a>
+    <a class="nav-item" href="receitas.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+      Receitas e Repasses
+    </a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-label">Análise</div>
+    <a class="nav-item" href="relatorios.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      Histórico de Carteiras
+    </a>
+    <a class="nav-item" href="gestao.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+      Oportunidades &amp; Alertas
+    </a>
+    <a class="nav-item active" href="pipeline.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      Pipeline de Clientes
+    </a>
+    <a class="nav-item" href="produtos.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+      Produtos BTG
+    </a>
+  </div>
+  <div class="sidebar-section" id="sidebarSistema" style="display:none">
+    <div class="sidebar-label">Sistema</div>
+    <a class="nav-item" href="configuracoes.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      Configurações
+    </a>
+  </div>
+  <div class="sidebar-footer">
+    <a class="nav-item" href="#" onclick="firebase.auth().signOut()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      Sair
+    </a>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+  <div class="hero">
+    <div class="hero-label">Prospecção · Pipeline</div>
+    <div class="hero-name">Pipeline de Clientes</div>
+    <div class="hero-sub" id="heroSub">Acompanhe a evolução dos seus prospects</div>
+  </div>
+
+  <!-- ADMIN FILTER -->
+  <div class="admin-filter" id="adminFilter">
+    <span class="filter-label">Assessor:</span>
+    <select class="filter-select" id="assessorFilter" onchange="aplicarFiltroAssessor()">
+      <option value="">Todos</option>
+    </select>
+  </div>
+
+  <div class="content">
+    <!-- KPIs -->
+    <div class="kpi-grid">
+      <div class="kpi">
+        <div class="kpi-label">Total Prospects</div>
+        <div class="kpi-value" id="kpiTotal">—</div>
+        <div class="kpi-sub">clientes no pipeline</div>
+      </div>
+      <div class="kpi quente">
+        <div class="kpi-label">🔴 Quente</div>
+        <div class="kpi-value" id="kpiQuente">—</div>
+        <div class="kpi-sub">entrada este mês</div>
+      </div>
+      <div class="kpi morno">
+        <div class="kpi-label">🟠 Morno</div>
+        <div class="kpi-value" id="kpiMorno">—</div>
+        <div class="kpi-sub">curto prazo</div>
+      </div>
+      <div class="kpi frio">
+        <div class="kpi-label">🔵 Frio</div>
+        <div class="kpi-value" id="kpiFrio">—</div>
+        <div class="kpi-sub">horizonte indefinido</div>
+      </div>
+      <div class="kpi lead">
+        <div class="kpi-label">🟣 Lead</div>
+        <div class="kpi-value" id="kpiLead">—</div>
+        <div class="kpi-sub">sem contato ainda</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">AuC Potencial</div>
+        <div class="kpi-value" id="kpiAucPot" style="font-size:18px">—</div>
+        <div class="kpi-sub">total mapeado</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Pipe Quente Mês</div>
+        <div class="kpi-value" id="kpiPipeQuente" style="font-size:18px">—</div>
+        <div class="kpi-sub">entrando este mês</div>
+      </div>
+    </div>
+
+    <!-- TOOLBAR -->
+    <div class="toolbar">
+      <div class="search-box">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="searchInput" placeholder="Buscar por nome..." oninput="renderTabela()">
+      </div>
+      <div class="filter-chips">
+        <button class="chip active" data-pipe="" onclick="setFiltro(this)">Todos</button>
+        <button class="chip quente" data-pipe="Quente" onclick="setFiltro(this)">🔴 Quente</button>
+        <button class="chip morno"  data-pipe="Morno"  onclick="setFiltro(this)">🟠 Morno</button>
+        <button class="chip frio"   data-pipe="Frio"   onclick="setFiltro(this)">🔵 Frio</button>
+        <button class="chip lead"   data-pipe="LEAD"   onclick="setFiltro(this)">🟣 Lead</button>
+      </div>
+      <button class="btn-primary" onclick="abrirModal()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Novo Cliente
+      </button>
+    </div>
+
+    <!-- TABLE -->
+    <div class="table-card">
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>Pipe</th>
+              <th>Ranking</th>
+              <th class="num">AuC Global</th>
+              <th class="num">AuC BTG</th>
+              <th class="num">AuC Potencial</th>
+              <th>Conta BTG</th>
+              <th>Próximo FUP</th>
+              <th id="thAssessor" style="display:none">Assessor</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="pipelineTbody">
+            <tr><td colspan="11" class="empty-state"><div class="empty-icon">⏳</div><div class="empty-title">Carregando...</div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</main>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modalTitle">Novo Cliente</div>
+      <button class="modal-close" onclick="fecharModal()">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- 1. Dados do Cliente -->
+      <div class="form-section">
+        <div class="form-section-title">Dados do Cliente</div>
+        <div class="form-grid">
+          <div class="form-group full">
+            <label class="form-label">Nome *</label>
+            <input class="form-control" id="fNome" type="text" placeholder="Nome completo">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Conta Antiga</label>
+            <input class="form-control" id="fContaAntiga" type="text" placeholder="Número da conta anterior">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Origem</label>
+            <input class="form-control" id="fOrigem" type="text" placeholder="Como chegou até você">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Telefone</label>
+            <input class="form-control" id="fTelefone" type="text" placeholder="(11) 99999-9999">
+          </div>
+          <div class="form-group">
+            <label class="form-label">E-mail</label>
+            <input class="form-control" id="fEmail" type="email" placeholder="email@exemplo.com">
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. Patrimônio -->
+      <div class="form-section">
+        <div class="form-section-title">Patrimônio Mapeado (R$)</div>
+        <div class="form-grid cols-3">
+          <div class="form-group">
+            <label class="form-label">AuC Global</label>
+            <input class="form-control" id="fAucGlobal" type="number" min="0" placeholder="0" oninput="calcAucPot()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Renda Fixa</label>
+            <input class="form-control" id="fRF" type="number" min="0" placeholder="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Renda Variável</label>
+            <input class="form-control" id="fRV" type="number" min="0" placeholder="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Fundos</label>
+            <input class="form-control" id="fFundos" type="number" min="0" placeholder="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Previdência</label>
+            <input class="form-control" id="fPrev" type="number" min="0" placeholder="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">COE</label>
+            <input class="form-control" id="fCOE" type="number" min="0" placeholder="0">
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. Mapeamento -->
+      <div class="form-section">
+        <div class="form-section-title">Mapeamento</div>
+        <div class="form-grid cols-2">
+          <div class="form-group">
+            <label class="form-label">Ranking</label>
+            <select class="form-control" id="fRanking">
+              <option value="">— Selecione —</option>
+              <option value="Com certeza">Com certeza</option>
+              <option value="Possivelmente">Possivelmente</option>
+              <option value="Stand By">Stand By</option>
+              <option value="Desafio">Desafio</option>
+              <option value="Não Vem">Não Vem</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Pipe</label>
+            <select class="form-control" id="fPipe">
+              <option value="">— Selecione —</option>
+              <option value="Quente">🔴 Quente — entrada este mês</option>
+              <option value="Morno">🟠 Morno — curto prazo</option>
+              <option value="Frio">🔵 Frio — horizonte indefinido</option>
+              <option value="LEAD">🟣 LEAD — sem contato ainda</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. Funil -->
+      <div class="form-section">
+        <div class="form-section-title">Funil de Conversão</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">1º Contato</label>
+            <input class="form-control" id="fPrimeiroContato" type="date">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Retorno Positivo?</label>
+            <select class="form-control" id="fRetornoPositivo">
+              <option value="">—</option>
+              <option value="Sim">Sim</option>
+              <option value="Não">Não</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Status</label>
+            <input class="form-control" id="fStatus" type="text" placeholder="Ex: Link enviado, Em negociação...">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Conta BTG</label>
+            <input class="form-control" id="fContaBTG" type="text" placeholder="Número da conta BTG">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Pipe Quente R$</label>
+            <input class="form-control" id="fPipeQuente" type="number" min="0" placeholder="Valor entrando este mês">
+          </div>
+          <div class="form-group">
+            <label class="form-label">AuC BTG (já em custódia)</label>
+            <input class="form-control" id="fAucBTG" type="number" min="0" placeholder="0" oninput="calcAucPot()">
+          </div>
+        </div>
+        <div style="margin-top:10px;padding:10px 14px;background:#f0f9ff;border-radius:8px;font-size:13px;color:#0369a1">
+          <strong>AuC Potencial:</strong> <span id="aucPotLabel">R$ —</span>
+          <span style="color:#9ca3af;font-size:11px;margin-left:6px">(AuC Global − AuC BTG)</span>
+        </div>
+      </div>
+
+      <!-- 5. Plano de Ação -->
+      <div class="form-section">
+        <div class="form-section-title">Plano de Ação</div>
+        <div class="form-grid cols-2">
+          <div class="form-group full">
+            <label class="form-label">O que vou fazer?</label>
+            <textarea class="form-control" id="fPlanoAcao" placeholder="Descreva o próximo passo..."></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Cliente Revertido?</label>
+            <select class="form-control" id="fClienteRevertido">
+              <option value="">—</option>
+              <option value="Sim">Sim</option>
+              <option value="Não">Não</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- 6. Produtos de Interesse -->
+      <div class="form-section">
+        <div class="form-section-title">Produtos de Interesse</div>
+        <div class="produtos-grid">
+          <div class="form-group">
+            <label class="form-label">Produto 1</label>
+            <select class="form-control" id="fProd1">
+              <option value="">—</option>
+              <option>Investimento</option>
+              <option>Boleto</option>
+              <option>Seguro</option>
+              <option>Câmbio</option>
+              <option>Cartão de Crédito</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Produto 2</label>
+            <select class="form-control" id="fProd2">
+              <option value="">—</option>
+              <option>Investimento</option>
+              <option>Boleto</option>
+              <option>Seguro</option>
+              <option>Câmbio</option>
+              <option>Cartão de Crédito</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Produto 3</label>
+            <select class="form-control" id="fProd3">
+              <option value="">—</option>
+              <option>Investimento</option>
+              <option>Boleto</option>
+              <option>Seguro</option>
+              <option>Câmbio</option>
+              <option>Cartão de Crédito</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Produto 4</label>
+            <select class="form-control" id="fProd4">
+              <option value="">—</option>
+              <option>Investimento</option>
+              <option>Boleto</option>
+              <option>Seguro</option>
+              <option>Câmbio</option>
+              <option>Cartão de Crédito</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Produto 5</label>
+            <select class="form-control" id="fProd5">
+              <option value="">—</option>
+              <option>Investimento</option>
+              <option>Boleto</option>
+              <option>Seguro</option>
+              <option>Câmbio</option>
+              <option>Cartão de Crédito</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- 7. Controle -->
+      <div class="form-section">
+        <div class="form-section-title">Controle de Contato</div>
+        <div class="form-grid cols-3">
+          <div class="form-group">
+            <label class="form-label">Último Contato</label>
+            <input class="form-control" id="fUltimoContato" type="date">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Próximo FUP</label>
+            <input class="form-control" id="fProximoFup" type="date">
+          </div>
+          <div class="form-group full">
+            <label class="form-label">Observações</label>
+            <textarea class="form-control" id="fObs" placeholder="Anotações livres..."></textarea>
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn-danger" id="btnDeletar" style="display:none;margin-right:auto" onclick="deletarCliente()">Excluir</button>
+      <button class="btn-secondary" onclick="fecharModal()">Cancelar</button>
+      <button class="btn-primary" onclick="salvarCliente()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const API_URL = 'https://api-creta-978599698367.us-central1.run.app';
+  const firebaseConfig = {
+    apiKey:            "AIzaSyDLJrg7Cmaq6DDlDdcLfe4kH9hUukMVuE0",
+    authDomain:        "creta-btg-bd3a8.firebaseapp.com",
+    projectId:         "creta-btg-bd3a8",
+    storageBucket:     "creta-btg-bd3a8.firebasestorage.app",
+    messagingSenderId: "609636823379",
+    appId:             "1:609636823379:web:fbf9de8c2960d7392c31a6"
+  };
+  if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db   = firebase.firestore();
+
+  let _token     = null;
+  let _isAdmin   = false;
+  let _clientes  = [];
+  let _filtroAssessor = '';
+  let _filtroPipe     = '';
+  let _editId    = null;
+
+  // ── Auth ─────────────────────────────────────────────────────────────────
+  auth.onAuthStateChanged(async user => {
+    document.getElementById('loadingScreen').style.display = 'none';
+    if (!user) { window.location.replace('index.html'); return; }
+    document.getElementById('app').style.display = 'block';
+
+    const email = user.email || '';
+    document.getElementById('userEmailEl').textContent = email;
+
+    try {
+      const snap = await db.collection('users').doc(user.uid).get();
+      const data = snap.exists ? snap.data() : {};
+      const name = data.displayName || user.displayName || email.split('@')[0];
+      const role = data.role || '';
+      _isAdmin = (role === 'admin');
+      document.getElementById('userNameEl').textContent  = name;
+      document.getElementById('avatarEl').textContent    = name.charAt(0).toUpperCase();
+      document.getElementById('userRoleEl').textContent  = _isAdmin ? 'Administrador' : 'Assessor BTG';
+      if (_isAdmin) {
+        document.getElementById('sidebarSistema').style.display = 'block';
+        document.getElementById('adminFilter').classList.add('visible');
+        document.getElementById('thAssessor').style.display = '';
+        await carregarAssessores();
+      }
+    } catch(e) {
+      document.getElementById('userNameEl').textContent = email.split('@')[0];
+    }
+
+    _token = await user.getIdToken();
+    await carregarPipeline();
+  });
+
+  // ── Carregar assessores (admin) ──────────────────────────────────────────
+  async function carregarAssessores() {
+    try {
+      const res = await fetch(`${API_URL}/api/assessores`, { headers: { Authorization: `Bearer ${_token}` } });
+      const json = await res.json();
+      const sel = document.getElementById('assessorFilter');
+      (json.assessores || []).forEach(a => {
+        const opt = document.createElement('option');
+        opt.value = a; opt.textContent = a; sel.appendChild(opt);
+      });
+    } catch(e) {}
+  }
+
+  function aplicarFiltroAssessor() {
+    _filtroAssessor = document.getElementById('assessorFilter').value;
+    renderTabela();
+  }
+
+  // ── Carregar pipeline ────────────────────────────────────────────────────
+  async function carregarPipeline() {
+    try {
+      const res = await fetch(`${API_URL}/api/pipeline`, { headers: { Authorization: `Bearer ${_token}` } });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      _clientes = json.clientes || [];
+      atualizarKPIs();
+      renderTabela();
+    } catch(e) {
+      document.getElementById('pipelineTbody').innerHTML =
+        `<tr><td colspan="11" style="text-align:center;padding:40px;color:#9ca3af">Erro ao carregar: ${e.message}</td></tr>`;
+    }
+  }
+
+  // ── KPIs ─────────────────────────────────────────────────────────────────
+  function atualizarKPIs() {
+    const lista = _clientes;
+    document.getElementById('kpiTotal').textContent   = lista.length;
+    document.getElementById('kpiQuente').textContent  = lista.filter(c => c.pipe === 'Quente').length;
+    document.getElementById('kpiMorno').textContent   = lista.filter(c => c.pipe === 'Morno').length;
+    document.getElementById('kpiFrio').textContent    = lista.filter(c => c.pipe === 'Frio').length;
+    document.getElementById('kpiLead').textContent    = lista.filter(c => c.pipe === 'LEAD').length;
+    const aucPot   = lista.reduce((s, c) => s + (c.auc_potencial || 0), 0);
+    const pipeQ    = lista.filter(c => c.pipe === 'Quente').reduce((s, c) => s + (c.pipe_quente || 0), 0);
+    document.getElementById('kpiAucPot').textContent    = fmtMoeda(aucPot);
+    document.getElementById('kpiPipeQuente').textContent = fmtMoeda(pipeQ);
+    document.getElementById('heroSub').textContent =
+      `${lista.length} prospect${lista.length !== 1 ? 's' : ''} · AuC potencial ${fmtMoeda(aucPot)}`;
+  }
+
+  // ── Render tabela ────────────────────────────────────────────────────────
+  function setFiltro(btn) {
+    _filtroPipe = btn.dataset.pipe;
+    document.querySelectorAll('.filter-chips .chip').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderTabela();
+  }
+
+  function renderTabela() {
+    const busca = (document.getElementById('searchInput').value || '').toLowerCase();
+    let dados = _clientes.filter(c => {
+      if (_filtroPipe && c.pipe !== _filtroPipe) return false;
+      if (_filtroAssessor && (c.assessor_name || '').toUpperCase() !== _filtroAssessor.toUpperCase()) return false;
+      if (busca && !(c.nome || '').toLowerCase().includes(busca)) return false;
+      return true;
+    });
+
+    if (!dados.length) {
+      document.getElementById('pipelineTbody').innerHTML =
+        `<tr><td colspan="11" style="text-align:center;padding:50px;color:#9ca3af">
+          <div style="font-size:32px;margin-bottom:10px">🔍</div>
+          <div style="font-weight:600;color:#374151">Nenhum cliente encontrado</div>
+        </td></tr>`;
+      return;
+    }
+
+    const hoje = new Date(); hoje.setHours(0,0,0,0);
+    document.getElementById('pipelineTbody').innerHTML = dados.map(c => {
+      const pipeCls  = 'pipe-' + (c.pipe || 'LEAD');
+      const pipeLabel = c.pipe || 'LEAD';
+      const rankCls  = rankClass(c.ranking);
+      const fupHtml  = fupBadge(c.proximo_fup, hoje);
+      const aucG     = c.auc_global    != null ? fmtMoeda(c.auc_global)    : '—';
+      const aucB     = c.auc_btg       != null ? fmtMoeda(c.auc_btg)       : '—';
+      const aucP     = c.auc_potencial != null ? fmtMoeda(c.auc_potencial) : '—';
+      const adminCell = _isAdmin
+        ? `<td style="font-size:12px;color:#9ca3af;display:${_isAdmin ? '' : 'none'}">${c.assessor_name || '—'}</td>`
+        : '';
+      return `<tr onclick="abrirModal('${c.id}')">
+        <td style="font-weight:600;color:#0c1a35">${esc(c.nome || '—')}</td>
+        <td><span class="pipe-badge ${pipeCls}">${pipeLabel}</span></td>
+        <td><span class="rank-badge ${rankCls}">${c.ranking || '—'}</span></td>
+        <td class="num" style="font-size:12px">${aucG}</td>
+        <td class="num" style="font-size:12px">${aucB}</td>
+        <td class="num" style="font-size:12px;font-weight:600">${aucP}</td>
+        <td style="font-size:12px;color:#6b7280">${c.conta_btg || '—'}</td>
+        <td>${fupHtml}</td>
+        ${adminCell}
+        <td style="font-size:12px;max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.status || '—'}</td>
+        <td onclick="event.stopPropagation()">
+          <button class="action-btn del" title="Excluir" onclick="confirmarDelete('${c.id}')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+          </button>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  function rankClass(r) {
+    if (!r) return '';
+    if (r === 'Com certeza')  return 'rank-certeza';
+    if (r === 'Possivelmente') return 'rank-poss';
+    if (r === 'Stand By')     return 'rank-standby';
+    if (r === 'Desafio')      return 'rank-desafio';
+    if (r === 'Não Vem')      return 'rank-naovem';
+    return '';
+  }
+
+  function fupBadge(fupStr, hoje) {
+    if (!fupStr) return '<span style="color:#d1d5db">—</span>';
+    const fup = new Date(fupStr + 'T00:00:00');
+    const diff = Math.floor((fup - hoje) / 86400000);
+    const label = fup.toLocaleDateString('pt-BR');
+    if (diff < 0)  return `<span class="fup-vencido">⚠ ${label}</span>`;
+    if (diff === 0) return `<span class="fup-hoje">Hoje</span>`;
+    if (diff <= 3)  return `<span class="fup-hoje">${label}</span>`;
+    return `<span class="fup-ok">${label}</span>`;
+  }
+
+  // ── Modal ────────────────────────────────────────────────────────────────
+  function abrirModal(id) {
+    _editId = id || null;
+    limparForm();
+    document.getElementById('btnDeletar').style.display = id ? '' : 'none';
+    document.getElementById('modalTitle').textContent = id ? 'Editar Cliente' : 'Novo Cliente';
+
+    if (id) {
+      const c = _clientes.find(x => x.id === id);
+      if (c) preencherForm(c);
+    }
+    document.getElementById('modalOverlay').classList.add('open');
+  }
+
+  function fecharModal() {
+    document.getElementById('modalOverlay').classList.remove('open');
+    _editId = null;
+  }
+
+  function limparForm() {
+    ['fNome','fContaAntiga','fOrigem','fTelefone','fEmail',
+     'fAucGlobal','fRF','fRV','fFundos','fPrev','fCOE',
+     'fRanking','fPipe',
+     'fPrimeiroContato','fRetornoPositivo','fStatus','fContaBTG','fPipeQuente','fAucBTG',
+     'fPlanoAcao','fClienteRevertido',
+     'fProd1','fProd2','fProd3','fProd4','fProd5',
+     'fUltimoContato','fProximoFup','fObs'
+    ].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    document.getElementById('aucPotLabel').textContent = 'R$ —';
+  }
+
+  function preencherForm(c) {
+    const set = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val; };
+    set('fNome',           c.nome);
+    set('fContaAntiga',    c.conta_antiga);
+    set('fOrigem',         c.origem);
+    set('fTelefone',       c.telefone);
+    set('fEmail',          c.email);
+    set('fAucGlobal',      c.auc_global);
+    set('fRF',             c.rf);
+    set('fRV',             c.rv);
+    set('fFundos',         c.fundos);
+    set('fPrev',           c.prev);
+    set('fCOE',            c.coe);
+    set('fRanking',        c.ranking);
+    set('fPipe',           c.pipe);
+    set('fPrimeiroContato',c.primeiro_contato);
+    set('fRetornoPositivo',c.retorno_positivo);
+    set('fStatus',         c.status);
+    set('fContaBTG',       c.conta_btg);
+    set('fPipeQuente',     c.pipe_quente);
+    set('fAucBTG',         c.auc_btg);
+    set('fPlanoAcao',      c.plano_acao);
+    set('fClienteRevertido', c.cliente_revertido);
+    const prods = c.produtos || [];
+    ['fProd1','fProd2','fProd3','fProd4','fProd5'].forEach((id, i) => set(id, prods[i] || ''));
+    set('fUltimoContato',  c.ultimo_contato);
+    set('fProximoFup',     c.proximo_fup);
+    set('fObs',            c.observacoes);
+    calcAucPot();
+  }
+
+  function calcAucPot() {
+    const g = parseFloat(document.getElementById('fAucGlobal').value) || 0;
+    const b = parseFloat(document.getElementById('fAucBTG').value)    || 0;
+    const pot = g - b;
+    document.getElementById('aucPotLabel').textContent = pot >= 0 ? fmtMoedaFull(pot) : '—';
+  }
+
+  function coletarForm() {
+    const get = id => document.getElementById(id)?.value?.trim() || null;
+    const getNum = id => { const v = parseFloat(document.getElementById(id)?.value); return isNaN(v) ? null : v; };
+    return {
+      nome:              get('fNome'),
+      conta_antiga:      get('fContaAntiga'),
+      origem:            get('fOrigem'),
+      telefone:          get('fTelefone'),
+      email:             get('fEmail'),
+      auc_global:        getNum('fAucGlobal'),
+      rf:                getNum('fRF'),
+      rv:                getNum('fRV'),
+      fundos:            getNum('fFundos'),
+      prev:              getNum('fPrev'),
+      coe:               getNum('fCOE'),
+      ranking:           get('fRanking'),
+      pipe:              get('fPipe'),
+      primeiro_contato:  get('fPrimeiroContato'),
+      retorno_positivo:  get('fRetornoPositivo'),
+      status:            get('fStatus'),
+      conta_btg:         get('fContaBTG'),
+      pipe_quente:       getNum('fPipeQuente'),
+      auc_btg:           getNum('fAucBTG'),
+      plano_acao:        get('fPlanoAcao'),
+      cliente_revertido: get('fClienteRevertido'),
+      produtos:          ['fProd1','fProd2','fProd3','fProd4','fProd5'].map(id => get(id)).filter(Boolean),
+      ultimo_contato:    get('fUltimoContato'),
+      proximo_fup:       get('fProximoFup'),
+      observacoes:       get('fObs'),
+    };
+  }
+
+  async function salvarCliente() {
+    const dados = coletarForm();
+    if (!dados.nome) { showToast('Nome é obrigatório.', 'err'); return; }
+
+    try {
+      const url    = _editId ? `${API_URL}/api/pipeline/${_editId}` : `${API_URL}/api/pipeline`;
+      const method = _editId ? 'PUT' : 'POST';
+      const res = await fetch(url, {
+        method,
+        headers: { Authorization: `Bearer ${_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(dados),
+      });
+      if (!res.ok) throw new Error((await res.json()).detail || `HTTP ${res.status}`);
+      showToast(_editId ? 'Cliente atualizado.' : 'Cliente adicionado ao pipeline.');
+      fecharModal();
+      await carregarPipeline();
+    } catch(e) { showToast(e.message, 'err'); }
+  }
+
+  async function confirmarDelete(id) {
+    if (!confirm('Remover este cliente do pipeline?')) return;
+    try {
+      const res = await fetch(`${API_URL}/api/pipeline/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${_token}` },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      showToast('Cliente removido.');
+      fecharModal();
+      await carregarPipeline();
+    } catch(e) { showToast(e.message, 'err'); }
+  }
+
+  function deletarCliente() { confirmarDelete(_editId); }
+
+  // ── Formatação ───────────────────────────────────────────────────────────
+  function fmtMoeda(v) {
+    if (v == null || isNaN(v)) return '—';
+    if (v >= 1e6) return 'R$ ' + (v/1e6).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1}) + 'M';
+    if (v >= 1e3) return 'R$ ' + (v/1e3).toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:0}) + 'K';
+    return 'R$ ' + v.toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:0});
+  }
+  function fmtMoedaFull(v) {
+    return 'R$ ' + Number(v).toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:0});
+  }
+  function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  // ── Toast ────────────────────────────────────────────────────────────────
+  let _toastTimer;
+  function showToast(msg, type) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = 'toast' + (type === 'err' ? ' err' : '') + ' show';
+    clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+  }
+
+  // Fechar modal ao clicar fora
+  document.getElementById('modalOverlay').addEventListener('click', e => {
+    if (e.target === document.getElementById('modalOverlay')) fecharModal();
+  });
+</script>
+</body>
+</html>

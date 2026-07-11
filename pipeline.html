@@ -450,27 +450,27 @@
         <div class="form-grid cols-3">
           <div class="form-group">
             <label class="form-label">AuC Global</label>
-            <input class="form-control" id="fAucGlobal" type="number" min="0" placeholder="0" oninput="calcAucPot()">
+            <input class="form-control" id="fAucGlobal" type="text" inputmode="numeric" placeholder="R$ 0" oninput="fmtInput(this);calcAucPot()">
           </div>
           <div class="form-group">
             <label class="form-label">Renda Fixa</label>
-            <input class="form-control" id="fRF" type="number" min="0" placeholder="0">
+            <input class="form-control" id="fRF" type="text" inputmode="numeric" placeholder="R$ 0" oninput="fmtInput(this)">
           </div>
           <div class="form-group">
             <label class="form-label">Renda Variável</label>
-            <input class="form-control" id="fRV" type="number" min="0" placeholder="0">
+            <input class="form-control" id="fRV" type="text" inputmode="numeric" placeholder="R$ 0" oninput="fmtInput(this)">
           </div>
           <div class="form-group">
             <label class="form-label">Fundos</label>
-            <input class="form-control" id="fFundos" type="number" min="0" placeholder="0">
+            <input class="form-control" id="fFundos" type="text" inputmode="numeric" placeholder="R$ 0" oninput="fmtInput(this)">
           </div>
           <div class="form-group">
             <label class="form-label">Previdência</label>
-            <input class="form-control" id="fPrev" type="number" min="0" placeholder="0">
+            <input class="form-control" id="fPrev" type="text" inputmode="numeric" placeholder="R$ 0" oninput="fmtInput(this)">
           </div>
           <div class="form-group">
             <label class="form-label">COE</label>
-            <input class="form-control" id="fCOE" type="number" min="0" placeholder="0">
+            <input class="form-control" id="fCOE" type="text" inputmode="numeric" placeholder="R$ 0" oninput="fmtInput(this)">
           </div>
         </div>
       </div>
@@ -529,11 +529,11 @@
           </div>
           <div class="form-group">
             <label class="form-label">Pipe Quente R$</label>
-            <input class="form-control" id="fPipeQuente" type="number" min="0" placeholder="Valor entrando este mês">
+            <input class="form-control" id="fPipeQuente" type="text" inputmode="numeric" placeholder="R$ 0" oninput="fmtInput(this)">
           </div>
           <div class="form-group">
             <label class="form-label">AuC BTG (já em custódia)</label>
-            <input class="form-control" id="fAucBTG" type="number" min="0" placeholder="0" oninput="calcAucPot()">
+            <input class="form-control" id="fAucBTG" type="text" inputmode="numeric" placeholder="R$ 0" oninput="fmtInput(this);calcAucPot()">
           </div>
         </div>
         <div style="margin-top:10px;padding:10px 14px;background:#f0f9ff;border-radius:8px;font-size:13px;color:#0369a1">
@@ -927,7 +927,16 @@
   }
 
   function preencherForm(c) {
-    const set = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val; };
+    const set = (id, val) => {
+      const el = document.getElementById(id);
+      if (!el || val == null) return;
+      if (MONETARY_IDS.has(id)) {
+        const num = parseFloat(val);
+        el.value = isNaN(num) ? '' : 'R$ ' + num.toLocaleString('pt-BR');
+      } else {
+        el.value = val;
+      }
+    };
     set('fNome',           c.nome);
     set('fContaAntiga',    c.conta_antiga);
     set('fOrigem',         c.origem);
@@ -958,35 +967,34 @@
   }
 
   function calcAucPot() {
-    const g = parseFloat(document.getElementById('fAucGlobal').value) || 0;
-    const b = parseFloat(document.getElementById('fAucBTG').value)    || 0;
+    const g = parseMonetary('fAucGlobal') || 0;
+    const b = parseMonetary('fAucBTG')    || 0;
     const pot = g - b;
     document.getElementById('aucPotLabel').textContent = pot >= 0 ? fmtMoedaFull(pot) : '—';
   }
 
   function coletarForm() {
     const get = id => document.getElementById(id)?.value?.trim() || null;
-    const getNum = id => { const v = parseFloat(document.getElementById(id)?.value); return isNaN(v) ? null : v; };
     return {
       nome:              get('fNome'),
       conta_antiga:      get('fContaAntiga'),
       origem:            get('fOrigem'),
       telefone:          get('fTelefone'),
       email:             get('fEmail'),
-      auc_global:        getNum('fAucGlobal'),
-      rf:                getNum('fRF'),
-      rv:                getNum('fRV'),
-      fundos:            getNum('fFundos'),
-      prev:              getNum('fPrev'),
-      coe:               getNum('fCOE'),
+      auc_global:        parseMonetary('fAucGlobal'),
+      rf:                parseMonetary('fRF'),
+      rv:                parseMonetary('fRV'),
+      fundos:            parseMonetary('fFundos'),
+      prev:              parseMonetary('fPrev'),
+      coe:               parseMonetary('fCOE'),
       ranking:           get('fRanking'),
       pipe:              get('fPipe'),
       primeiro_contato:  get('fPrimeiroContato'),
       retorno_positivo:  get('fRetornoPositivo'),
       status:            get('fStatus'),
       conta_btg:         get('fContaBTG'),
-      pipe_quente:       getNum('fPipeQuente'),
-      auc_btg:           getNum('fAucBTG'),
+      pipe_quente:       parseMonetary('fPipeQuente'),
+      auc_btg:           parseMonetary('fAucBTG'),
       plano_acao:        get('fPlanoAcao'),
       cliente_revertido: get('fClienteRevertido'),
       produtos:          ['fProd1','fProd2','fProd3','fProd4','fProd5'].map(id => get(id)).filter(Boolean),
@@ -1030,6 +1038,25 @@
   }
 
   function deletarCliente() { confirmarDelete(_editId); }
+
+  // ── Formatação de input monetário ────────────────────────────────────────
+  const MONETARY_IDS = new Set(['fAucGlobal','fRF','fRV','fFundos','fPrev','fCOE','fPipeQuente','fAucBTG']);
+
+  function fmtInput(el) {
+    const pos = el.selectionStart;
+    const raw = el.value.replace(/\D/g, '');
+    if (!raw) { el.value = ''; return; }
+    const num = parseInt(raw, 10);
+    el.value = 'R$ ' + num.toLocaleString('pt-BR');
+    // Mantém cursor no final
+    el.setSelectionRange(el.value.length, el.value.length);
+  }
+
+  function parseMonetary(id) {
+    const v = (document.getElementById(id)?.value || '').replace(/[R$\s.]/g, '').replace(',', '.');
+    const n = parseFloat(v);
+    return isNaN(n) ? null : n;
+  }
 
   // ── Formatação ───────────────────────────────────────────────────────────
   function fmtMoeda(v) {

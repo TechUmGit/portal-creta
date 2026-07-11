@@ -2191,3 +2191,273 @@ async def pipeline_deletar(
     except Exception as e:
         log.error(f"pipeline_deletar: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Pipeline: log de contatos ─────────────────────────────────────────────────
+
+class ContatoLog(BaseModel):
+    data:        str            # ISO date YYYY-MM-DD
+    tipo:        str            # Ligação | WhatsApp | Email | Reunião | Outro
+    resultado:   str
+    proximo_fup: Optional[str] = None   # ISO date
+
+
+def _contatos_col(doc_id: str):
+    return _pipeline_col().document(doc_id).collection("contatos")
+
+
+@app.get("/api/pipeline/{doc_id}/contatos")
+async def pipeline_contatos_listar(
+    doc_id: str,
+    authorization: Optional[str] = Header(default=None),
+):
+    """Lista o histórico de contatos de um cliente."""
+    token_data   = await verificar_token(authorization)
+    role         = token_data.get("role", "assessor")
+    assessor_uid = token_data.get("uid")
+
+    try:
+        ref = _pipeline_col().document(doc_id)
+        doc = ref.get()
+        if not doc.exists:
+            raise HTTPException(status_code=404, detail="Cliente não encontrado.")
+        if role != "admin" and doc.to_dict().get("assessor_uid") != assessor_uid:
+            raise HTTPException(status_code=403, detail="Sem permissão.")
+
+        docs = _contatos_col(doc_id).order_by("data", direction="DESCENDING").stream()
+        contatos = []
+        for d in docs:
+            c = d.to_dict() or {}
+            c["id"] = d.id
+            for k, v in c.items():
+                if hasattr(v, "isoformat"):
+                    c[k] = v.isoformat()
+            contatos.append(c)
+        return {"contatos": contatos}
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"pipeline_contatos_listar: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/pipeline/{doc_id}/contatos")
+async def pipeline_contatos_adicionar(
+    doc_id: str,
+    body: ContatoLog,
+    authorization: Optional[str] = Header(default=None),
+):
+    """Registra um contato no histórico e atualiza ultimo_contato/proximo_fup do cliente."""
+    token_data    = await verificar_token(authorization)
+    role          = token_data.get("role", "assessor")
+    assessor_uid  = token_data.get("uid")
+    assessor_name = token_data.get("assessor_name", "") or token_data.get("email", "")
+
+    try:
+        ref = _pipeline_col().document(doc_id)
+        doc = ref.get()
+        if not doc.exists:
+            raise HTTPException(status_code=404, detail="Cliente não encontrado.")
+        if role != "admin" and doc.to_dict().get("assessor_uid") != assessor_uid:
+            raise HTTPException(status_code=403, detail="Sem permissão.")
+
+        entrada = body.dict()
+        entrada["assessor_name"] = assessor_name
+        entrada["created_at"]    = datetime.utcnow().isoformat()
+
+        _contatos_col(doc_id).add(entrada)
+
+        # Atualiza campos principais do cliente
+        update_fields: dict = {
+            "ultimo_contato": body.data,
+            "updated_at":     datetime.utcnow().isoformat(),
+        }
+        if body.proximo_fup:
+            update_fields["proximo_fup"] = body.proximo_fup
+
+        ref.update(update_fields)
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"pipeline_contatos_adicionar: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Pipeline: template Excel + importação em lote ────────────────────────────
+
+PIPELINE_TEMPLATE_COLS = [
+    "Nome", "Telefone", "Email", "Conta Antiga", "Origem",
+    "AuC Global (R$)", "AuC BTG (R$)",
+    "Ranking", "Pipe", "Status", "Observações",
+]
+
+RANKING_OPTS = "Com certeza | Possivelmente | Stand By | Desafio | Não Vem"
+PIPE_OPTS    = "Quente | Morno | Frio | LEAD"
+
+
+@app.get("/api/pipeline/template")
+async def pipeline_template(
+    authorization: Optional[str] = Header(default=None),
+):
+    """Retorna um arquivo .xlsx como template para carga em lote."""
+    await verificar_token(authorization)
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Pipeline"
+
+    header_fill = PatternFill("solid", fgColor="0C1A35")
+    header_font = Font(bold=True, color="FFFFFF", size=11)
+    thin = Side(style="thin", color="D1D5DB")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    # Cabeçalho
+    for col_idx, col_name in enumerate(PIPELINE_TEMPLATE_COLS, start=1):
+        cell = ws.cell(row=1, column=col_idx, value=col_name)
+        cell.fill   = header_fill
+        cell.font   = header_font
+        cell.border = border
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    # 3 linhas de exemplo
+    exemplos = [
+        ["João Silva", "11999990001", "joao@email.com", "", "Indicação",
+         1500000, 0, "Com certeza", "Quente", "Primeiro contato feito", "Cliente VIP"],
+        ["Maria Souza", "11999990002", "maria@email.com", "12345", "LinkedIn",
+         500000, 200000, "Possivelmente", "Morno", "Aguardando retorno", ""],
+        ["Pedro Lima",  "11999990003", "",               "",      "Evento",
+         300000, None,   "Stand By",      "Frio",   "",                  "Amigo do cliente X"],
+    ]
+    example_fill = PatternFill("solid", fgColor="F0F9FF")
+    for row_idx, row in enumerate(exemplos, start=2):
+        for col_idx, val in enumerate(row, start=1):
+            cell = ws.cell(row=row_idx, column=col_idx, value=val)
+            cell.fill   = example_fill
+            cell.border = border
+            cell.alignment = Alignment(vertical="center")
+
+    # Linha de legenda (logo abaixo dos exemplos)
+    legend_row = len(exemplos) + 2
+    ws.cell(row=legend_row, column=1, value="⚠ Ranking válido:").font = Font(bold=True, color="92400E", size=10)
+    ws.cell(row=legend_row, column=2, value=RANKING_OPTS).font = Font(color="92400E", size=10)
+    ws.merge_cells(start_row=legend_row, start_column=2, end_row=legend_row, end_column=6)
+
+    legend_row2 = legend_row + 1
+    ws.cell(row=legend_row2, column=1, value="⚠ Pipe válido:").font = Font(bold=True, color="1E40AF", size=10)
+    ws.cell(row=legend_row2, column=2, value=PIPE_OPTS).font = Font(color="1E40AF", size=10)
+    ws.merge_cells(start_row=legend_row2, start_column=2, end_row=legend_row2, end_column=6)
+
+    # Larguras
+    widths = [28, 16, 28, 16, 20, 18, 18, 18, 12, 24, 36]
+    for i, w in enumerate(widths, start=1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+    ws.row_dimensions[1].height = 30
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=pipeline_template.xlsx"},
+    )
+
+
+PIPELINE_COL_MAP = {
+    "nome":        "Nome",
+    "telefone":    "Telefone",
+    "email":       "Email",
+    "conta_antiga":"Conta Antiga",
+    "origem":      "Origem",
+    "auc_global":  "AuC Global (R$)",
+    "auc_btg":     "AuC BTG (R$)",
+    "ranking":     "Ranking",
+    "pipe":        "Pipe",
+    "status":      "Status",
+    "observacoes": "Observações",
+}
+
+VALID_RANKING = {"Com certeza", "Possivelmente", "Stand By", "Desafio", "Não Vem"}
+VALID_PIPE    = {"Quente", "Morno", "Frio", "LEAD"}
+
+
+@app.post("/api/pipeline/import")
+async def pipeline_importar(
+    file: UploadFile = File(...),
+    authorization: Optional[str] = Header(default=None),
+):
+    """Importa clientes em lote a partir de um arquivo .xlsx."""
+    token_data    = await verificar_token(authorization)
+    assessor_uid  = token_data.get("uid")
+    assessor_name = token_data.get("assessor_name", "") or token_data.get("email", "")
+
+    content = await file.read()
+    try:
+        df = pd.read_excel(io.BytesIO(content), dtype=str)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erro ao ler Excel: {e}")
+
+    # Mapeamento inverso: coluna do Excel → campo interno
+    inv = {v: k for k, v in PIPELINE_COL_MAP.items()}
+    df.rename(columns=inv, inplace=True)
+
+    erros   = []
+    criados = 0
+    col     = _pipeline_col()
+    agora   = datetime.utcnow().isoformat()
+
+    for i, row in df.iterrows():
+        nome = str(row.get("nome", "") or "").strip()
+        if not nome or nome.lower() == "nan":
+            continue  # pula linhas vazias
+
+        ranking = str(row.get("ranking", "") or "").strip()
+        pipe    = str(row.get("pipe",    "") or "").strip()
+
+        if ranking and ranking not in VALID_RANKING:
+            erros.append(f"Linha {i+2}: Ranking inválido '{ranking}'")
+            continue
+        if pipe and pipe not in VALID_PIPE:
+            erros.append(f"Linha {i+2}: Pipe inválido '{pipe}'")
+            continue
+
+        def _num(v):
+            try:
+                return float(str(v).replace(",", ".")) if v and str(v).strip() not in ("", "nan") else None
+            except Exception:
+                return None
+
+        auc_global = _num(row.get("auc_global"))
+        auc_btg    = _num(row.get("auc_btg"))
+
+        dados = {
+            "nome":          nome,
+            "telefone":      str(row.get("telefone") or "").strip() or None,
+            "email":         str(row.get("email")    or "").strip() or None,
+            "conta_antiga":  str(row.get("conta_antiga") or "").strip() or None,
+            "origem":        str(row.get("origem")   or "").strip() or None,
+            "auc_global":    auc_global,
+            "auc_btg":       auc_btg,
+            "auc_potencial": round((auc_global or 0) - (auc_btg or 0), 2),
+            "ranking":       ranking or None,
+            "pipe":          pipe    or None,
+            "status":        str(row.get("status")      or "").strip() or None,
+            "observacoes":   str(row.get("observacoes") or "").strip() or None,
+            "assessor_uid":  assessor_uid,
+            "assessor_name": assessor_name,
+            "created_at":    agora,
+            "updated_at":    agora,
+        }
+        try:
+            col.add(dados)
+            criados += 1
+        except Exception as e:
+            erros.append(f"Linha {i+2}: {e}")
+
+    return {"ok": True, "criados": criados, "erros": erros}

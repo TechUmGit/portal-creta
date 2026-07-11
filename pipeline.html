@@ -163,6 +163,32 @@
     .btn-secondary:hover { background: #e8ebf2; }
     .btn-danger { padding: 9px 18px; background: #fee2e2; color: #dc2626; border: 1px solid #fecaca; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
     .btn-danger:hover { background: #fecaca; }
+    .btn-outline { display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px; background: #fff; color: #374151; border: 1.5px solid #d1d5db; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; transition: all 0.15s; white-space: nowrap; }
+    .btn-outline:hover { border-color: #0c1a35; color: #0c1a35; background: #f8f9fc; }
+
+    /* CONTACT LOG */
+    .log-section { margin-top: 4px; }
+    .log-toggle { display: flex; align-items: center; gap: 8px; background: none; border: none; cursor: pointer; font-family: inherit; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #9ca3af; padding: 0 0 10px; width: 100%; border-bottom: 1px solid #f0f3f8; }
+    .log-toggle svg { transition: transform 0.2s; }
+    .log-toggle.open svg { transform: rotate(90deg); }
+    .log-body { display: none; padding-top: 16px; }
+    .log-body.open { display: block; }
+    .log-add-form { background: #f8f9fc; border-radius: 10px; padding: 14px; margin-bottom: 16px; }
+    .log-add-title { font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 10px; }
+    .log-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+    .log-timeline { display: flex; flex-direction: column; gap: 10px; }
+    .log-entry { display: flex; gap: 12px; }
+    .log-dot-col { display: flex; flex-direction: column; align-items: center; }
+    .log-dot { width: 10px; height: 10px; border-radius: 50%; background: #0bb5d5; flex-shrink: 0; margin-top: 4px; }
+    .log-line { width: 2px; background: #e8ebf2; flex: 1; margin-top: 4px; }
+    .log-card { flex: 1; background: #f8f9fc; border-radius: 8px; padding: 10px 14px; margin-bottom: 0; }
+    .log-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .log-tipo { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 12px; background: #e0f2fe; color: #0369a1; }
+    .log-data { font-size: 11px; color: #9ca3af; }
+    .log-resultado { font-size: 13px; color: #374151; line-height: 1.5; }
+    .log-fup { font-size: 11px; color: #16a34a; margin-top: 4px; }
+    .log-assessor { font-size: 11px; color: #9ca3af; margin-top: 2px; }
+    .log-empty { text-align: center; padding: 20px; color: #9ca3af; font-size: 13px; }
 
     /* TOAST */
     .toast { position: fixed; bottom: 24px; right: 24px; background: #0c1a35; color: #fff; padding: 12px 20px; border-radius: 10px; font-size: 13px; font-weight: 500; z-index: 9999; transform: translateY(100px); opacity: 0; transition: all 0.3s; pointer-events: none; }
@@ -336,10 +362,21 @@
         <button class="chip frio"   data-pipe="Frio"   onclick="setFiltro(this)">🔵 Frio</button>
         <button class="chip lead"   data-pipe="LEAD"   onclick="setFiltro(this)">🟣 Lead</button>
       </div>
-      <button class="btn-primary" onclick="abrirModal()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        Novo Cliente
-      </button>
+      <div style="display:flex;gap:8px;margin-left:auto">
+        <button class="btn-outline" onclick="baixarTemplate()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Baixar Template
+        </button>
+        <button class="btn-outline" onclick="document.getElementById('importInput').click()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Importar Excel
+        </button>
+        <input type="file" id="importInput" accept=".xlsx" style="display:none" onchange="importarExcel(this)">
+        <button class="btn-primary" onclick="abrirModal()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Novo Cliente
+        </button>
+      </div>
     </div>
 
     <!-- TABLE -->
@@ -605,6 +642,51 @@
         </div>
       </div>
 
+      <!-- 8. Log de Contatos (só aparece no modo edição) -->
+      <div class="log-section" id="logSection" style="display:none">
+        <button class="log-toggle" id="logToggle" onclick="toggleLog()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          Histórico de Contatos
+          <span id="logCount" style="margin-left:auto;background:#e0f2fe;color:#0369a1;padding:1px 8px;border-radius:10px;font-size:10px"></span>
+        </button>
+        <div class="log-body" id="logBody">
+          <!-- Form para novo contato -->
+          <div class="log-add-form">
+            <div class="log-add-title">Registrar novo contato</div>
+            <div class="log-form-row">
+              <div class="form-group">
+                <label class="form-label">Data</label>
+                <input class="form-control" id="lData" type="date">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Tipo</label>
+                <select class="form-control" id="lTipo">
+                  <option value="">— Selecione —</option>
+                  <option>Ligação</option>
+                  <option>WhatsApp</option>
+                  <option>Email</option>
+                  <option>Reunião</option>
+                  <option>Outro</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group" style="margin-bottom:10px">
+              <label class="form-label">Resultado / O que aconteceu</label>
+              <textarea class="form-control" id="lResultado" placeholder="Descreva o que aconteceu neste contato..." style="min-height:60px"></textarea>
+            </div>
+            <div class="form-group" style="margin-bottom:12px">
+              <label class="form-label">Próximo FUP combinado</label>
+              <input class="form-control" id="lProximoFup" type="date">
+            </div>
+            <button class="btn-primary" style="padding:7px 16px;font-size:12px" onclick="registrarContato()">Salvar contato</button>
+          </div>
+          <!-- Timeline -->
+          <div class="log-timeline" id="logTimeline">
+            <div class="log-empty">Nenhum contato registrado.</div>
+          </div>
+        </div>
+      </div>
+
     </div>
     <div class="modal-footer">
       <button class="btn-danger" id="btnDeletar" style="display:none;margin-right:auto" onclick="deletarCliente()">Excluir</button>
@@ -804,9 +886,22 @@
     document.getElementById('btnDeletar').style.display = id ? '' : 'none';
     document.getElementById('modalTitle').textContent = id ? 'Editar Cliente' : 'Novo Cliente';
 
+    // Log section: só aparece no modo edição
+    const logSection = document.getElementById('logSection');
+    const logToggle  = document.getElementById('logToggle');
+    const logBody    = document.getElementById('logBody');
+    logSection.style.display = id ? '' : 'none';
+    logToggle.classList.remove('open');
+    logBody.classList.remove('open');
+    document.getElementById('logTimeline').innerHTML = '<div class="log-empty">Nenhum contato registrado.</div>';
+    document.getElementById('logCount').textContent = '';
+    ['lData','lTipo','lResultado','lProximoFup'].forEach(i => { document.getElementById(i).value = ''; });
+
     if (id) {
       const c = _clientes.find(x => x.id === id);
       if (c) preencherForm(c);
+      // Pré-carrega log em background (sem bloquear abertura do modal)
+      carregarLog(id);
     }
     document.getElementById('modalOverlay').classList.add('open');
   }
@@ -956,6 +1051,130 @@
     el.className = 'toast' + (type === 'err' ? ' err' : '') + ' show';
     clearTimeout(_toastTimer);
     _toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+  }
+
+  // ── Log de Contatos ──────────────────────────────────────────────────────
+  function toggleLog() {
+    const toggle = document.getElementById('logToggle');
+    const body   = document.getElementById('logBody');
+    toggle.classList.toggle('open');
+    body.classList.toggle('open');
+  }
+
+  async function carregarLog(id) {
+    try {
+      const res = await fetch(`${API_URL}/api/pipeline/${id}/contatos`, {
+        headers: { Authorization: `Bearer ${_token}` }
+      });
+      const json = await res.json();
+      renderLog(json.contatos || []);
+    } catch(e) {
+      document.getElementById('logTimeline').innerHTML =
+        `<div class="log-empty" style="color:#dc2626">Erro ao carregar histórico.</div>`;
+    }
+  }
+
+  function renderLog(contatos) {
+    document.getElementById('logCount').textContent = contatos.length || '';
+    if (!contatos.length) {
+      document.getElementById('logTimeline').innerHTML =
+        '<div class="log-empty">Nenhum contato registrado.</div>';
+      return;
+    }
+    const TIPO_ICONS = { Ligação: '📞', WhatsApp: '💬', Email: '✉️', Reunião: '🤝', Outro: '📌' };
+    document.getElementById('logTimeline').innerHTML = contatos.map((c, i) => {
+      const icon = TIPO_ICONS[c.tipo] || '📌';
+      const dataFmt = c.data ? new Date(c.data + 'T00:00:00').toLocaleDateString('pt-BR') : '—';
+      const fupFmt  = c.proximo_fup ? new Date(c.proximo_fup + 'T00:00:00').toLocaleDateString('pt-BR') : null;
+      return `<div class="log-entry">
+        <div class="log-dot-col">
+          <div class="log-dot"></div>
+          ${i < contatos.length - 1 ? '<div class="log-line"></div>' : ''}
+        </div>
+        <div class="log-card">
+          <div class="log-card-header">
+            <span class="log-tipo">${icon} ${c.tipo}</span>
+            <span class="log-data">${dataFmt}</span>
+          </div>
+          <div class="log-resultado">${esc(c.resultado || '')}</div>
+          ${fupFmt ? `<div class="log-fup">📅 Próximo FUP: ${fupFmt}</div>` : ''}
+          ${c.assessor_name ? `<div class="log-assessor">por ${c.assessor_name}</div>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  async function registrarContato() {
+    if (!_editId) return;
+    const data      = document.getElementById('lData').value;
+    const tipo      = document.getElementById('lTipo').value;
+    const resultado = document.getElementById('lResultado').value.trim();
+    const fup       = document.getElementById('lProximoFup').value;
+
+    if (!data || !tipo || !resultado) {
+      showToast('Preencha data, tipo e resultado.', 'err'); return;
+    }
+
+    try {
+      const res = await fetch(`${API_URL}/api/pipeline/${_editId}/contatos`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data, tipo, resultado, proximo_fup: fup || null }),
+      });
+      if (!res.ok) throw new Error((await res.json()).detail || `HTTP ${res.status}`);
+      // Limpa form
+      ['lData','lTipo','lResultado','lProximoFup'].forEach(id => { document.getElementById(id).value = ''; });
+      // Atualiza último contato e FUP nos campos do form principal
+      if (data) document.getElementById('fUltimoContato').value = data;
+      if (fup)  document.getElementById('fProximoFup').value    = fup;
+      showToast('Contato registrado.');
+      await carregarLog(_editId);
+      // Recarrega lista para atualizar FUP na tabela
+      await carregarPipeline();
+    } catch(e) { showToast(e.message, 'err'); }
+  }
+
+  // ── Template e Importação ────────────────────────────────────────────────
+  async function baixarTemplate() {
+    try {
+      const res = await fetch(`${API_URL}/api/pipeline/template`, {
+        headers: { Authorization: `Bearer ${_token}` }
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = 'pipeline_template.xlsx';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch(e) { showToast('Erro ao baixar template: ' + e.message, 'err'); }
+  }
+
+  async function importarExcel(input) {
+    const file = input.files[0];
+    if (!file) return;
+    input.value = '';  // reset para poder re-importar o mesmo arquivo
+
+    const form = new FormData();
+    form.append('file', file);
+
+    showToast('Importando...');
+    try {
+      const res = await fetch(`${API_URL}/api/pipeline/import`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${_token}` },
+        body: form,
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.detail || `HTTP ${res.status}`);
+
+      const errosTxt = json.erros?.length
+        ? `\n${json.erros.length} erro(s): ${json.erros.slice(0,3).join('; ')}`
+        : '';
+      showToast(`${json.criados} cliente(s) importado(s).${errosTxt}`);
+      await carregarPipeline();
+    } catch(e) { showToast('Erro na importação: ' + e.message, 'err'); }
   }
 
   // Fechar modal ao clicar fora

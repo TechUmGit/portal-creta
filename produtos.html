@@ -300,7 +300,7 @@
           <div style="font-size:16px;font-weight:700;color:#0c1a35;margin-bottom:4px">Carteira Recomendada de Ações</div>
           <div style="font-size:13px;color:#6b7280">Selecione uma carteira para ver a alocação detalhada</div>
         </div>
-        <button id="btnFiltroComite" class="comite-filtro-btn" onclick="toggleFiltroComite(this)">★ Recomendadas pelo Comitê</button>
+        <button id="btnFiltroComite" class="comite-filtro-btn ativo" onclick="toggleFiltroComite(this)">★ Só recomendadas</button>
       </div>
 
       <div class="tabs-wrap" id="carteirasTabs">
@@ -398,7 +398,7 @@
   let _carteiras    = [];
   let _ativa        = null;
   let _comiteRec    = new Set();
-  let _filtroComite = false;
+  let _filtroComite = true;
   let _rfData       = [];
   let _rfTipoAtivo  = '';
   let _rfRec        = new Set();

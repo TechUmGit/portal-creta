@@ -167,6 +167,11 @@
     .ir-badge { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 5px; background: #f0fdf4; color: #15803d; }
     .ir-badge.nao { background: #f9fafb; color: #9ca3af; }
     .risco-badge { font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 5px; background: #f8f9fc; color: #374151; }
+    .rf-th { cursor: pointer; user-select: none; white-space: nowrap; }
+    .rf-th:hover { color: #0c1a35; background: #eef3ff; }
+    .rf-th.sorted { color: #0bb5d5; }
+    .sort-icon { margin-left: 4px; font-size: 10px; opacity: 0.5; }
+    .rf-th.sorted .sort-icon { opacity: 1; color: #0bb5d5; }
   </style>
 </head>
 <body>
@@ -350,20 +355,20 @@
         <div class="table-wrap">
           <table class="data-table">
             <thead>
-              <tr>
+              <tr id="rfTheadRow">
                 <th style="width:36px;text-align:center" title="Recomendado pelo Comitê">★</th>
-                <th>Tipo</th>
-                <th>Emissor</th>
-                <th>Risco</th>
-                <th>Indexador</th>
-                <th class="num">Rentabilidade</th>
-                <th class="num">CDI Equiv.</th>
-                <th class="num">Taxa a.a.</th>
-                <th class="num">Prazo (meses)</th>
-                <th>Vencimento</th>
-                <th class="num">Mín. Aplic. (R$)</th>
-                <th>Liquidez</th>
-                <th>IR Isento</th>
+                <th class="rf-th" onclick="sortRF('productName')">Tipo<span class="sort-icon">⇅</span></th>
+                <th class="rf-th" onclick="sortRF('issuerName')">Emissor<span class="sort-icon">⇅</span></th>
+                <th class="rf-th" onclick="sortRF('riskLevel')">Risco<span class="sort-icon">⇅</span></th>
+                <th class="rf-th" onclick="sortRF('indexCaptureName')">Indexador<span class="sort-icon">⇅</span></th>
+                <th class="rf-th num" onclick="sortRF('_rentVal')">Rentabilidade<span class="sort-icon">⇅</span></th>
+                <th class="rf-th num" onclick="sortRF('cdbCdiIndexEquivalent')">CDI Equiv.<span class="sort-icon">⇅</span></th>
+                <th class="rf-th num" onclick="sortRF('cdbYearIndexEquivalent')">Taxa a.a.<span class="sort-icon">⇅</span></th>
+                <th class="rf-th num" onclick="sortRF('amountTimeMonth')">Prazo (meses)<span class="sort-icon">⇅</span></th>
+                <th class="rf-th" onclick="sortRF('applicationDeadline')">Vencimento<span class="sort-icon">⇅</span></th>
+                <th class="rf-th num" onclick="sortRF('minAplicationValue')">Mín. Aplic. (R$)<span class="sort-icon">⇅</span></th>
+                <th class="rf-th" onclick="sortRF('typeLiquidityName')">Liquidez<span class="sort-icon">⇅</span></th>
+                <th class="rf-th" onclick="sortRF('incomeTaxFree')">IR Isento<span class="sort-icon">⇅</span></th>
               </tr>
             </thead>
             <tbody id="rfTbody"></tbody>
@@ -404,6 +409,8 @@
   let _rfRec        = new Set();
   let _rfFiltroRec  = true;
   let _segmento     = 'rv';
+  let _rfSortCol    = null;
+  let _rfSortDir    = 1; // 1 = asc, -1 = desc
 
   // ── Auth ──────────────────────────────────────────────────────────────────
   auth.onAuthStateChanged(async function(user) {
@@ -487,6 +494,32 @@
     }
   }
 
+  function sortRF(col) {
+    if (_rfSortCol === col) {
+      _rfSortDir = -_rfSortDir;
+    } else {
+      _rfSortCol = col;
+      _rfSortDir = 1;
+    }
+    // Atualiza visual dos headers
+    document.querySelectorAll('.rf-th').forEach(th => {
+      th.classList.remove('sorted');
+      const icon = th.querySelector('.sort-icon');
+      if (icon) icon.textContent = '⇅';
+    });
+    const ths = document.querySelectorAll('#rfTheadRow .rf-th');
+    const cols = ['productName','issuerName','riskLevel','indexCaptureName','_rentVal',
+                  'cdbCdiIndexEquivalent','cdbYearIndexEquivalent','amountTimeMonth',
+                  'applicationDeadline','minAplicationValue','typeLiquidityName','incomeTaxFree'];
+    const idx = cols.indexOf(col);
+    if (idx >= 0 && ths[idx]) {
+      ths[idx].classList.add('sorted');
+      const icon = ths[idx].querySelector('.sort-icon');
+      if (icon) icon.textContent = _rfSortDir === 1 ? '▲' : '▼';
+    }
+    renderRF();
+  }
+
   function filtrarRF(btn, tipo) {
     _rfTipoAtivo = tipo;
     document.querySelectorAll('.rf-tipo-btn').forEach(b => b.classList.remove('active'));
@@ -517,9 +550,30 @@
     } catch(e) { alert('Erro ao atualizar recomendação: ' + e.message); }
   }
 
+  function rfSortVal(r, col) {
+    if (col === '_rentVal') {
+      return r.indexCaptureName === 'PRE'
+        ? (r.taxValue ?? 0)
+        : (r.percentIndexValue ?? r.taxValue ?? 0);
+    }
+    const v = r[col];
+    if (v == null) return col === 'applicationDeadline' ? '9999' : (typeof v === 'number' ? -Infinity : '');
+    return v;
+  }
+
   function renderRF() {
     let dados = _rfTipoAtivo ? _rfData.filter(r => r.productName === _rfTipoAtivo) : _rfData;
     if (_rfFiltroRec) dados = dados.filter(r => _rfRec.has(r.productID));
+
+    if (_rfSortCol) {
+      dados = [...dados].sort((a, b) => {
+        const va = rfSortVal(a, _rfSortCol);
+        const vb = rfSortVal(b, _rfSortCol);
+        if (va < vb) return -1 * _rfSortDir;
+        if (va > vb) return  1 * _rfSortDir;
+        return 0;
+      });
+    }
     if (!dados.length) {
       document.getElementById('rfTbody').innerHTML =
         `<tr><td colspan="13" style="text-align:center;padding:40px;color:#9ca3af">Nenhum produto encontrado</td></tr>`;

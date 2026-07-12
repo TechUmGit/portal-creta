@@ -274,12 +274,36 @@
 
     <!-- SELETOR DE SEGMENTO -->
     <div class="seg-bar">
-      <button class="seg-btn active" id="segBtnRV" onclick="switchSegmento('rv')">Renda Variável</button>
-      <button class="seg-btn"        id="segBtnRF" onclick="switchSegmento('rf')">Renda Fixa</button>
+      <button class="seg-btn active" id="segBtnDest"   onclick="switchSegmento('destaques')">⭐ Destaques</button>
+      <button class="seg-btn"        id="segBtnRV"     onclick="switchSegmento('rv')">Renda Variável</button>
+      <button class="seg-btn"        id="segBtnRF"     onclick="switchSegmento('rf')">Renda Fixa</button>
+      <button class="seg-btn"        id="segBtnOP"     onclick="switchSegmento('op')">Ofertas Públicas</button>
+      <button class="seg-btn"        id="segBtnPE"     onclick="switchSegmento('pe')">Produtos Estruturados</button>
+    </div>
+
+    <!-- ═══ DESTAQUES ═══ -->
+    <div id="secaoDestaques">
+      <div id="destRVSection">
+        <div style="font-size:15px;font-weight:700;color:#0c1a35;margin-bottom:16px;display:flex;align-items:center;gap:8px">
+          <span>📈</span> Carteiras Recomendadas de Ações
+        </div>
+        <div id="destRVContent">
+          <div class="empty-state"><div class="empty-state-icon">⭐</div><div class="empty-state-title">Nenhuma carteira favoritada</div></div>
+        </div>
+      </div>
+      <div style="border-top:1px solid #e8ebf2;margin:28px 0"></div>
+      <div id="destRFSection">
+        <div style="font-size:15px;font-weight:700;color:#0c1a35;margin-bottom:16px;display:flex;align-items:center;gap:8px">
+          <span>📊</span> Renda Fixa Recomendada
+        </div>
+        <div id="destRFContent">
+          <div class="empty-state"><div class="empty-state-icon">⭐</div><div class="empty-state-title">Nenhum produto de RF favoritado</div></div>
+        </div>
+      </div>
     </div>
 
     <!-- ═══ RENDA VARIÁVEL ═══ -->
-    <div id="secaoRV">
+    <div id="secaoRV" style="display:none">
       <!-- KPIs -->
       <div class="kpi-grid">
         <div class="kpi">
@@ -305,7 +329,7 @@
           <div style="font-size:16px;font-weight:700;color:#0c1a35;margin-bottom:4px">Carteira Recomendada de Ações</div>
           <div style="font-size:13px;color:#6b7280">Selecione uma carteira para ver a alocação detalhada</div>
         </div>
-        <button id="btnFiltroComite" class="comite-filtro-btn ativo" onclick="toggleFiltroComite(this)">★ Só recomendadas</button>
+        <button id="btnFiltroComite" class="comite-filtro-btn" onclick="toggleFiltroComite(this)">★ Recomendadas pelo Comitê</button>
       </div>
 
       <div class="tabs-wrap" id="carteirasTabs">
@@ -347,7 +371,7 @@
           <span style="font-size:12px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em">Filtrar:</span>
           <div id="rfFiltros" style="display:flex;gap:6px;flex-wrap:wrap"></div>
         </div>
-        <button id="btnFiltroRF" class="comite-filtro-btn ativo" onclick="toggleFiltroRF(this)">★ Só recomendadas</button>
+        <button id="btnFiltroRF" class="comite-filtro-btn" onclick="toggleFiltroRF(this)">★ Recomendadas pelo Comitê</button>
       </div>
 
       <!-- Tabela RF -->
@@ -377,6 +401,24 @@
       </div>
     </div>
 
+    <!-- ═══ OFERTAS PÚBLICAS ═══ -->
+    <div id="secaoOP" style="display:none">
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;text-align:center">
+        <div style="font-size:48px;margin-bottom:16px">🏦</div>
+        <div style="font-size:18px;font-weight:700;color:#0c1a35;margin-bottom:8px">Ofertas Públicas</div>
+        <div style="font-size:14px;color:#9ca3af;max-width:360px">Em breve. Os dados de IPOs, FIIs e debêntures aparecerão aqui quando disponíveis.</div>
+      </div>
+    </div>
+
+    <!-- ═══ PRODUTOS ESTRUTURADOS ═══ -->
+    <div id="secaoPE" style="display:none">
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;text-align:center">
+        <div style="font-size:48px;margin-bottom:16px">🧩</div>
+        <div style="font-size:18px;font-weight:700;color:#0c1a35;margin-bottom:8px">Produtos Estruturados</div>
+        <div style="font-size:14px;color:#9ca3af;max-width:360px">Em breve. COEs, notas estruturadas e outros produtos aparecerão aqui quando disponíveis.</div>
+      </div>
+    </div>
+
   </div>
 </main>
 </div>
@@ -403,12 +445,12 @@
   let _carteiras    = [];
   let _ativa        = null;
   let _comiteRec    = new Set();
-  let _filtroComite = true;
+  let _filtroComite = false;
   let _rfData       = [];
   let _rfTipoAtivo  = '';
   let _rfRec        = new Set();
-  let _rfFiltroRec  = true;
-  let _segmento     = 'rv';
+  let _rfFiltroRec  = false;
+  let _segmento     = 'destaques';
   let _rfSortCol    = null;
   let _rfSortDir    = 1; // 1 = asc, -1 = desc
 
@@ -455,11 +497,86 @@
   // ── Segmento switcher ────────────────────────────────────────────────────
   function switchSegmento(seg) {
     _segmento = seg;
-    document.getElementById('secaoRV').style.display = seg === 'rv' ? '' : 'none';
-    document.getElementById('secaoRF').style.display = seg === 'rf' ? '' : 'none';
+    document.getElementById('secaoDestaques').style.display = seg === 'destaques' ? '' : 'none';
+    document.getElementById('secaoRV').style.display        = seg === 'rv'         ? '' : 'none';
+    document.getElementById('secaoRF').style.display        = seg === 'rf'         ? '' : 'none';
+    document.getElementById('secaoOP').style.display        = seg === 'op'         ? '' : 'none';
+    document.getElementById('secaoPE').style.display        = seg === 'pe'         ? '' : 'none';
+    document.getElementById('segBtnDest').classList.toggle('active', seg === 'destaques');
     document.getElementById('segBtnRV').classList.toggle('active', seg === 'rv');
+    document.getElementById('segBtnOP').classList.toggle('active', seg === 'op');
+    document.getElementById('segBtnPE').classList.toggle('active', seg === 'pe');
     document.getElementById('segBtnRF').classList.toggle('active', seg === 'rf');
     if (seg === 'rf' && _rfData.length === 0) carregarRendaFixa();
+    if (seg === 'destaques') renderDestaques();
+  }
+
+  // ── Destaques ─────────────────────────────────────────────────────────────
+  function renderDestaques() {
+    // RV: carteiras com estrela — exibe como cards clicáveis
+    const rvEl  = document.getElementById('destRVContent');
+    const rvFav = _carteiras.filter(c => _comiteRec.has(c));
+    if (!rvFav.length) {
+      rvEl.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⭐</div><div class="empty-state-title">Nenhuma carteira favoritada</div></div>';
+    } else {
+      rvEl.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:10px">${rvFav.map(c =>
+        `<button onclick="switchSegmento('rv');setTimeout(()=>ativarCarteira('${c}'),50)"
+          style="padding:10px 18px;background:#fff;border:1.5px solid #e8ebf2;border-radius:10px;
+                 font-size:13px;font-weight:600;color:#0c1a35;cursor:pointer;font-family:inherit;
+                 transition:all 0.15s;display:flex;align-items:center;gap:8px"
+          onmouseover="this.style.borderColor='#0bb5d5'" onmouseout="this.style.borderColor='#e8ebf2'">
+          <span style="color:#f59e0b">★</span> ${c}
+        </button>`
+      ).join('')}</div>
+      <div style="margin-top:12px;font-size:12px;color:#9ca3af">Clique em uma carteira para ver a alocação completa em Renda Variável.</div>`;
+    }
+
+    // RF: produtos com estrela
+    const rfEl = document.getElementById('destRFContent');
+    if (_rfData.length === 0) {
+      rfEl.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⏳</div><div class="empty-state-title">Carregando RF...</div></div>';
+      carregarRendaFixa().then(() => renderDestRF());
+    } else {
+      renderDestRF();
+    }
+  }
+
+  function renderDestRF() {
+    const rfEl   = document.getElementById('destRFContent');
+    const favRF  = _rfData.filter(r => _rfRec.has(r.productID));
+    if (!favRF.length) {
+      rfEl.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⭐</div><div class="empty-state-title">Nenhum produto de RF favoritado</div></div>';
+      return;
+    }
+    rfEl.innerHTML = `<div class="table-card"><div class="table-wrap"><table class="data-table">
+      <thead><tr>
+        <th>Tipo</th><th>Emissor</th><th>Risco</th><th>Indexador</th>
+        <th class="num">Rentabilidade</th><th class="num">CDI Equiv.</th>
+        <th class="num">Prazo (m)</th><th>Vencimento</th><th class="num">Mín. Aplic.</th><th>Liquidez</th>
+      </tr></thead>
+      <tbody>${favRF.map(r => {
+        const rentVal = r.indexCaptureName === 'PRE' ? r.taxValue : r.percentIndexValue;
+        const rentFmt = r.indexCaptureName === 'PRE'
+          ? (rentVal != null ? rentVal.toFixed(2) + '% a.a.' : '—')
+          : (rentVal != null ? rentVal.toFixed(2) + '% do CDI' : '—');
+        const cdiEq   = r.cdbCdiIndexEquivalent != null ? r.cdbCdiIndexEquivalent.toFixed(2) + '%' : '—';
+        const minAp   = r.minAplicationValue != null ? 'R$ ' + Number(r.minAplicationValue).toLocaleString('pt-BR') : '—';
+        const tipo    = r.productName || '—';
+        const tipoCls = 'tipo-' + (tipo.replace(/\s/g,'').toUpperCase());
+        return `<tr>
+          <td><span class="tipo-badge ${tipoCls}">${tipo}</span></td>
+          <td style="font-weight:500">${r.issuerName || '—'}</td>
+          <td><span class="risco-badge">${r.riskLevel || '—'}</span></td>
+          <td>${r.indexCaptureName || '—'}</td>
+          <td class="num" style="font-weight:600;color:#0c1a35">${rentFmt}</td>
+          <td class="num">${cdiEq}</td>
+          <td class="num">${r.amountTimeMonth ?? '—'}</td>
+          <td>${r.applicationDeadline ? new Date(r.applicationDeadline).toLocaleDateString('pt-BR') : '—'}</td>
+          <td class="num">${minAp}</td>
+          <td>${r.typeLiquidityName || '—'}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div></div>`;
   }
 
   // ── Renda Fixa ───────────────────────────────────────────────────────────
@@ -660,6 +777,8 @@
       }
 
       renderTabs();
+      // Se a aba ativa for Destaques, renderiza agora que os dados chegaram
+      if (_segmento === 'destaques') renderDestaques();
     } catch(e) {
       document.getElementById('heroSub').textContent = 'Erro ao carregar produtos.';
       document.getElementById('tabContent').innerHTML =
@@ -765,6 +884,11 @@
     btns.forEach(b => { if (b.textContent === carteira) btn = b; });
     selecionarTab(carteira, btn);
     document.getElementById('tabsHeader').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function ativarCarteira(nome) {
+    const btn = [...document.querySelectorAll('.tab-btn')].find(b => b.textContent.trim() === nome);
+    if (btn) selecionarTab(nome, btn);
   }
 
   function selecionarTab(carteira, btn) {

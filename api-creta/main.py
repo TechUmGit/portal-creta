@@ -177,7 +177,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
 
@@ -807,15 +807,29 @@ async def posicao(
     authorization: Optional[str] = Header(default=None),
 ):
     """
-    Retorna AUC total e contagem de contas ativas para a data mais recente
-    da tabela posicao_das_contas.
+    Retorna AUC total e contagem de contas ativas para a data mais recente.
+    Admin → totais do escritório. Assessor → apenas suas contas.
     """
-    await verificar_token(authorization)  # exige login; sem filtro por assessor (tabela não tem coluna Assessor)
+    token_data    = await verificar_token(authorization)
+    role          = token_data.get("role", "assessor")
+    assessor_name = token_data.get("assessor_name")
+    is_admin      = role == "admin"
 
-    cache_key = "posicao:snapshot"
+    filter_assessor = None if is_admin else assessor_name
+
+    cache_key = f"posicao:snapshot:{filter_assessor or 'all'}"
     cached = cache_get(cache_key)
     if cached:
         return cached
+
+    if filter_assessor:
+        join_assessor = f"INNER JOIN {_mapa_assessor_sq()} ma ON SAFE_CAST(TRIM(p.Conta) AS INT64) = ma.Conta"
+        where_assessor = "AND UPPER(ma.Assessor) = UPPER(@assessor)"
+        qp = [ScalarQueryParameter("assessor", "STRING", filter_assessor)]
+    else:
+        join_assessor  = ""
+        where_assessor = ""
+        qp = []
 
     sql = f"""
         WITH ultima_data AS (
@@ -828,13 +842,18 @@ async def posicao(
             ud.max_data                     AS data_referencia
         FROM {TABLE_POSICAO} p
         CROSS JOIN ultima_data ud
+        {join_assessor}
         WHERE DATE(p.Data) = ud.max_data
           AND p.Classe != 'Aluguel de Ações'
+          {where_assessor}
         GROUP BY ud.max_data
     """
 
-    log.info("BQ posicao: buscando snapshot mais recente")
-    rows = list(bq.query(sql).result())
+    log.info(f"BQ posicao: assessor={filter_assessor or 'todos'}")
+    if qp:
+        rows = list(bq.query(sql, job_config=QueryJobConfig(query_parameters=qp)).result())
+    else:
+        rows = list(bq.query(sql).result())
 
     if not rows:
         resultado = {"auc_total": 0, "contas_ativas": 0, "data_referencia": None}
@@ -842,8 +861,8 @@ async def posicao(
         row = rows[0]
         data_ref = row["data_referencia"]
         resultado = {
-            "auc_total":       float(row["auc_total"]),
-            "contas_ativas":   int(row["contas_ativas"]),
+            "auc_total":       float(row["auc_total"] or 0),
+            "contas_ativas":   int(row["contas_ativas"] or 0),
             "data_referencia": data_ref.date().isoformat() if hasattr(data_ref, "date") else str(data_ref),
         }
 
@@ -2687,19 +2706,22 @@ async def listar_chamados(
     """Admin vê todos os chamados. Assessor vê apenas os seus."""
     payload    = await verificar_token(authorization)
     uid        = payload.get("uid", "")
-    is_admin   = await _is_admin(uid)
+    role       = payload.get("role", "assessor")
+    is_admin   = role == "admin"
 
     col = _chamados_col()
     if is_admin:
-        docs = col.order_by("created_at", direction="DESCENDING").stream()
+        docs = col.stream()
     else:
-        docs = col.where("uid", "==", uid).order_by("created_at", direction="DESCENDING").stream()
+        docs = col.where("uid", "==", uid).stream()
 
     result = []
     for d in docs:
         item = d.to_dict() or {}
         item["id"] = d.id
         result.append(item)
+
+    result.sort(key=lambda x: x.get("created_at", ""), reverse=True)
     return result
 
 
@@ -2712,7 +2734,8 @@ async def atualizar_status_chamado(
     """Atualiza status do chamado (somente admin)."""
     payload  = await verificar_token(authorization)
     uid      = payload.get("uid", "")
-    is_admin = await _is_admin(uid)
+    role     = payload.get("role", "assessor")
+    is_admin = role == "admin"
     if not is_admin:
         raise HTTPException(status_code=403, detail="Apenas admins podem alterar status.")
 
@@ -2736,7 +2759,8 @@ async def download_chamado_arquivo(
     """Retorna o arquivo anexado ao chamado."""
     payload  = await verificar_token(authorization)
     uid      = payload.get("uid", "")
-    is_admin = await _is_admin(uid)
+    role     = payload.get("role", "assessor")
+    is_admin = role == "admin"
 
     ref = _chamados_col().document(doc_id)
     doc = ref.get()

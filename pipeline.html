@@ -98,6 +98,11 @@
     .data-table thead tr { background: #f8f9fc; }
     .data-table th { padding: 11px 14px; text-align: left; font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #9ca3af; border-bottom: 1px solid #e8ebf2; white-space: nowrap; }
     .data-table th.num { text-align: right; }
+    .data-table th.sortable { cursor: pointer; user-select: none; }
+    .data-table th.sortable:hover { color: #374151; }
+    .data-table th.sortable .sort-icon::after { content: '↕'; opacity: 0.3; margin-left: 3px; font-size: 10px; }
+    .data-table th.sortable[data-dir="asc"] .sort-icon::after  { content: '↑'; opacity: 1; color: #1e40af; }
+    .data-table th.sortable[data-dir="desc"] .sort-icon::after { content: '↓'; opacity: 1; color: #1e40af; }
     .data-table td { padding: 12px 14px; border-bottom: 1px solid #f5f7fb; vertical-align: middle; }
     .data-table td.num { text-align: right; }
     .data-table tbody tr:last-child td { border-bottom: none; }
@@ -418,11 +423,19 @@
         <input type="text" id="searchInput" placeholder="Buscar por nome..." oninput="renderTabela()">
       </div>
       <div class="filter-chips">
-        <button class="chip active" data-pipe="" onclick="setFiltro(this)">Todos</button>
-        <button class="chip quente" data-pipe="Quente" onclick="setFiltro(this)">🔴 Quente</button>
-        <button class="chip morno"  data-pipe="Morno"  onclick="setFiltro(this)">🟠 Morno</button>
-        <button class="chip frio"   data-pipe="Frio"   onclick="setFiltro(this)">🔵 Frio</button>
-        <button class="chip lead"   data-pipe="LEAD"   onclick="setFiltro(this)">🟣 Lead</button>
+        <span style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;align-self:center">Pipe</span>
+        <button class="chip active" data-pipe="" onclick="setFiltroPipe(this)">Todos</button>
+        <button class="chip quente" data-pipe="Quente" onclick="setFiltroPipe(this)">🔴 Quente</button>
+        <button class="chip morno"  data-pipe="Morno"  onclick="setFiltroPipe(this)">🟠 Morno</button>
+        <button class="chip frio"   data-pipe="Frio"   onclick="setFiltroPipe(this)">🔵 Frio</button>
+        <button class="chip lead"   data-pipe="LEAD"   onclick="setFiltroPipe(this)">🟣 Lead</button>
+        <span style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;align-self:center;margin-left:8px">Ranking</span>
+        <button class="chip active" data-rank="" onclick="setFiltroRank(this)">Todos</button>
+        <button class="chip" data-rank="Com certeza"   onclick="setFiltroRank(this)">✅ Com certeza</button>
+        <button class="chip" data-rank="Possivelmente" onclick="setFiltroRank(this)">🤔 Possivelmente</button>
+        <button class="chip" data-rank="Stand By"      onclick="setFiltroRank(this)">⏸ Stand By</button>
+        <button class="chip" data-rank="Desafio"       onclick="setFiltroRank(this)">⚡ Desafio</button>
+        <button class="chip" data-rank="Não Vem"       onclick="setFiltroRank(this)">❌ Não Vem</button>
       </div>
       <div style="display:flex;gap:8px;margin-left:auto">
         <button class="btn-outline" onclick="baixarTemplate()">
@@ -447,14 +460,14 @@
         <table class="data-table">
           <thead>
             <tr>
-              <th>Nome</th>
-              <th>Pipe</th>
-              <th>Ranking</th>
-              <th class="num">AuC Global</th>
-              <th class="num">AuC BTG</th>
-              <th class="num">AuC Potencial</th>
+              <th class="sortable" data-col="Nome" onclick="sortTabela('Nome')">Nome <span class="sort-icon"></span></th>
+              <th class="sortable" data-col="Pipe" onclick="sortTabela('Pipe')">Pipe <span class="sort-icon"></span></th>
+              <th class="sortable" data-col="Ranking" onclick="sortTabela('Ranking')">Ranking <span class="sort-icon"></span></th>
+              <th class="num sortable" data-col="AuC Global" onclick="sortTabela('AuC Global')">AuC Global <span class="sort-icon"></span></th>
+              <th class="num sortable" data-col="AuC BTG" onclick="sortTabela('AuC BTG')">AuC BTG <span class="sort-icon"></span></th>
+              <th class="num sortable" data-col="AuC Potencial" onclick="sortTabela('AuC Potencial')">AuC Potencial <span class="sort-icon"></span></th>
               <th>Conta BTG</th>
-              <th>Próximo FUP</th>
+              <th class="sortable" data-col="Próximo FUP" onclick="sortTabela('Próximo FUP')">Próximo FUP <span class="sort-icon"></span></th>
               <th id="thAssessor" style="display:none">Assessor</th>
               <th>Status</th>
               <th></th>
@@ -842,6 +855,9 @@
   let _clientes  = [];
   let _filtroAssessor = '';
   let _filtroPipe     = '';
+  let _filtroRanking  = '';
+  let _sortCol        = null;
+  let _sortDir        = 'asc';
   let _editId    = null;
 
   // ── Auth ─────────────────────────────────────────────────────────────────
@@ -932,10 +948,42 @@
   }
 
   // ── Render tabela ────────────────────────────────────────────────────────
-  function setFiltro(btn) {
+  function setFiltroPipe(btn) {
     _filtroPipe = btn.dataset.pipe;
-    document.querySelectorAll('.filter-chips .chip').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.filter-chips .chip[data-pipe]').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
+    renderTabela();
+  }
+
+  function setFiltroRank(btn) {
+    _filtroRanking = btn.dataset.rank;
+    document.querySelectorAll('.filter-chips .chip[data-rank]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderTabela();
+  }
+
+  const SORT_KEYS = {
+    'Nome': 'nome',
+    'Pipe': 'pipe',
+    'Ranking': 'ranking',
+    'AuC Global': 'auc_global',
+    'AuC BTG': 'auc_btg',
+    'AuC Potencial': 'auc_potencial',
+    'Próximo FUP': 'proximo_fup',
+  };
+
+  const RANKING_ORDER = { 'Com certeza': 0, 'Possivelmente': 1, 'Stand By': 2, 'Desafio': 3, 'Não Vem': 4 };
+
+  function sortTabela(col) {
+    if (_sortCol === col) {
+      _sortDir = _sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      _sortCol = col;
+      _sortDir = 'asc';
+    }
+    document.querySelectorAll('th.sortable').forEach(th => {
+      th.dataset.dir = th.dataset.col === col ? _sortDir : '';
+    });
     renderTabela();
   }
 
@@ -943,10 +991,29 @@
     const busca = (document.getElementById('searchInput').value || '').toLowerCase();
     let dados = _clientes.filter(c => {
       if (_filtroPipe && c.pipe !== _filtroPipe) return false;
+      if (_filtroRanking && c.ranking !== _filtroRanking) return false;
       if (_filtroAssessor && (c.assessor_name || '').toUpperCase() !== _filtroAssessor.toUpperCase()) return false;
       if (busca && !(c.nome || '').toLowerCase().includes(busca)) return false;
       return true;
     });
+
+    if (_sortCol) {
+      const key = SORT_KEYS[_sortCol];
+      const dir = _sortDir === 'asc' ? 1 : -1;
+      dados = [...dados].sort((a, b) => {
+        let va = a[key] ?? null;
+        let vb = b[key] ?? null;
+        if (key === 'ranking') {
+          va = RANKING_ORDER[va] ?? 99;
+          vb = RANKING_ORDER[vb] ?? 99;
+          return dir * (va - vb);
+        }
+        if (typeof va === 'number' && typeof vb === 'number') return dir * (va - vb);
+        if (va === null && vb !== null) return dir;
+        if (vb === null && va !== null) return -dir;
+        return dir * String(va).localeCompare(String(vb), 'pt-BR');
+      });
+    }
 
     if (!dados.length) {
       document.getElementById('pipelineTbody').innerHTML =

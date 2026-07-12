@@ -137,9 +137,13 @@
     .news-item:last-child { border-bottom: none; }
     .news-item:hover { background: #f8f9fc; }
     .news-cat { font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; padding: 2px 7px; border-radius: 4px; white-space: nowrap; margin-bottom: 5px; display: inline-block; }
-    .cat-rf  { background: #dbeafe; color: #1e40af; }
-    .cat-rv  { background: #dcfce7; color: #15803d; }
-    .cat-mm  { background: #ede9fe; color: #6d28d9; }
+    .cat-rf           { background: #dbeafe; color: #1e40af; }
+    .cat-rv           { background: #dcfce7; color: #15803d; }
+    .cat-mm           { background: #ede9fe; color: #6d28d9; }
+    .cat-macro        { background: #fef9c3; color: #92400e; }
+    .cat-juros        { background: #ede9fe; color: #6d28d9; }
+    .cat-ipca         { background: #fee2e2; color: #b91c1c; }
+    .cat-internacional{ background: #f1f5f9; color: #475569; }
     .news-title { font-size: 13px; font-weight: 600; color: #111827; line-height: 1.45; margin-bottom: 3px; }
     .news-desc  { font-size: 12px; color: #6b7280; line-height: 1.5; }
     .news-date  { font-size: 10px; color: #9ca3af; margin-top: 4px; }
@@ -361,31 +365,10 @@
       <div class="panel">
         <div class="panel-header">
           <div class="panel-title">📰 Mercado</div>
-          <span style="font-size:11px;color:rgba(255,255,255,0.4)">Exemplo ilustrativo</span>
+          <span id="noticiasHora" style="font-size:11px;color:rgba(255,255,255,0.4)"></span>
         </div>
-        <div class="news-item">
-          <div style="flex-shrink:0;padding-top:2px">
-            <span class="news-cat cat-rf">Renda Fixa</span>
-            <div class="news-title">Tesouro IPCA+ 2035 ultrapassa IPCA + 7% ao ano</div>
-            <div class="news-desc">Abertura da curva longa empurra taxas reais para o maior nível em 12 meses, criando janela de entrada para investidores de longo prazo.</div>
-            <div class="news-date">Hoje, 09:30</div>
-          </div>
-        </div>
-        <div class="news-item">
-          <div style="flex-shrink:0;padding-top:2px">
-            <span class="news-cat cat-mm">Juros</span>
-            <div class="news-title">Copom mantém Selic e mercado debate ritmo de cortes para 2026</div>
-            <div class="news-desc">Ata do Copom indica preocupação com inflação de serviços. Curva de juros precifica dois cortes de 25 bps no segundo semestre.</div>
-            <div class="news-date">Ontem, 18:00</div>
-          </div>
-        </div>
-        <div class="news-item">
-          <div style="flex-shrink:0;padding-top:2px">
-            <span class="news-cat cat-rv">Renda Variável</span>
-            <div class="news-title">Ibovespa supera 135 mil pontos com fluxo estrangeiro e commodities</div>
-            <div class="news-desc">Petro e Vale puxam alta após dados positivos da China. Dólar recua para R$ 5,68 com melhora do risco externo e superávit comercial recorde.</div>
-            <div class="news-date">Ontem, 17:30</div>
-          </div>
+        <div id="noticiasWrap">
+          <div class="prio-empty">Carregando...</div>
         </div>
       </div>
 
@@ -550,6 +533,7 @@
     // Carrega KPIs da página inicial
     carregarPosicao();
     carregarPrioridades();
+    carregarNoticias();
   });
 
   async function getIdToken() {
@@ -648,6 +632,72 @@
     } catch(e) {
       console.error('Erro ao carregar prioridades:', e);
       wrap.innerHTML = '<div class="prio-empty">Erro ao carregar dados.</div>';
+    }
+  }
+
+  const SLUG_CSS = {
+    "rv":           "cat-rv",
+    "rf":           "cat-rf",
+    "macro":        "cat-macro",
+    "juros":        "cat-juros",
+    "ipca":         "cat-ipca",
+    "internacional":"cat-internacional",
+  };
+
+  function fmtDataPub(iso) {
+    if (!iso) return '';
+    try {
+      const d = new Date(iso);
+      const agora = new Date();
+      const diffH = Math.floor((agora - d) / 3600000);
+      if (diffH < 1)  return 'Agora mesmo';
+      if (diffH < 24) return `Há ${diffH}h`;
+      return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+    } catch { return ''; }
+  }
+
+  async function carregarNoticias() {
+    const wrap = document.getElementById('noticiasWrap');
+    const hora = document.getElementById('noticiasHora');
+    try {
+      // Tenta tarde primeiro, depois manhã
+      const periodos = ['tarde', 'manha'];
+      let itens = [];
+      let geradoEm = '';
+
+      for (const p of periodos) {
+        const snap = await db.collection('noticias').doc(p).get();
+        if (snap.exists) {
+          const data = snap.data();
+          itens = data.itens || [];
+          geradoEm = data.gerado_em || '';
+          break;
+        }
+      }
+
+      if (!itens.length) {
+        wrap.innerHTML = '<div class="prio-empty">Nenhuma notícia disponível.</div>';
+        return;
+      }
+
+      if (geradoEm) {
+        hora.textContent = 'Atualizado ' + fmtDataPub(geradoEm);
+      }
+
+      wrap.innerHTML = itens.map(n => `
+        <div class="news-item" style="cursor:pointer" onclick="window.open('${n.url}','_blank')">
+          <div style="flex-shrink:0;padding-top:2px">
+            <span class="news-cat ${SLUG_CSS[n.slug] || 'cat-mm'}">${n.categoria}</span>
+            <div class="news-title">${n.titulo}</div>
+            <div class="news-desc">${n.descricao || ''}</div>
+            <div class="news-date">${n.fonte ? n.fonte + ' · ' : ''}${fmtDataPub(n.data_pub)}</div>
+          </div>
+        </div>
+      `).join('');
+
+    } catch(e) {
+      console.error('Erro ao carregar notícias:', e);
+      wrap.innerHTML = '<div class="prio-empty">Erro ao carregar notícias.</div>';
     }
   }
 

@@ -144,6 +144,30 @@
     .news-desc  { font-size: 12px; color: #6b7280; line-height: 1.5; }
     .news-date  { font-size: 10px; color: #9ca3af; margin-top: 4px; }
 
+    /* TABELA PRIORIDADES */
+    .prio-panel { background: #fff; border-radius: 14px; border: 1px solid #e8ebf2; overflow: hidden; margin-bottom: 28px; }
+    .prio-panel-header { padding: 16px 20px; background: #0c1a35; display: flex; align-items: center; justify-content: space-between; }
+    .prio-panel-title { font-size: 13px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 8px; }
+    .prio-count { background: rgba(255,255,255,0.15); color: #fff; font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 20px; }
+    .prio-table-wrap { max-height: 340px; overflow-y: auto; }
+    .prio-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .prio-table th { position: sticky; top: 0; background: #f8f9fc; padding: 10px 14px; text-align: left; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #9ca3af; border-bottom: 1px solid #e8ebf2; white-space: nowrap; }
+    .prio-table th.num { text-align: right; }
+    .prio-table td { padding: 11px 14px; color: #374151; border-bottom: 1px solid #f4f6fb; vertical-align: middle; }
+    .prio-table tr:last-child td { border-bottom: none; }
+    .prio-table tr:hover td { background: #f8f9fc; }
+    .prio-table td.rank { color: #9ca3af; font-size: 12px; width: 32px; }
+    .prio-table td.num { text-align: right; }
+    .score-high { color: #dc2626; font-weight: 700; }
+    .score-mid  { color: #92400e; font-weight: 600; }
+    .score-low  { color: #374151; }
+    .alert-chip { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 500; margin: 1px 2px; white-space: nowrap; }
+    .ac-caixa  { background: #fef9c3; color: #92400e; }
+    .ac-vence  { background: #dbeafe; color: #1d4ed8; }
+    .ac-semrec { background: #fee2e2; color: #dc2626; }
+    .ac-queda  { background: #f3e8ff; color: #7e22ce; }
+    .prio-empty { text-align: center; padding: 32px; color: #9ca3af; font-size: 13px; }
+
     .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 99; }
 
 
@@ -367,6 +391,20 @@
 
     </div>
 
+    <!-- LISTA DE PRIORIDADES FULL-WIDTH -->
+    <div class="prio-panel" id="prioPanelFull">
+      <div class="prio-panel-header">
+        <div class="prio-panel-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+          Lista de Prioridades
+        </div>
+        <span class="prio-count" id="prioCountBadge">—</span>
+      </div>
+      <div class="prio-table-wrap" id="prioTableWrap">
+        <div class="prio-empty">Carregando...</div>
+      </div>
+    </div>
+
     <!-- MÓDULOS -->
     <div class="section-head">
       <div class="section-title">Módulos do Portal</div>
@@ -511,6 +549,7 @@
 
     // Carrega KPIs da página inicial
     carregarPosicao();
+    carregarPrioridades();
   });
 
   async function getIdToken() {
@@ -548,6 +587,67 @@
       document.getElementById('kpiContasSub').textContent = fmtData(data.data_referencia);
     } catch(e) {
       console.error('Erro ao carregar posição:', e);
+    }
+  }
+
+  function buildAlertChips(alertas) {
+    if (!alertas) return '';
+    return alertas.split('|').filter(a => a.trim()).map(a => {
+      const t = a.trim();
+      let cls = 'ac-queda';
+      if (t.startsWith('Caixa'))  cls = 'ac-caixa';
+      else if (t.startsWith('Vence')) cls = 'ac-vence';
+      else if (t.startsWith('Sem'))   cls = 'ac-semrec';
+      return `<span class="alert-chip ${cls}">${t}</span>`;
+    }).join('');
+  }
+
+  async function carregarPrioridades() {
+    const wrap = document.getElementById('prioTableWrap');
+    try {
+      const token = await getIdToken();
+      const resp  = await fetch(API_URL + '/api/gestao', {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      if (!resp.ok) throw new Error('Status ' + resp.status);
+      const data  = await resp.json();
+      const items = data.prioridades || [];
+
+      document.getElementById('prioCountBadge').textContent = items.length;
+
+      if (!items.length) {
+        wrap.innerHTML = '<div class="prio-empty">Nenhuma prioridade encontrada.</div>';
+        return;
+      }
+
+      const rows = items.map((c, i) => {
+        const score = c.score ?? 0;
+        const sCls  = score >= 5 ? 'score-high' : score >= 3 ? 'score-mid' : 'score-low';
+        const chips = buildAlertChips(c.alertas_raw);
+        return `<tr>
+          <td class="rank num">${i + 1}</td>
+          <td><strong>${c.cliente || '—'}</strong></td>
+          <td style="color:#6b7280;font-size:12px">${c.Conta || c.conta || '—'}</td>
+          <td>${c.assessor || '—'}</td>
+          <td class="${sCls}">${score}</td>
+          <td>${chips || '<span style="color:#d1d5db;font-size:11px">—</span>'}</td>
+        </tr>`;
+      }).join('');
+
+      wrap.innerHTML = `<table class="prio-table">
+        <thead><tr>
+          <th class="num">#</th>
+          <th>Cliente</th>
+          <th>Conta</th>
+          <th>Assessor</th>
+          <th>Score</th>
+          <th>Alertas</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+    } catch(e) {
+      console.error('Erro ao carregar prioridades:', e);
+      wrap.innerHTML = '<div class="prio-empty">Erro ao carregar dados.</div>';
     }
   }
 

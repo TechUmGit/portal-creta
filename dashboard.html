@@ -334,30 +334,8 @@
           <div class="panel-title">🎯 Prioridades da Semana</div>
           <a class="panel-link" href="gestao.html">Ver todas →</a>
         </div>
-        <div class="prio-item">
-          <div class="prio-dot dot-red"></div>
-          <div class="prio-text"><strong>FUPs vencidos</strong> — Há clientes no pipeline com follow-up atrasado. Verifique a aba Kanban.</div>
-          <span class="prio-tag tag-red">Urgente</span>
-        </div>
-        <div class="prio-item">
-          <div class="prio-dot dot-amber"></div>
-          <div class="prio-text"><strong>Vencimentos próximos</strong> — Títulos de RF vencem nos próximos 30 dias. Considere estratégia de reinvestimento.</div>
-          <span class="prio-tag tag-amber">Atenção</span>
-        </div>
-        <div class="prio-item">
-          <div class="prio-dot dot-blue"></div>
-          <div class="prio-text"><strong>Carteira Recomendada</strong> — Clientes com aderência abaixo de 60% em relação à carteira do comitê.</div>
-          <span class="prio-tag tag-blue">Revisão</span>
-        </div>
-        <div class="prio-item">
-          <div class="prio-dot dot-amber"></div>
-          <div class="prio-text"><strong>Opções com vencimento próximo</strong> — Posições em opções com exercício nos próximos 15 dias.</div>
-          <span class="prio-tag tag-amber">Atenção</span>
-        </div>
-        <div class="prio-item">
-          <div class="prio-dot dot-green"></div>
-          <div class="prio-text"><strong>Novos produtos disponíveis</strong> — Ofertas públicas recentes incluídas na prateleira pelo comitê.</div>
-          <span class="prio-tag tag-green">Oportunidade</span>
+        <div id="prioSemanaWrap">
+          <div class="prio-empty">Carregando...</div>
         </div>
       </div>
 
@@ -519,8 +497,10 @@
 
     // Mostra menu Configurações para admins e ajusta labels de KPI
     try {
-      const tr = await user.getIdTokenResult();
-      if ((tr.claims.role || '') === 'admin') {
+      const tr           = await user.getIdTokenResult();
+      const role         = tr.claims.role || 'assessor';
+      const assessorName = tr.claims.assessor_name || '';
+      if (role === 'admin') {
         document.getElementById('sidebarSistema').style.display = 'block';
         document.getElementById('kpiAucLabel').textContent    = 'AuC Total da Equipe';
         document.getElementById('kpiContasLabel').textContent = 'Contas Ativas (Total)';
@@ -528,6 +508,7 @@
         document.getElementById('kpiAucLabel').textContent    = 'Meu AuC';
         document.getElementById('kpiContasLabel').textContent = 'Minhas Contas Ativas';
       }
+      carregarPrioridadesSemana(assessorName, role);
     } catch(_) {}
 
     // Carrega KPIs da página inicial
@@ -632,6 +613,51 @@
     } catch(e) {
       console.error('Erro ao carregar prioridades:', e);
       wrap.innerHTML = '<div class="prio-empty">Erro ao carregar dados.</div>';
+    }
+  }
+
+  function slugify(nome) {
+    return nome
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .trim()
+      .replace(/\s+/g, "_");
+  }
+
+  const PRIO_DOT  = { alta: 'dot-red', media: 'dot-amber', baixa: 'dot-blue' };
+  const PRIO_TAG  = { alta: 'tag-red', media: 'tag-amber', baixa: 'tag-blue' };
+  const PRIO_LABEL = { alta: 'Urgente', media: 'Atenção', baixa: 'Info' };
+
+  async function carregarPrioridadesSemana(assessorName, role) {
+    const wrap = document.getElementById('prioSemanaWrap');
+    try {
+      // Admin vê mensagem orientando a usar a tabela completa abaixo
+      if (role === 'admin' || !assessorName) {
+        wrap.innerHTML = '<div class="prio-empty">Disponível para assessores.<br>Use a tabela abaixo para ver todas as prioridades.</div>';
+        return;
+      }
+
+      const docId = slugify(assessorName);
+      const snap  = await db.collection('prioridades').doc(docId).get();
+
+      if (!snap.exists || !(snap.data().itens || []).length) {
+        wrap.innerHTML = '<div class="prio-empty">Nenhuma prioridade registrada para hoje.</div>';
+        return;
+      }
+
+      const itens = snap.data().itens;
+      wrap.innerHTML = itens.map(item => `
+        <div class="prio-item">
+          <div class="prio-dot ${PRIO_DOT[item.prioridade] || 'dot-blue'}"></div>
+          <div class="prio-text"><strong>${item.titulo}</strong> — ${item.descricao}</div>
+          <span class="prio-tag ${PRIO_TAG[item.prioridade] || 'tag-blue'}">${PRIO_LABEL[item.prioridade] || 'Info'}</span>
+        </div>
+      `).join('');
+
+    } catch(e) {
+      console.error('Erro ao carregar prioridades da semana:', e);
+      wrap.innerHTML = '<div class="prio-empty">Erro ao carregar prioridades.</div>';
     }
   }
 

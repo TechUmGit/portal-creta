@@ -59,7 +59,8 @@ TABLE_CDB_LCA            = f"`{GCP_PROJECT}.{DATASET}.partner_report_cdb_lca_lci
 # ── GCS ───────────────────────────────────────────────────────────────────────
 GCS_BUCKET         = os.getenv("GCS_BUCKET", "creta-btg-pipeline")
 GCS_PREFIX         = "entradas/"
-GCS_PREFIX_PRODUTOS = "produtos-manuais/"
+GCS_PREFIX_PRODUTOS  = "produtos-manuais/"
+GCS_PREFIX_CHAMADOS  = "chamados/"
 gcs_client         = gcs.Client(project=GCP_PROJECT)
 
 # ── Cotações via Yahoo Finance ────────────────────────────────────────────────
@@ -2613,5 +2614,152 @@ async def download_produto_manual_arquivo(
     buf.seek(0)
 
     # PDFs abrem inline; outros fazem download
+    disposition = "inline" if "pdf" in ct else f'attachment; filename="{fname}"'
+    return StreamingResponse(buf, media_type=ct, headers={"Content-Disposition": disposition})
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CHAMADOS (suporte / melhorias)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _chamados_col():
+    return get_fs().collection("chamados")
+
+VALID_TIPO_CHAMADO      = {"Melhoria", "Bug", "Dúvida"}
+VALID_PRIORIDADE_CHAMADO = {"Baixa", "Média", "Alta"}
+VALID_STATUS_CHAMADO    = {"Aberto", "Em análise", "Concluído"}
+
+
+@app.post("/api/chamados")
+async def abrir_chamado(
+    titulo:      str       = Form(...),
+    tipo:        str       = Form(...),
+    prioridade:  str       = Form(...),
+    descricao:   str       = Form(...),
+    arquivo:     Optional[UploadFile] = File(default=None),
+    authorization: Optional[str] = Header(default=None),
+):
+    """Abre um novo chamado. Qualquer usuário autenticado pode abrir."""
+    payload = await verificar_token(authorization)
+    uid            = payload.get("uid", "")
+    assessor_name  = payload.get("assessor_name", uid)
+
+    if tipo not in VALID_TIPO_CHAMADO:
+        raise HTTPException(status_code=400, detail=f"Tipo inválido: {tipo}")
+    if prioridade not in VALID_PRIORIDADE_CHAMADO:
+        raise HTTPException(status_code=400, detail=f"Prioridade inválida: {prioridade}")
+
+    arquivo_gcs  = None
+    arquivo_nome = None
+    arquivo_tipo = None
+
+    if arquivo and arquivo.filename:
+        content   = await arquivo.read()
+        safe      = re.sub(r"[^\w.\-]", "_", arquivo.filename)
+        gcs_path  = f"{GCS_PREFIX_CHAMADOS}{uid}/{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{safe}"
+        blob      = gcs_client.bucket(GCS_BUCKET).blob(gcs_path)
+        blob.upload_from_string(content, content_type=arquivo.content_type or "application/octet-stream")
+        arquivo_gcs  = gcs_path
+        arquivo_nome = arquivo.filename
+        arquivo_tipo = arquivo.content_type or "application/octet-stream"
+
+    dados = {
+        "titulo":       titulo.strip(),
+        "tipo":         tipo,
+        "prioridade":   prioridade,
+        "descricao":    descricao.strip(),
+        "status":       "Aberto",
+        "criado_por":   assessor_name,
+        "uid":          uid,
+        "created_at":   datetime.utcnow().isoformat(),
+        "arquivo_gcs":  arquivo_gcs,
+        "arquivo_nome": arquivo_nome,
+        "arquivo_tipo": arquivo_tipo,
+    }
+    ref, doc = _chamados_col().add(dados)
+    return {"id": doc.id, **dados}
+
+
+@app.get("/api/chamados")
+async def listar_chamados(
+    authorization: Optional[str] = Header(default=None),
+):
+    """Admin vê todos os chamados. Assessor vê apenas os seus."""
+    payload    = await verificar_token(authorization)
+    uid        = payload.get("uid", "")
+    is_admin   = await _is_admin(uid)
+
+    col = _chamados_col()
+    if is_admin:
+        docs = col.order_by("created_at", direction="DESCENDING").stream()
+    else:
+        docs = col.where("uid", "==", uid).order_by("created_at", direction="DESCENDING").stream()
+
+    result = []
+    for d in docs:
+        item = d.to_dict() or {}
+        item["id"] = d.id
+        result.append(item)
+    return result
+
+
+@app.patch("/api/chamados/{doc_id}")
+async def atualizar_status_chamado(
+    doc_id: str,
+    body:   dict,
+    authorization: Optional[str] = Header(default=None),
+):
+    """Atualiza status do chamado (somente admin)."""
+    payload  = await verificar_token(authorization)
+    uid      = payload.get("uid", "")
+    is_admin = await _is_admin(uid)
+    if not is_admin:
+        raise HTTPException(status_code=403, detail="Apenas admins podem alterar status.")
+
+    novo_status = body.get("status")
+    if novo_status not in VALID_STATUS_CHAMADO:
+        raise HTTPException(status_code=400, detail=f"Status inválido: {novo_status}")
+
+    ref = _chamados_col().document(doc_id)
+    if not ref.get().exists:
+        raise HTTPException(status_code=404, detail="Chamado não encontrado.")
+
+    ref.update({"status": novo_status})
+    return {"id": doc_id, "status": novo_status}
+
+
+@app.get("/api/chamados/{doc_id}/arquivo")
+async def download_chamado_arquivo(
+    doc_id: str,
+    authorization: Optional[str] = Header(default=None),
+):
+    """Retorna o arquivo anexado ao chamado."""
+    payload  = await verificar_token(authorization)
+    uid      = payload.get("uid", "")
+    is_admin = await _is_admin(uid)
+
+    ref = _chamados_col().document(doc_id)
+    doc = ref.get()
+    if not doc.exists:
+        raise HTTPException(status_code=404, detail="Chamado não encontrado.")
+
+    d = doc.to_dict() or {}
+
+    # Assessor só pode baixar anexo do próprio chamado
+    if not is_admin and d.get("uid") != uid:
+        raise HTTPException(status_code=403, detail="Acesso negado.")
+
+    gcs_path = d.get("arquivo_gcs")
+    fname    = d.get("arquivo_nome", "arquivo")
+    ct       = d.get("arquivo_tipo", "application/octet-stream")
+
+    if not gcs_path:
+        raise HTTPException(status_code=404, detail="Nenhum arquivo anexado.")
+
+    blob = gcs_client.bucket(GCS_BUCKET).blob(gcs_path)
+    buf  = io.BytesIO()
+    blob.download_to_file(buf)
+    buf.seek(0)
+
     disposition = "inline" if "pdf" in ct else f'attachment; filename="{fname}"'
     return StreamingResponse(buf, media_type=ct, headers={"Content-Disposition": disposition})

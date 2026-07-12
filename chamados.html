@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Creta Capital — Chamados</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; font-family: 'Inter', -apple-system, sans-serif; -webkit-font-smoothing: antialiased; background: #f0f3f8; }
+    .loading-screen { position: fixed; inset: 0; background: #f0f3f8; display: flex; align-items: center; justify-content: center; z-index: 999; }
+    .spinner { width: 26px; height: 26px; border: 3px solid rgba(11,181,213,0.2); border-top-color: #0bb5d5; border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* TOPBAR */
+    .topbar { height: 60px; background: #fff; border-bottom: 1px solid #e8ebf2; display: flex; align-items: center; padding: 0 24px; gap: 16px; position: fixed; top: 0; left: 0; right: 0; z-index: 200; }
+    .topbar-logo { text-decoration: none; flex-shrink: 0; display: flex; align-items: center; }
+    .topbar-divider { width: 1px; height: 28px; background: #e2e6ef; margin: 0 4px; flex-shrink: 0; }
+    .topbar-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+    .icon-btn { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: none; border: none; cursor: pointer; color: #6b7280; transition: background 0.15s; }
+    .icon-btn:hover { background: #f4f6fb; }
+    .user-chip { display: flex; align-items: center; gap: 10px; padding: 4px 10px 4px 4px; border-radius: 8px; cursor: pointer; background: none; border: none; font-family: inherit; transition: background 0.15s; position: relative; }
+    .user-chip:hover { background: #f4f6fb; }
+    .avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #0c1a35, #1a3a6c); color: #fff; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .user-name { font-size: 13px; font-weight: 600; color: #1a202c; white-space: nowrap; }
+    .user-role { font-size: 11px; color: #9ca3af; }
+    .user-info { text-align: left; }
+    .user-dropdown { display: none; position: absolute; top: calc(100% + 8px); right: 0; background: #fff; border: 1px solid #e8ebf2; border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.12); min-width: 200px; padding: 6px; z-index: 300; }
+    .user-chip.open .user-dropdown { display: block; }
+    .user-email-dd { padding: 10px 12px 8px; font-size: 12px; color: #9ca3af; border-bottom: 1px solid #f0f3f8; margin-bottom: 4px; }
+    .dd-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 6px; font-size: 13px; color: #374151; cursor: pointer; transition: background 0.12s; text-decoration: none; }
+    .dd-item:hover { background: #f4f6fb; }
+    .dd-item.danger { color: #dc2626; }
+    .dd-item.danger:hover { background: #fff5f5; }
+    .dd-sep { height: 1px; background: #f0f3f8; margin: 4px 0; }
+
+    /* SIDEBAR */
+    .sidebar { position: fixed; top: 60px; left: 0; bottom: 0; width: 240px; background: #fff; border-right: 1px solid #e8ebf2; display: flex; flex-direction: column; overflow-y: auto; z-index: 100; transform: translateX(-100%); transition: transform 0.25s cubic-bezier(0.25,0,0.25,1); }
+    .sidebar.open { transform: translateX(0); }
+    .sidebar-section { padding: 20px 12px 8px; }
+    .sidebar-label { font-size: 9.5px; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; color: #9ca3af; padding: 0 10px; margin-bottom: 6px; }
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 8px; font-size: 13px; font-weight: 500; color: #6b7280; text-decoration: none; transition: all 0.15s; cursor: pointer; }
+    .nav-item svg { width: 16px; height: 16px; flex-shrink: 0; }
+    .nav-item:hover { background: #f4f6fb; color: #0c1a35; }
+    .nav-item.active { background: #eef6ff; color: #0c1a35; font-weight: 600; }
+    .sidebar-footer { margin-top: auto; padding: 16px 12px; border-top: 1px solid #f0f3f8; }
+    .sidebar-footer .nav-item { color: #9ca3af; }
+    .sidebar-footer .nav-item:hover { color: #dc2626; }
+    .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 99; }
+
+    /* MAIN */
+    .main { padding-top: 60px; min-height: 100vh; }
+    .hero { background: linear-gradient(135deg, #0c1a35 0%, #1a3a6c 100%); padding: 28px 24px 24px; }
+    .hero-title { font-size: 22px; font-weight: 800; color: #fff; margin-bottom: 4px; }
+    .hero-sub   { font-size: 13px; color: rgba(255,255,255,0.6); }
+    .content    { padding: 24px; max-width: 900px; margin: 0 auto; }
+
+    /* CARD */
+    .card { background: #fff; border-radius: 14px; border: 1px solid #e8ebf2; overflow: hidden; }
+    .card-header { padding: 18px 22px; background: #0c1a35; display: flex; align-items: center; justify-content: space-between; }
+    .card-title { font-size: 14px; font-weight: 700; color: #fff; }
+    .card-body { padding: 22px; }
+
+    /* FORM */
+    .form-grid { display: grid; gap: 14px; }
+    .form-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+    .form-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+    .form-group { display: flex; flex-direction: column; gap: 5px; }
+    .form-group.full { grid-column: 1 / -1; }
+    .form-label { font-size: 11px; font-weight: 600; color: #374151; letter-spacing: 0.04em; }
+    .form-control { padding: 9px 12px; border: 1.5px solid #e2e6ef; border-radius: 10px; font-size: 13px; font-family: inherit; color: #1e293b; background: #f8f9fc; transition: border-color 0.15s, background 0.15s, box-shadow 0.15s; outline: none; width: 100%; }
+    .form-control:focus { border-color: #0bb5d5; background: #fff; box-shadow: 0 0 0 3px rgba(11,181,213,0.12); }
+    textarea.form-control { resize: vertical; min-height: 90px; }
+    select.form-control { cursor: pointer; }
+    .upload-dropzone { background: #f8f9fc; border-radius: 12px; border: 2px dashed #d1d5db; padding: 22px 20px; text-align: center; cursor: pointer; transition: border-color 0.2s, background 0.2s; }
+    .upload-dropzone:hover { border-color: #0bb5d5; background: #f0f9ff; }
+    .upload-dropzone-icon { font-size: 22px; margin-bottom: 6px; }
+    .upload-dropzone-text { font-size: 13px; font-weight: 600; color: #374151; }
+    .upload-dropzone-sub  { font-size: 11px; color: #9ca3af; margin-top: 3px; }
+    .upload-dropzone-file { font-size: 12px; color: #0bb5d5; margin-top: 8px; font-weight: 500; display:none; }
+    .form-footer { display: flex; justify-content: flex-end; margin-top: 20px; }
+    .btn-primary { display: inline-flex; align-items: center; gap: 8px; padding: 10px 22px; background: linear-gradient(135deg, #0c1a35 0%, #1a3a6c 100%); color: #fff; border: none; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; transition: opacity 0.15s, transform 0.1s; }
+    .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+    .btn-secondary { display: inline-flex; align-items: center; gap: 7px; padding: 8px 16px; background: #f4f6fb; color: #374151; border: 1px solid #e2e6ef; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; transition: background 0.15s; }
+    .btn-secondary:hover { background: #e8ebf2; }
+
+    /* CHAMADOS LIST */
+    .list-header { display: flex; align-items: center; justify-content: space-between; margin: 28px 0 14px; }
+    .list-title { font-size: 15px; font-weight: 700; color: #0c1a35; }
+    .chamado-item { background: #fff; border-radius: 12px; border: 1px solid #e8ebf2; padding: 18px 20px; margin-bottom: 12px; display: flex; align-items: flex-start; gap: 16px; transition: box-shadow 0.15s; }
+    .chamado-item:hover { box-shadow: 0 4px 16px rgba(12,26,53,0.08); }
+    .chamado-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 18px; }
+    .chamado-icon.melhoria { background: #e0f2fe; }
+    .chamado-icon.bug      { background: #fee2e2; }
+    .chamado-icon.duvida   { background: #fef3c7; }
+    .chamado-info { flex: 1; min-width: 0; }
+    .chamado-titulo { font-size: 14px; font-weight: 700; color: #0c1a35; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .chamado-desc { font-size: 12px; color: #6b7280; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 8px; }
+    .chamado-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+    .badge-tipo-melhoria  { background: #e0f2fe; color: #0369a1; }
+    .badge-tipo-bug       { background: #fee2e2; color: #dc2626; }
+    .badge-tipo-duvida    { background: #fef3c7; color: #92400e; }
+    .badge-prio-alta   { background: #fee2e2; color: #b91c1c; }
+    .badge-prio-media  { background: #fef3c7; color: #92400e; }
+    .badge-prio-baixa  { background: #f0fdf4; color: #15803d; }
+    .badge-status-aberto    { background: #f0f3f8; color: #374151; }
+    .badge-status-analise   { background: #ede9fe; color: #6d28d9; }
+    .badge-status-concluido { background: #f0fdf4; color: #15803d; }
+    .chamado-date { font-size: 11px; color: #9ca3af; }
+    .chamado-autor { font-size: 11px; color: #9ca3af; }
+    .chamado-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; flex-shrink: 0; }
+    .status-select { padding: 5px 10px; border: 1.5px solid #e2e6ef; border-radius: 8px; font-size: 12px; font-family: inherit; color: #374151; background: #f8f9fc; cursor: pointer; outline: none; }
+    .status-select:focus { border-color: #0bb5d5; }
+    .anexo-btn { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: #0bb5d5; background: none; border: none; cursor: pointer; font-family: inherit; font-weight: 600; padding: 0; }
+    .anexo-btn:hover { text-decoration: underline; }
+    .empty-state { text-align: center; padding: 48px 24px; color: #9ca3af; }
+    .empty-state-icon { font-size: 36px; margin-bottom: 12px; }
+    .empty-state-text { font-size: 14px; font-weight: 600; color: #6b7280; margin-bottom: 4px; }
+    .empty-state-sub { font-size: 13px; }
+
+    /* TOAST */
+    .toast { position: fixed; bottom: 24px; right: 24px; background: #0c1a35; color: #fff; padding: 12px 20px; border-radius: 10px; font-size: 13px; font-weight: 600; z-index: 999; box-shadow: 0 8px 24px rgba(0,0,0,0.18); transform: translateY(0); opacity: 1; transition: opacity 0.3s; }
+    .toast.err { background: #dc2626; }
+    .toast.hide { opacity: 0; }
+  </style>
+</head>
+<body>
+
+<div id="loadingScreen" class="loading-screen"><div class="spinner"></div></div>
+<div id="app" style="display:none">
+
+<!-- TOPBAR -->
+<nav class="topbar">
+  <button class="icon-btn" onclick="document.getElementById('sidebar').classList.toggle('open');document.getElementById('sidebarOverlay').style.display='block'">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+  </button>
+  <a href="dashboard.html" class="topbar-logo"><img src="logo-creta.svg" alt="Creta Capital" style="height:60px;display:block;"></a>
+  <div class="topbar-divider"></div>
+  <span style="font-size:13px;font-weight:600;color:#374151;">Chamados & Melhorias</span>
+  <div class="topbar-actions">
+    <button class="user-chip" id="userChip" onclick="this.classList.toggle('open')">
+      <div class="avatar" id="avatarEl">?</div>
+      <div class="user-info">
+        <div class="user-name" id="userNameEl">—</div>
+        <div class="user-role" id="userRoleEl">—</div>
+      </div>
+      <div class="user-dropdown">
+        <div class="user-email-dd" id="userEmailEl"></div>
+        <div class="dd-sep"></div>
+        <div class="dd-item danger" onclick="firebase.auth().signOut()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Sair
+        </div>
+      </div>
+    </button>
+  </div>
+</nav>
+
+<!-- SIDEBAR -->
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="document.getElementById('sidebar').classList.remove('open');this.style.display='none'"></div>
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-section">
+    <div class="sidebar-label">Início</div>
+    <a class="nav-item" href="dashboard.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      Visão Geral
+    </a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-label">Dados</div>
+    <a class="nav-item" href="posicoes.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      Posições
+    </a>
+    <a class="nav-item" href="opcoes.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+      Opções
+    </a>
+    <a class="nav-item" href="receitas.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+      Receitas e Repasses
+    </a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-label">Análise</div>
+    <a class="nav-item" href="relatorios.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      Histórico de Carteiras
+    </a>
+    <a class="nav-item" href="gestao.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+      Oportunidades &amp; Alertas
+    </a>
+    <a class="nav-item" href="pipeline.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      Pipeline de Clientes
+    </a>
+    <a class="nav-item" href="produtos.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+      Produtos BTG
+    </a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-label">Suporte</div>
+    <a class="nav-item active" href="chamados.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+      Chamados &amp; Melhorias
+    </a>
+  </div>
+  <div class="sidebar-section" id="sidebarSistema" style="display:none">
+    <div class="sidebar-label">Sistema</div>
+    <a class="nav-item" href="configuracoes.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      Configurações
+    </a>
+  </div>
+  <div class="sidebar-footer">
+    <a class="nav-item" href="#" onclick="firebase.auth().signOut()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      Sair
+    </a>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+  <div class="hero">
+    <div class="hero-title">Chamados &amp; Melhorias</div>
+    <div class="hero-sub">Registre bugs, dúvidas ou sugestões de melhoria para o portal</div>
+  </div>
+
+  <div class="content">
+
+    <!-- FORMULÁRIO -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Novo Chamado</div>
+      </div>
+      <div class="card-body">
+        <div class="form-grid cols-2" style="margin-bottom:14px">
+          <div class="form-group full">
+            <label class="form-label">Título *</label>
+            <input id="fTitulo" class="form-control" type="text" placeholder="Resumo do chamado">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Tipo *</label>
+            <select id="fTipo" class="form-control">
+              <option value="">— Selecione —</option>
+              <option value="Melhoria">💡 Melhoria</option>
+              <option value="Bug">🐛 Bug</option>
+              <option value="Dúvida">❓ Dúvida</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Prioridade *</label>
+            <select id="fPrioridade" class="form-control">
+              <option value="">— Selecione —</option>
+              <option value="Baixa">🟢 Baixa</option>
+              <option value="Média">🟡 Média</option>
+              <option value="Alta">🔴 Alta</option>
+            </select>
+          </div>
+          <div class="form-group full">
+            <label class="form-label">Descrição *</label>
+            <textarea id="fDescricao" class="form-control" placeholder="Descreva em detalhes o que aconteceu, o que esperava que acontecesse, ou o que gostaria de ver no portal..."></textarea>
+          </div>
+        </div>
+
+        <div class="upload-dropzone" onclick="document.getElementById('fArquivo').click()">
+          <div class="upload-dropzone-icon">📎</div>
+          <div class="upload-dropzone-text">Anexar arquivo (opcional)</div>
+          <div class="upload-dropzone-sub">Print de tela, PDF ou documento — máx 20 MB</div>
+          <div id="fArquivoNome" class="upload-dropzone-file"></div>
+        </div>
+        <input type="file" id="fArquivo" style="display:none" accept=".pdf,.docx,.xlsx,.jpg,.jpeg,.png,.gif"
+               onchange="const n=this.files[0]?.name||'';const el=document.getElementById('fArquivoNome');el.textContent=n;el.style.display=n?'':'none'">
+
+        <div class="form-footer">
+          <button class="btn-primary" id="btnEnviar" onclick="enviarChamado()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            Enviar Chamado
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- LISTA -->
+    <div class="list-header">
+      <div class="list-title" id="listTitle">Meus Chamados</div>
+      <button class="btn-secondary" onclick="carregarChamados()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+        Atualizar
+      </button>
+    </div>
+    <div id="listaChamados">
+      <div class="empty-state"><div class="spinner" style="margin:0 auto"></div></div>
+    </div>
+
+  </div>
+</main>
+</div>
+
+<script>
+const API = 'https://api-creta-978599698367.us-central1.run.app';
+let _token = null;
+let _isAdmin = false;
+let _assessorName = '';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBzPqsYnVRXHXSiT8y7FcnbBjsWuT4OQBQ",
+  authDomain: "creta-btg-bd3a8.firebaseapp.com",
+  projectId: "creta-btg-bd3a8",
+  storageBucket: "creta-btg-bd3a8.appspot.com",
+  messagingSenderId: "978599698367",
+  appId: "1:978599698367:web:placeholder"
+};
+
+firebase.initializeApp(firebaseConfig);
+
+firebase.auth().onAuthStateChanged(async user => {
+  if (!user) { window.location.href = 'index.html'; return; }
+
+  _token = await user.getIdToken();
+  const claims = (await user.getIdTokenResult()).claims;
+  _assessorName = claims.assessor_name || user.displayName || user.email;
+  const role = claims.role || 'assessor';
+
+  // Check admin via Firestore
+  try {
+    const snap = await firebase.firestore().doc(`users/${user.uid}`).get();
+    _isAdmin = snap.exists && snap.data()?.role === 'admin';
+  } catch(e) { _isAdmin = false; }
+
+  const ini = (_assessorName || '?')[0].toUpperCase();
+  document.getElementById('avatarEl').textContent = ini;
+  document.getElementById('userNameEl').textContent = _assessorName;
+  document.getElementById('userRoleEl').textContent = _isAdmin ? 'Admin' : 'Assessor';
+  document.getElementById('userEmailEl').textContent = user.email;
+
+  if (_isAdmin) {
+    document.getElementById('sidebarSistema').style.display = 'block';
+    document.getElementById('listTitle').textContent = 'Todos os Chamados';
+  }
+
+  document.getElementById('loadingScreen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+
+  carregarChamados();
+});
+
+// ── Enviar chamado ──────────────────────────────────────────────────────────
+async function enviarChamado() {
+  const titulo    = document.getElementById('fTitulo').value.trim();
+  const tipo      = document.getElementById('fTipo').value;
+  const prioridade = document.getElementById('fPrioridade').value;
+  const descricao = document.getElementById('fDescricao').value.trim();
+  const arquivo   = document.getElementById('fArquivo').files[0];
+
+  if (!titulo || !tipo || !prioridade || !descricao) {
+    showToast('Preencha todos os campos obrigatórios.', true); return;
+  }
+
+  const btn = document.getElementById('btnEnviar');
+  btn.disabled = true;
+  btn.textContent = 'Enviando...';
+
+  try {
+    const fd = new FormData();
+    fd.append('titulo', titulo);
+    fd.append('tipo', tipo);
+    fd.append('prioridade', prioridade);
+    fd.append('descricao', descricao);
+    if (arquivo) fd.append('arquivo', arquivo);
+
+    const r = await fetch(`${API}/api/chamados`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${_token}` },
+      body: fd
+    });
+    if (!r.ok) throw new Error(await r.text());
+
+    // limpar form
+    document.getElementById('fTitulo').value = '';
+    document.getElementById('fTipo').value = '';
+    document.getElementById('fPrioridade').value = '';
+    document.getElementById('fDescricao').value = '';
+    document.getElementById('fArquivo').value = '';
+    document.getElementById('fArquivoNome').style.display = 'none';
+
+    showToast('Chamado enviado com sucesso!');
+    carregarChamados();
+  } catch(e) {
+    showToast('Erro ao enviar: ' + e.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Enviar Chamado';
+  }
+}
+
+// ── Carregar chamados ───────────────────────────────────────────────────────
+async function carregarChamados() {
+  _token = await firebase.auth().currentUser?.getIdToken(true) || _token;
+  document.getElementById('listaChamados').innerHTML =
+    '<div class="empty-state"><div class="spinner" style="margin:0 auto"></div></div>';
+  try {
+    const r = await fetch(`${API}/api/chamados`, {
+      headers: { Authorization: `Bearer ${_token}` }
+    });
+    if (!r.ok) throw new Error(await r.text());
+    const lista = await r.json();
+    renderChamados(lista);
+  } catch(e) {
+    document.getElementById('listaChamados').innerHTML =
+      `<div class="empty-state"><div class="empty-state-text">Erro ao carregar chamados</div><div class="empty-state-sub">${e.message}</div></div>`;
+  }
+}
+
+function renderChamados(lista) {
+  const el = document.getElementById('listaChamados');
+  if (!lista.length) {
+    el.innerHTML = `<div class="empty-state">
+      <div class="empty-state-icon">💬</div>
+      <div class="empty-state-text">Nenhum chamado ainda</div>
+      <div class="empty-state-sub">Use o formulário acima para abrir seu primeiro chamado.</div>
+    </div>`;
+    return;
+  }
+
+  el.innerHTML = lista.map(c => {
+    const tipoClass  = (c.tipo || '').toLowerCase().replace('ú','u');
+    const prioClass  = (c.prioridade || 'baixa').toLowerCase().replace('é','e');
+    const statClass  = c.status === 'Concluído' ? 'concluido' : c.status === 'Em análise' ? 'analise' : 'aberto';
+    const tipoIcon   = c.tipo === 'Bug' ? '🐛' : c.tipo === 'Melhoria' ? '💡' : '❓';
+    const dateStr    = c.created_at ? new Date(c.created_at).toLocaleDateString('pt-BR') : '—';
+
+    const adminControls = _isAdmin ? `
+      <select class="status-select" onchange="atualizarStatus('${c.id}', this.value)" data-id="${c.id}">
+        <option value="Aberto"     ${c.status==='Aberto'?'selected':''}>Aberto</option>
+        <option value="Em análise" ${c.status==='Em análise'?'selected':''}>Em análise</option>
+        <option value="Concluído"  ${c.status==='Concluído'?'selected':''}>Concluído</option>
+      </select>` : '';
+
+    const autorStr = _isAdmin && c.criado_por ? `<span class="chamado-autor">por ${c.criado_por}</span>` : '';
+
+    const anexoBtn = c.arquivo_nome ? `
+      <button class="anexo-btn" onclick="baixarAnexo('${c.id}', '${esc(c.arquivo_nome)}')">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
+        ${esc(c.arquivo_nome)}
+      </button>` : '';
+
+    return `<div class="chamado-item">
+      <div class="chamado-icon ${tipoClass}">${tipoIcon}</div>
+      <div class="chamado-info">
+        <div class="chamado-titulo">${esc(c.titulo)}</div>
+        <div class="chamado-desc">${esc(c.descricao)}</div>
+        <div class="chamado-meta">
+          <span class="badge badge-tipo-${tipoClass}">${c.tipo}</span>
+          <span class="badge badge-prio-${prioClass}">${c.prioridade}</span>
+          <span class="badge badge-status-${statClass}">${c.status}</span>
+          <span class="chamado-date">${dateStr}</span>
+          ${autorStr}
+        </div>
+        ${anexoBtn ? `<div style="margin-top:8px">${anexoBtn}</div>` : ''}
+      </div>
+      <div class="chamado-actions">${adminControls}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── Atualizar status (admin) ────────────────────────────────────────────────
+async function atualizarStatus(id, novoStatus) {
+  try {
+    _token = await firebase.auth().currentUser?.getIdToken(true) || _token;
+    const r = await fetch(`${API}/api/chamados/${id}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${_token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: novoStatus })
+    });
+    if (!r.ok) throw new Error(await r.text());
+    showToast('Status atualizado!');
+  } catch(e) {
+    showToast('Erro: ' + e.message, true);
+    carregarChamados();
+  }
+}
+
+// ── Baixar anexo ────────────────────────────────────────────────────────────
+async function baixarAnexo(id, nome) {
+  try {
+    _token = await firebase.auth().currentUser?.getIdToken(true) || _token;
+    const r = await fetch(`${API}/api/chamados/${id}/arquivo`, {
+      headers: { Authorization: `Bearer ${_token}` }
+    });
+    if (!r.ok) throw new Error(await r.text());
+    const blob = await r.blob();
+    const url  = URL.createObjectURL(blob);
+    const ct   = r.headers.get('Content-Type') || '';
+    if (ct.includes('pdf')) {
+      window.open(url, '_blank');
+    } else {
+      const a = document.createElement('a');
+      a.href = url; a.download = nome; a.click();
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  } catch(e) {
+    showToast('Erro ao baixar: ' + e.message, true);
+  }
+}
+
+// ── Utils ───────────────────────────────────────────────────────────────────
+function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function showToast(msg, err=false) {
+  const t = document.createElement('div');
+  t.className = 'toast' + (err ? ' err' : '');
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => { t.classList.add('hide'); setTimeout(() => t.remove(), 350); }, 3000);
+}
+
+// Fecha dropdown ao clicar fora
+document.addEventListener('click', e => {
+  const chip = document.getElementById('userChip');
+  if (!chip.contains(e.target)) chip.classList.remove('open');
+});
+</script>
+</body>
+</html>

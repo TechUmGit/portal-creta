@@ -282,6 +282,8 @@ if __name__ == "__main__":
     )
     log.info(f"{len(todos_assessores)} assessor(es) encontrado(s)")
 
+    todos_itens: list[dict] = []  # acumula todos para o doc do admin
+
     for assessor in sorted(todos_assessores):
         log.info(f"Processando: {assessor}")
         itens = processar_assessor(
@@ -293,7 +295,22 @@ if __name__ == "__main__":
         )
         if itens:
             salvar_firestore(fs_client, assessor, itens)
+            # Adiciona o nome do assessor em cada item para o doc consolidado
+            for item in itens:
+                todos_itens.append({**item, "assessor": assessor})
         else:
             log.info(f"  Sem prioridades para {assessor} — documento não atualizado")
+
+    # ── Doc consolidado para admin ────────────────────────────────────────────
+    if todos_itens:
+        # Ordena por prioridade e pega os top 15
+        todos_itens.sort(key=lambda x: ORDEM_PRIORIDADE.get(x["prioridade"], 9))
+        top = todos_itens[:15]
+        fs_client.collection("prioridades").document("admin").set({
+            "assessor":  "admin",
+            "gerado_em": datetime.now(timezone.utc).isoformat(),
+            "itens":     top,
+        })
+        log.info(f"Firestore → prioridades/admin ({len(top)} item(s))")
 
     log.info("=== Job Prioridades concluído ===")

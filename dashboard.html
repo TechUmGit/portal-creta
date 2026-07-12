@@ -632,13 +632,7 @@
   async function carregarPrioridadesSemana(assessorName, role) {
     const wrap = document.getElementById('prioSemanaWrap');
     try {
-      // Admin vê mensagem orientando a usar a tabela completa abaixo
-      if (role === 'admin' || !assessorName) {
-        wrap.innerHTML = '<div class="prio-empty">Disponível para assessores.<br>Use a tabela abaixo para ver todas as prioridades.</div>';
-        return;
-      }
-
-      const docId = slugify(assessorName);
+      const docId = (role === 'admin' || !assessorName) ? 'admin' : slugify(assessorName);
       const snap  = await db.collection('prioridades').doc(docId).get();
 
       if (!snap.exists || !(snap.data().itens || []).length) {
@@ -650,7 +644,10 @@
       wrap.innerHTML = itens.map(item => `
         <div class="prio-item">
           <div class="prio-dot ${PRIO_DOT[item.prioridade] || 'dot-blue'}"></div>
-          <div class="prio-text"><strong>${item.titulo}</strong> — ${item.descricao}</div>
+          <div class="prio-text">
+            <strong>${item.titulo}</strong> — ${item.descricao}
+            ${item.assessor ? `<span style="font-size:10px;color:#9ca3af;display:block;margin-top:2px">${item.assessor}</span>` : ''}
+          </div>
           <span class="prio-tag ${PRIO_TAG[item.prioridade] || 'tag-blue'}">${PRIO_LABEL[item.prioridade] || 'Info'}</span>
         </div>
       `).join('');

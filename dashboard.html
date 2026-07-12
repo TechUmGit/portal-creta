@@ -111,7 +111,8 @@
     @media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
 
     /* PRIORIDADES */
-    .panel { background: #fff; border-radius: 14px; border: 1px solid #e8ebf2; overflow: hidden; }
+    .panel { background: #fff; border-radius: 14px; border: 1px solid #e8ebf2; overflow: hidden; display: flex; flex-direction: column; }
+    .panel-body { max-height: 340px; overflow-y: auto; flex: 1; }
     .panel-header { padding: 16px 20px; background: #0c1a35; display: flex; align-items: center; justify-content: space-between; }
     .panel-title { font-size: 13px; font-weight: 700; color: #fff; }
     .panel-link { font-size: 11px; color: rgba(255,255,255,0.6); text-decoration: none; transition: color 0.15s; }
@@ -334,7 +335,7 @@
           <div class="panel-title">🎯 Prioridades da Semana</div>
           <a class="panel-link" href="gestao.html">Ver todas →</a>
         </div>
-        <div id="prioSemanaWrap">
+        <div id="prioSemanaWrap" class="panel-body">
           <div class="prio-empty">Carregando...</div>
         </div>
       </div>
@@ -345,7 +346,7 @@
           <div class="panel-title">📰 Mercado</div>
           <span id="noticiasHora" style="font-size:11px;color:rgba(255,255,255,0.4)"></span>
         </div>
-        <div id="noticiasWrap">
+        <div id="noticiasWrap" class="panel-body">
           <div class="prio-empty">Carregando...</div>
         </div>
       </div>

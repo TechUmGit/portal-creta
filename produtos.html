@@ -147,6 +147,43 @@
     .empty-state-icon { font-size: 40px; margin-bottom: 12px; }
     .empty-state-title { font-size: 15px; font-weight: 600; color: #374151; margin-bottom: 6px; }
 
+    /* PRELOADER INLINE */
+    .preloader-inline { display: flex; justify-content: center; padding: 40px; }
+    .preloader-inline::after { content: ''; width: 28px; height: 28px; border: 3px solid rgba(11,181,213,0.2); border-top-color: #0bb5d5; border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ADMIN ADD BTN */
+    .btn-admin-add { display: inline-flex; align-items: center; gap: 8px; padding: 9px 18px; background: #0c1a35; color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; transition: background 0.15s; }
+    .btn-admin-add:hover { background: #1a3a6c; }
+
+    /* PRODUTO MANUAL CARD */
+    .prod-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+    .prod-card { background: #fff; border: 1px solid #e8ebf2; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+    .prod-card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+    .prod-card-nome { font-size: 14px; font-weight: 700; color: #0c1a35; flex: 1; }
+    .prod-tipo-badge { font-size: 10px; font-weight: 700; padding: 3px 9px; border-radius: 10px; white-space: nowrap; flex-shrink: 0; }
+    .tipo-Fundo                { background: #e0f2fe; color: #0369a1; }
+    .tipo-Oferta\ Pública      { background: #d1fae5; color: #065f46; }
+    .tipo-Produto\ Estruturado { background: #ede9fe; color: #6d28d9; }
+    .tipo-Outro                { background: #f1f5f9; color: #475569; }
+    .prod-card-info { display: flex; flex-direction: column; gap: 4px; }
+    .prod-info-row { display: flex; gap: 6px; font-size: 12px; }
+    .prod-info-label { color: #9ca3af; font-weight: 600; min-width: 90px; }
+    .prod-info-val { color: #374151; }
+    .prod-card-desc { font-size: 12px; color: #6b7280; line-height: 1.5; border-top: 1px solid #f0f3f8; padding-top: 8px; }
+    .prod-card-actions { display: flex; gap: 8px; margin-top: auto; }
+    .btn-prod-action { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 7px; border: 1.5px solid #e8ebf2; background: #fff; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; color: #374151; transition: all 0.15s; text-decoration: none; }
+    .btn-prod-action:hover { border-color: #0c1a35; color: #0c1a35; }
+    .btn-prod-action.del { border-color: #fecaca; color: #dc2626; }
+    .btn-prod-action.del:hover { background: #fee2e2; }
+    .prod-empty { display: flex; flex-direction: column; align-items: center; padding: 60px 20px; text-align: center; color: #9ca3af; }
+    .prod-empty-icon { font-size: 40px; margin-bottom: 12px; }
+    .prod-empty-title { font-size: 15px; font-weight: 600; color: #374151; margin-bottom: 6px; }
+    .prod-empty-sub { font-size: 13px; max-width: 300px; }
+
+    /* MODAL PRODUTO */
+    .modal-prod { background: #fff; border-radius: 14px; width: 100%; max-width: 640px; max-height: 90vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
+
     /* SEGMENTO */
     .seg-bar { display: flex; gap: 0; margin-bottom: 28px; background: #fff; border-radius: 10px; border: 1px solid #e8ebf2; padding: 4px; width: fit-content; }
     .seg-btn { padding: 8px 22px; border-radius: 7px; border: none; background: none; font-size: 13px; font-weight: 600; color: #6b7280; cursor: pointer; font-family: inherit; transition: all 0.15s; white-space: nowrap; }
@@ -272,6 +309,14 @@
 
   <div class="content">
 
+    <!-- TOOLBAR ADMIN -->
+    <div id="adminBar" style="display:none;justify-content:flex-end;margin-bottom:16px">
+      <button class="btn-admin-add" onclick="abrirModalProduto()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Incluir Produto
+      </button>
+    </div>
+
     <!-- SELETOR DE SEGMENTO -->
     <div class="seg-bar">
       <button class="seg-btn active" id="segBtnDest"   onclick="switchSegmento('destaques')">⭐ Destaques</button>
@@ -287,18 +332,21 @@
         <div style="font-size:15px;font-weight:700;color:#0c1a35;margin-bottom:16px;display:flex;align-items:center;gap:8px">
           <span>📈</span> Carteiras Recomendadas de Ações
         </div>
-        <div id="destRVContent">
-          <div class="empty-state"><div class="empty-state-icon">⭐</div><div class="empty-state-title">Nenhuma carteira favoritada</div></div>
-        </div>
+        <div id="destRVContent"><div class="preloader-inline"></div></div>
       </div>
       <div style="border-top:1px solid #e8ebf2;margin:28px 0"></div>
       <div id="destRFSection">
         <div style="font-size:15px;font-weight:700;color:#0c1a35;margin-bottom:16px;display:flex;align-items:center;gap:8px">
           <span>📊</span> Renda Fixa Recomendada
         </div>
-        <div id="destRFContent">
-          <div class="empty-state"><div class="empty-state-icon">⭐</div><div class="empty-state-title">Nenhum produto de RF favoritado</div></div>
+        <div id="destRFContent"><div class="preloader-inline"></div></div>
+      </div>
+      <div id="destManuaisSection" style="display:none">
+        <div style="border-top:1px solid #e8ebf2;margin:28px 0"></div>
+        <div style="font-size:15px;font-weight:700;color:#0c1a35;margin-bottom:16px;display:flex;align-items:center;gap:8px">
+          <span>🗂️</span> Outros Produtos
         </div>
+        <div id="destManuaisContent"></div>
       </div>
     </div>
 
@@ -403,25 +451,123 @@
 
     <!-- ═══ OFERTAS PÚBLICAS ═══ -->
     <div id="secaoOP" style="display:none">
-      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;text-align:center">
-        <div style="font-size:48px;margin-bottom:16px">🏦</div>
-        <div style="font-size:18px;font-weight:700;color:#0c1a35;margin-bottom:8px">Ofertas Públicas</div>
-        <div style="font-size:14px;color:#9ca3af;max-width:360px">Em breve. Os dados de IPOs, FIIs e debêntures aparecerão aqui quando disponíveis.</div>
-      </div>
+      <div id="opContent"><div class="preloader-inline"></div></div>
     </div>
 
     <!-- ═══ PRODUTOS ESTRUTURADOS ═══ -->
     <div id="secaoPE" style="display:none">
-      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;text-align:center">
-        <div style="font-size:48px;margin-bottom:16px">🧩</div>
-        <div style="font-size:18px;font-weight:700;color:#0c1a35;margin-bottom:8px">Produtos Estruturados</div>
-        <div style="font-size:14px;color:#9ca3af;max-width:360px">Em breve. COEs, notas estruturadas e outros produtos aparecerão aqui quando disponíveis.</div>
-      </div>
+      <div id="peContent"><div class="preloader-inline"></div></div>
     </div>
 
   </div>
 </main>
 </div>
+
+<!-- MODAL PRODUTO MANUAL -->
+<div class="modal-overlay" id="modalProdOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:500;align-items:center;justify-content:center;padding:20px">
+  <div class="modal-prod">
+    <div style="padding:22px 28px 18px;border-bottom:1px solid #f0f3f8;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+      <div style="font-size:17px;font-weight:700;color:#0c1a35">Incluir Produto</div>
+      <button onclick="fecharModalProduto()" style="width:32px;height:32px;border-radius:8px;border:none;background:none;cursor:pointer;font-size:18px;color:#9ca3af">✕</button>
+    </div>
+    <div style="padding:24px 28px;overflow-y:auto;flex:1">
+
+      <!-- Identificação -->
+      <div style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#9ca3af;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid #f0f3f8">Identificação</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+        <div style="grid-column:1/-1;display:flex;flex-direction:column;gap:5px">
+          <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase">Nome *</label>
+          <input id="pmNome" class="form-control" type="text" placeholder="Nome do produto">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase">Tipo *</label>
+          <select id="pmTipo" class="form-control">
+            <option value="">— Selecione —</option>
+            <option value="Fundo">Fundo</option>
+            <option value="Oferta Pública">Oferta Pública</option>
+            <option value="Produto Estruturado">Produto Estruturado</option>
+            <option value="Outro">Outro</option>
+          </select>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase">Emissor / Gestora</label>
+          <input id="pmEmissor" class="form-control" type="text" placeholder="Ex: XP Asset, BTG Pactual">
+        </div>
+      </div>
+
+      <!-- Financeiro -->
+      <div style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#9ca3af;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid #f0f3f8">Financeiro</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase">Rentabilidade alvo</label>
+          <input id="pmRent" class="form-control" type="text" placeholder="Ex: CDI + 2%, 15% a.a.">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase">Indexador</label>
+          <input id="pmIndex" class="form-control" type="text" placeholder="Ex: CDI, IPCA, PRE">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase">Mín. Aplicação (R$)</label>
+          <input id="pmMinAp" class="form-control" type="text" inputmode="numeric" placeholder="R$ 0" oninput="fmtInputPM(this)">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase">Liquidez</label>
+          <input id="pmLiquidez" class="form-control" type="text" placeholder="Ex: D+30, No vencimento">
+        </div>
+      </div>
+
+      <!-- Prazo / Risco -->
+      <div style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#9ca3af;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid #f0f3f8">Prazo e Risco</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase">Prazo (meses)</label>
+          <input id="pmPrazo" class="form-control" type="number" min="0" placeholder="0">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase">Data de Vencimento</label>
+          <input id="pmVenc" class="form-control" type="date">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase">Nível de Risco</label>
+          <select id="pmRisco" class="form-control">
+            <option value="">—</option>
+            <option>Baixo</option>
+            <option>Médio</option>
+            <option>Alto</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Descrição -->
+      <div style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#9ca3af;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid #f0f3f8">Descrição</div>
+      <div style="margin-bottom:16px;display:flex;flex-direction:column;gap:5px">
+        <textarea id="pmDesc" class="form-control" style="min-height:80px" placeholder="Descreva o produto, estratégia, público-alvo..."></textarea>
+      </div>
+      <div style="margin-bottom:16px;display:flex;flex-direction:column;gap:5px">
+        <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase">Link Externo</label>
+        <input id="pmLink" class="form-control" type="url" placeholder="https://...">
+      </div>
+
+      <!-- Arquivo -->
+      <div style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#9ca3af;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid #f0f3f8">Arquivo de Apoio</div>
+      <div style="background:#f8f9fc;border-radius:10px;border:1.5px dashed #d1d5db;padding:20px;text-align:center;cursor:pointer" onclick="document.getElementById('pmArquivo').click()">
+        <div style="font-size:24px;margin-bottom:6px">📎</div>
+        <div style="font-size:13px;font-weight:600;color:#374151">Clique para anexar</div>
+        <div style="font-size:11px;color:#9ca3af;margin-top:3px">PDF, DOCX, XLSX, imagem — máx 20 MB</div>
+        <div id="pmArquivoNome" style="font-size:12px;color:#0bb5d5;margin-top:8px;display:none"></div>
+      </div>
+      <input type="file" id="pmArquivo" style="display:none" accept=".pdf,.docx,.xlsx,.xls,.pptx,.jpg,.jpeg,.png"
+             onchange="document.getElementById('pmArquivoNome').textContent=this.files[0]?.name||'';document.getElementById('pmArquivoNome').style.display=this.files[0]?'':'none'">
+    </div>
+    <div style="padding:16px 28px;border-top:1px solid #f0f3f8;display:flex;justify-content:flex-end;gap:10px;flex-shrink:0">
+      <button onclick="fecharModalProduto()" style="padding:9px 18px;background:#f4f6fb;color:#374151;border:1px solid #e8ebf2;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">Cancelar</button>
+      <button onclick="salvarProdutoManual()" style="display:inline-flex;align-items:center;gap:8px;padding:9px 18px;background:#0c1a35;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">Salvar Produto</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toastProd" style="position:fixed;bottom:24px;right:24px;background:#0c1a35;color:#fff;padding:12px 20px;border-radius:10px;font-size:13px;font-weight:500;z-index:9999;transform:translateY(100px);opacity:0;transition:all .3s;pointer-events:none"></div>
 
 <script>
   const API_URL = 'https://api-creta-978599698367.us-central1.run.app';
@@ -472,13 +618,16 @@
       document.getElementById('userNameEl').textContent = name;
       document.getElementById('avatarEl').textContent   = name.charAt(0).toUpperCase();
       document.getElementById('userRoleEl').textContent = _isAdmin ? 'Administrador' : 'Assessor BTG';
-      if (_isAdmin) document.getElementById('sidebarSistema').style.display = 'block';
+      if (_isAdmin) {
+        document.getElementById('sidebarSistema').style.display = 'block';
+        document.getElementById('adminBar').style.display = 'flex';
+      }
     } catch(e) {
       document.getElementById('userNameEl').textContent = email.split('@')[0];
     }
 
     _token = await user.getIdToken();
-    await carregarProdutos();
+    await Promise.all([carregarProdutos(), carregarProdutosManuais()]);
   });
 
   // ── Dados ──────────────────────────────────────────────────────────────────
@@ -534,7 +683,7 @@
     // RF: produtos com estrela
     const rfEl = document.getElementById('destRFContent');
     if (_rfData.length === 0) {
-      rfEl.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⏳</div><div class="empty-state-title">Carregando RF...</div></div>';
+      rfEl.innerHTML = '<div class="preloader-inline"></div>';
       carregarRendaFixa().then(() => renderDestRF());
     } else {
       renderDestRF();
@@ -1062,6 +1211,214 @@
   document.addEventListener('click', e => {
     if (!document.getElementById('userChip').contains(e.target))
       document.getElementById('userChip').classList.remove('open');
+  });
+
+  // ── Produtos Manuais ──────────────────────────────────────────────────────
+  let _prodManuais = [];
+
+  async function carregarProdutosManuais() {
+    try {
+      const res  = await fetch(`${API_URL}/api/produtos-manuais`, { headers: { Authorization: `Bearer ${_token}` } });
+      const json = await res.json();
+      _prodManuais = json.produtos || [];
+      renderProdutosManuais();
+    } catch(e) {
+      _prodManuais = [];
+      renderProdutosManuais();
+    }
+  }
+
+  function renderProdutosManuais() {
+    const TIPOS = {
+      'Oferta Pública':      { el: 'opContent',        icon: '🏦', label: 'Ofertas Públicas' },
+      'Produto Estruturado': { el: 'peContent',         icon: '🧩', label: 'Produtos Estruturados' },
+      'Fundo':               { el: 'destManuaisContent', icon: '📁', label: 'Fundos' },
+      'Outro':               { el: 'destManuaisContent', icon: '🗂️', label: 'Outros' },
+    };
+
+    // Renderiza OP e PE
+    renderGrupoProdutos('opContent', _prodManuais.filter(p => p.tipo === 'Oferta Pública'), '🏦', 'Ofertas Públicas');
+    renderGrupoProdutos('peContent', _prodManuais.filter(p => p.tipo === 'Produto Estruturado'), '🧩', 'Produtos Estruturados');
+
+    // Outros (Fundo + Outro) → Destaques
+    const outros = _prodManuais.filter(p => p.tipo === 'Fundo' || p.tipo === 'Outro');
+    const destManuais = document.getElementById('destManuaisSection');
+    if (destManuais) destManuais.style.display = outros.length ? '' : 'none';
+    renderGrupoProdutos('destManuaisContent', outros, '🗂️', '');
+  }
+
+  function renderGrupoProdutos(elId, lista, icon, label) {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    if (!lista.length) {
+      el.innerHTML = `<div class="prod-empty">
+        <div class="prod-empty-icon">${icon}</div>
+        <div class="prod-empty-title">${label || 'Nenhum produto'}</div>
+        <div class="prod-empty-sub">Nenhum produto cadastrado aqui ainda.${_isAdmin ? ' Use o botão "Incluir Produto" para adicionar.' : ''}</div>
+      </div>`;
+      return;
+    }
+    el.innerHTML = `<div class="prod-grid">${lista.map(p => prodCard(p)).join('')}</div>`;
+  }
+
+  function prodCard(p) {
+    const tipoCls = 'tipo-' + (p.tipo || 'Outro').replace(/\s/g, '\\ ');
+    const tipoCssSafe = `tipo-${(p.tipo||'Outro').replace(/\s+/g,'_')}`;
+    const badge  = `<span class="prod-tipo-badge" style="${tipoBadgeStyle(p.tipo)}">${p.tipo || '—'}</span>`;
+    const info   = [
+      p.emissor       && ['Emissor',      p.emissor],
+      p.rentabilidade && ['Rentabilidade', p.rentabilidade],
+      p.indexador     && ['Indexador',    p.indexador],
+      p.risco         && ['Risco',        p.risco],
+      p.prazo_meses   && ['Prazo',        p.prazo_meses + ' meses'],
+      p.data_vencimento && ['Vencimento', new Date(p.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR')],
+      p.min_aplicacao != null && ['Mín. Aplic.', 'R$ ' + Number(p.min_aplicacao).toLocaleString('pt-BR')],
+      p.liquidez      && ['Liquidez',     p.liquidez],
+    ].filter(Boolean);
+
+    const actions = [
+      p.arquivo_nome ? `<button class="btn-prod-action" onclick="downloadProduto('${p.id}','${esc(p.arquivo_nome||'')}')">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        ${esc(p.arquivo_nome)}</button>` : '',
+      p.link_externo ? `<a class="btn-prod-action" href="${esc(p.link_externo)}" target="_blank" rel="noopener">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        Link</a>` : '',
+      _isAdmin ? `<button class="btn-prod-action del" onclick="deletarProdutoManual('${p.id}',event)">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+        Excluir</button>` : '',
+    ].filter(Boolean).join('');
+
+    return `<div class="prod-card">
+      <div class="prod-card-header">
+        <div class="prod-card-nome">${esc(p.nome)}</div>
+        ${badge}
+      </div>
+      ${info.length ? `<div class="prod-card-info">${info.map(([l,v]) =>
+        `<div class="prod-info-row"><span class="prod-info-label">${l}</span><span class="prod-info-val">${esc(String(v))}</span></div>`
+      ).join('')}</div>` : ''}
+      ${p.descricao ? `<div class="prod-card-desc">${esc(p.descricao)}</div>` : ''}
+      ${actions ? `<div class="prod-card-actions">${actions}</div>` : ''}
+    </div>`;
+  }
+
+  function tipoBadgeStyle(tipo) {
+    const map = {
+      'Fundo':               'background:#e0f2fe;color:#0369a1',
+      'Oferta Pública':      'background:#d1fae5;color:#065f46',
+      'Produto Estruturado': 'background:#ede9fe;color:#6d28d9',
+      'Outro':               'background:#f1f5f9;color:#475569',
+    };
+    return map[tipo] || map['Outro'];
+  }
+
+  async function downloadProduto(id, nome) {
+    try {
+      const res = await fetch(`${API_URL}/api/produtos-manuais/${id}/arquivo`, {
+        headers: { Authorization: `Bearer ${_token}` }
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const ct   = blob.type || '';
+      if (ct.includes('pdf')) {
+        // Abrir PDF inline
+        window.open(URL.createObjectURL(blob), '_blank');
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = nome; a.click();
+        URL.revokeObjectURL(url);
+      }
+    } catch(e) { showToastProd('Erro ao baixar arquivo: ' + e.message, true); }
+  }
+
+  async function deletarProdutoManual(id, e) {
+    e.stopPropagation();
+    if (!confirm('Remover este produto?')) return;
+    try {
+      const res = await fetch(`${API_URL}/api/produtos-manuais/${id}`, {
+        method: 'DELETE', headers: { Authorization: `Bearer ${_token}` }
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      showToastProd('Produto removido.');
+      await carregarProdutosManuais();
+    } catch(e) { showToastProd(e.message, true); }
+  }
+
+  // ── Modal Produto Manual ──────────────────────────────────────────────────
+  function abrirModalProduto() {
+    ['pmNome','pmEmissor','pmRent','pmIndex','pmMinAp','pmLiquidez','pmPrazo','pmVenc','pmDesc','pmLink']
+      .forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+    document.getElementById('pmTipo').value   = '';
+    document.getElementById('pmRisco').value  = '';
+    document.getElementById('pmArquivo').value = '';
+    document.getElementById('pmArquivoNome').style.display = 'none';
+    const ov = document.getElementById('modalProdOverlay');
+    ov.style.display = 'flex';
+  }
+
+  function fecharModalProduto() {
+    document.getElementById('modalProdOverlay').style.display = 'none';
+  }
+
+  function fmtInputPM(el) {
+    const raw = el.value.replace(/\D/g, '');
+    if (!raw) { el.value = ''; return; }
+    el.value = 'R$ ' + parseInt(raw, 10).toLocaleString('pt-BR');
+    el.setSelectionRange(el.value.length, el.value.length);
+  }
+
+  async function salvarProdutoManual() {
+    const nome = document.getElementById('pmNome').value.trim();
+    const tipo = document.getElementById('pmTipo').value;
+    if (!nome || !tipo) { showToastProd('Nome e Tipo são obrigatórios.', true); return; }
+
+    const form = new FormData();
+    form.append('nome', nome);
+    form.append('tipo', tipo);
+    const fields = {
+      emissor: 'pmEmissor', rentabilidade: 'pmRent', indexador: 'pmIndex',
+      liquidez: 'pmLiquidez', data_vencimento: 'pmVenc', descricao: 'pmDesc', link_externo: 'pmLink',
+    };
+    Object.entries(fields).forEach(([k, id]) => {
+      const v = document.getElementById(id)?.value?.trim();
+      if (v) form.append(k, v);
+    });
+    const prazo = document.getElementById('pmPrazo').value;
+    if (prazo) form.append('prazo_meses', prazo);
+    const risco = document.getElementById('pmRisco').value;
+    if (risco) form.append('risco', risco);
+    const minAp = (document.getElementById('pmMinAp').value || '').replace(/[R$\s.]/g,'').replace(',','.');
+    if (minAp) form.append('min_aplicacao', minAp);
+    const arq = document.getElementById('pmArquivo').files[0];
+    if (arq) form.append('arquivo', arq);
+
+    try {
+      const res = await fetch(`${API_URL}/api/produtos-manuais`, {
+        method: 'POST', headers: { Authorization: `Bearer ${_token}` }, body: form,
+      });
+      if (!res.ok) throw new Error((await res.json()).detail || `HTTP ${res.status}`);
+      showToastProd('Produto incluído com sucesso.');
+      fecharModalProduto();
+      await carregarProdutosManuais();
+      if (_segmento === 'destaques') renderDestaques();
+    } catch(e) { showToastProd('Erro: ' + e.message, true); }
+  }
+
+  // ── Toast ─────────────────────────────────────────────────────────────────
+  let _toastPMTimer;
+  function showToastProd(msg, err) {
+    const el = document.getElementById('toastProd');
+    el.textContent = msg;
+    el.style.background = err ? '#dc2626' : '#0c1a35';
+    el.style.transform = 'translateY(0)'; el.style.opacity = '1';
+    clearTimeout(_toastPMTimer);
+    _toastPMTimer = setTimeout(() => { el.style.transform = 'translateY(100px)'; el.style.opacity = '0'; }, 3000);
+  }
+
+  function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  // Fechar modal ao clicar fora
+  document.getElementById('modalProdOverlay').addEventListener('click', e => {
+    if (e.target === document.getElementById('modalProdOverlay')) fecharModalProduto();
   });
 </script>
 </body>

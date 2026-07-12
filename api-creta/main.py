@@ -20,7 +20,7 @@ from urllib.parse import quote
 import pandas as pd
 import yfinance as yf
 
-from fastapi import FastAPI, Depends, HTTPException, Header, Query, UploadFile, File, Request, status
+from fastapi import FastAPI, Depends, HTTPException, Header, Query, UploadFile, File, Form, Request, status
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -57,9 +57,10 @@ TABLE_PRIMEIRA_APARICAO  = f"`{GCP_PROJECT}.{DATASET}.conta_primeira_aparicao`"
 TABLE_CDB_LCA            = f"`{GCP_PROJECT}.{DATASET}.partner_report_cdb_lca_lci_lf`"
 
 # ── GCS ───────────────────────────────────────────────────────────────────────
-GCS_BUCKET  = os.getenv("GCS_BUCKET", "creta-btg-pipeline")
-GCS_PREFIX  = "entradas/"
-gcs_client  = gcs.Client(project=GCP_PROJECT)
+GCS_BUCKET         = os.getenv("GCS_BUCKET", "creta-btg-pipeline")
+GCS_PREFIX         = "entradas/"
+GCS_PREFIX_PRODUTOS = "produtos-manuais/"
+gcs_client         = gcs.Client(project=GCP_PROJECT)
 
 # ── Cotações via Yahoo Finance ────────────────────────────────────────────────
 # Tickers BTG internos → código B3 padrão (.SA é o sufixo do Yahoo para B3)
@@ -2461,3 +2462,156 @@ async def pipeline_importar(
             erros.append(f"Linha {i+2}: {e}")
 
     return {"ok": True, "criados": criados, "erros": erros}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Produtos Manuais (admin) — Firestore + GCS
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _prod_manuais_col():
+    return get_fs().collection("produtos_manuais")
+
+
+def _ser_prod_manual(doc) -> dict:
+    d = doc.to_dict() or {}
+    d["id"] = doc.id
+    for k, v in d.items():
+        if hasattr(v, "isoformat"):
+            d[k] = v.isoformat()
+    return d
+
+
+@app.get("/api/produtos-manuais")
+async def listar_produtos_manuais(
+    authorization: Optional[str] = Header(default=None),
+):
+    """Lista todos os produtos incluídos manualmente."""
+    await verificar_token(authorization)
+    try:
+        docs = _prod_manuais_col().stream()
+        return {"produtos": [_ser_prod_manual(d) for d in docs]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/produtos-manuais")
+async def criar_produto_manual(
+    nome:            str            = Form(...),
+    tipo:            str            = Form(...),
+    emissor:         Optional[str]  = Form(default=None),
+    rentabilidade:   Optional[str]  = Form(default=None),
+    indexador:       Optional[str]  = Form(default=None),
+    min_aplicacao:   Optional[str]  = Form(default=None),
+    liquidez:        Optional[str]  = Form(default=None),
+    prazo_meses:     Optional[str]  = Form(default=None),
+    data_vencimento: Optional[str]  = Form(default=None),
+    risco:           Optional[str]  = Form(default=None),
+    descricao:       Optional[str]  = Form(default=None),
+    link_externo:    Optional[str]  = Form(default=None),
+    arquivo:         Optional[UploadFile] = File(default=None),
+    authorization:   Optional[str]  = Header(default=None),
+):
+    """Cria produto manual — apenas admin."""
+    token_data = await verificar_token(authorization)
+    if token_data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Acesso restrito a admins.")
+
+    gcs_path    = None
+    arquivo_nome = None
+    arquivo_tipo = None
+    if arquivo and arquivo.filename:
+        content = await arquivo.read()
+        safe    = re.sub(r"[^\w\-_\.]", "_", arquivo.filename)
+        gcs_path    = f"{GCS_PREFIX_PRODUTOS}{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{safe}"
+        arquivo_tipo = arquivo.content_type or "application/octet-stream"
+        blob = gcs_client.bucket(GCS_BUCKET).blob(gcs_path)
+        blob.upload_from_string(content, content_type=arquivo_tipo)
+        arquivo_nome = arquivo.filename
+
+    def _num(v):
+        try:
+            return float(str(v).replace(",", ".")) if v else None
+        except Exception:
+            return None
+
+    dados = {
+        "nome":            nome,
+        "tipo":            tipo,
+        "emissor":         emissor        or None,
+        "rentabilidade":   rentabilidade  or None,
+        "indexador":       indexador      or None,
+        "min_aplicacao":   _num(min_aplicacao),
+        "liquidez":        liquidez       or None,
+        "prazo_meses":     int(prazo_meses) if prazo_meses and prazo_meses.strip().isdigit() else None,
+        "data_vencimento": data_vencimento or None,
+        "risco":           risco          or None,
+        "descricao":       descricao      or None,
+        "link_externo":    link_externo   or None,
+        "arquivo_gcs":     gcs_path,
+        "arquivo_nome":    arquivo_nome,
+        "arquivo_tipo":    arquivo_tipo,
+        "criado_por":      token_data.get("assessor_name") or token_data.get("email", ""),
+        "created_at":      datetime.utcnow().isoformat(),
+    }
+    try:
+        ref = _prod_manuais_col().add(dados)
+        return {"ok": True, "id": ref[1].id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/produtos-manuais/{doc_id}")
+async def deletar_produto_manual(
+    doc_id: str,
+    authorization: Optional[str] = Header(default=None),
+):
+    """Remove produto manual — apenas admin."""
+    token_data = await verificar_token(authorization)
+    if token_data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Acesso restrito a admins.")
+
+    ref = _prod_manuais_col().document(doc_id)
+    doc = ref.get()
+    if not doc.exists:
+        raise HTTPException(status_code=404, detail="Produto não encontrado.")
+
+    gcs_path = (doc.to_dict() or {}).get("arquivo_gcs")
+    if gcs_path:
+        try:
+            gcs_client.bucket(GCS_BUCKET).blob(gcs_path).delete()
+        except Exception:
+            pass
+
+    ref.delete()
+    return {"ok": True}
+
+
+@app.get("/api/produtos-manuais/{doc_id}/arquivo")
+async def download_produto_manual_arquivo(
+    doc_id: str,
+    authorization: Optional[str] = Header(default=None),
+):
+    """Retorna (stream) o arquivo anexado ao produto — todos os assessores podem baixar."""
+    await verificar_token(authorization)
+
+    ref = _prod_manuais_col().document(doc_id)
+    doc = ref.get()
+    if not doc.exists:
+        raise HTTPException(status_code=404, detail="Produto não encontrado.")
+
+    d        = doc.to_dict() or {}
+    gcs_path = d.get("arquivo_gcs")
+    fname    = d.get("arquivo_nome", "arquivo")
+    ct       = d.get("arquivo_tipo", "application/octet-stream")
+
+    if not gcs_path:
+        raise HTTPException(status_code=404, detail="Nenhum arquivo anexado.")
+
+    blob = gcs_client.bucket(GCS_BUCKET).blob(gcs_path)
+    buf  = io.BytesIO()
+    blob.download_to_file(buf)
+    buf.seek(0)
+
+    # PDFs abrem inline; outros fazem download
+    disposition = "inline" if "pdf" in ct else f'attachment; filename="{fname}"'
+    return StreamingResponse(buf, media_type=ct, headers={"Content-Disposition": disposition})

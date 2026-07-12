@@ -76,11 +76,13 @@
     .kpi.lead    { border-left: 4px solid #8b5cf6; }
 
     /* TOOLBAR */
-    .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
-    .search-box { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid #e8ebf2; border-radius: 8px; padding: 8px 14px; flex: 1; min-width: 200px; max-width: 320px; }
+    .toolbar { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+    .toolbar-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .search-box { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid #e8ebf2; border-radius: 8px; padding: 8px 14px; min-width: 200px; max-width: 320px; }
     .search-box input { border: none; outline: none; font-size: 13px; font-family: inherit; color: #374151; background: none; width: 100%; }
     .search-box svg { color: #9ca3af; flex-shrink: 0; }
-    .filter-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+    .filter-chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .filter-label { font-size: 10px; font-weight: 700; color: #9ca3af; text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; min-width: 52px; }
     .chip { padding: 5px 14px; border-radius: 20px; border: 1.5px solid #d1d5db; background: #fff; color: #6b7280; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; transition: all 0.15s; white-space: nowrap; }
     .chip:hover { border-color: #0c1a35; color: #0c1a35; }
     .chip.active { background: #0c1a35; border-color: #0c1a35; color: #fff; }
@@ -418,39 +420,50 @@
 
     <!-- TOOLBAR -->
     <div class="toolbar">
-      <div class="search-box">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input type="text" id="searchInput" placeholder="Buscar por nome..." oninput="renderTabela()">
+      <!-- Linha 1: busca + botões -->
+      <div class="toolbar-row">
+        <div class="search-box">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="searchInput" placeholder="Buscar por nome..." oninput="renderTabela()">
+        </div>
+        <div style="display:flex;gap:8px;margin-left:auto">
+          <button class="btn-outline" onclick="baixarTemplate()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Baixar Template
+          </button>
+          <button class="btn-outline" onclick="document.getElementById('importInput').click()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Importar Excel
+          </button>
+          <input type="file" id="importInput" accept=".xlsx" style="display:none" onchange="importarExcel(this)">
+          <button class="btn-primary" onclick="abrirModal()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Novo Cliente
+          </button>
+        </div>
       </div>
-      <div class="filter-chips">
-        <span style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;align-self:center">Pipe</span>
-        <button class="chip active" data-pipe="" onclick="setFiltroPipe(this)">Todos</button>
-        <button class="chip quente" data-pipe="Quente" onclick="setFiltroPipe(this)">🔴 Quente</button>
-        <button class="chip morno"  data-pipe="Morno"  onclick="setFiltroPipe(this)">🟠 Morno</button>
-        <button class="chip frio"   data-pipe="Frio"   onclick="setFiltroPipe(this)">🔵 Frio</button>
-        <button class="chip lead"   data-pipe="LEAD"   onclick="setFiltroPipe(this)">🟣 Lead</button>
-        <span style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;align-self:center;margin-left:8px">Ranking</span>
-        <button class="chip active" data-rank="" onclick="setFiltroRank(this)">Todos</button>
-        <button class="chip" data-rank="Com certeza"   onclick="setFiltroRank(this)">✅ Com certeza</button>
-        <button class="chip" data-rank="Possivelmente" onclick="setFiltroRank(this)">🤔 Possivelmente</button>
-        <button class="chip" data-rank="Stand By"      onclick="setFiltroRank(this)">⏸ Stand By</button>
-        <button class="chip" data-rank="Desafio"       onclick="setFiltroRank(this)">⚡ Desafio</button>
-        <button class="chip" data-rank="Não Vem"       onclick="setFiltroRank(this)">❌ Não Vem</button>
+      <!-- Linha 2: filtro Pipe -->
+      <div class="toolbar-row">
+        <div class="filter-chips">
+          <span class="filter-label">Pipe</span>
+          <button class="chip active" data-pipe="" onclick="setFiltroPipe(this)">Todos</button>
+          <button class="chip quente" data-pipe="Quente" onclick="setFiltroPipe(this)">🔴 Quente</button>
+          <button class="chip morno"  data-pipe="Morno"  onclick="setFiltroPipe(this)">🟠 Morno</button>
+          <button class="chip frio"   data-pipe="Frio"   onclick="setFiltroPipe(this)">🔵 Frio</button>
+          <button class="chip lead"   data-pipe="LEAD"   onclick="setFiltroPipe(this)">🟣 Lead</button>
+        </div>
       </div>
-      <div style="display:flex;gap:8px;margin-left:auto">
-        <button class="btn-outline" onclick="baixarTemplate()">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          Baixar Template
-        </button>
-        <button class="btn-outline" onclick="document.getElementById('importInput').click()">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-          Importar Excel
-        </button>
-        <input type="file" id="importInput" accept=".xlsx" style="display:none" onchange="importarExcel(this)">
-        <button class="btn-primary" onclick="abrirModal()">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Novo Cliente
-        </button>
+      <!-- Linha 3: filtro Ranking -->
+      <div class="toolbar-row">
+        <div class="filter-chips">
+          <span class="filter-label">Ranking</span>
+          <button class="chip active" data-rank="" onclick="setFiltroRank(this)">Todos</button>
+          <button class="chip" data-rank="Com certeza"   onclick="setFiltroRank(this)">✅ Com certeza</button>
+          <button class="chip" data-rank="Possivelmente" onclick="setFiltroRank(this)">🤔 Possivelmente</button>
+          <button class="chip" data-rank="Stand By"      onclick="setFiltroRank(this)">⏸ Stand By</button>
+          <button class="chip" data-rank="Desafio"       onclick="setFiltroRank(this)">⚡ Desafio</button>
+          <button class="chip" data-rank="Não Vem"       onclick="setFiltroRank(this)">❌ Não Vem</button>
+        </div>
       </div>
     </div>
 

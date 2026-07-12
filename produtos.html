@@ -182,7 +182,36 @@
     .prod-empty-sub { font-size: 13px; max-width: 300px; }
 
     /* MODAL PRODUTO */
-    .modal-prod { background: #fff; border-radius: 14px; width: 100%; max-width: 640px; max-height: 90vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
+    .modal-prod { background: #fff; border-radius: 16px; width: 100%; max-width: 660px; max-height: 92vh; display: flex; flex-direction: column; box-shadow: 0 24px 70px rgba(12,26,53,0.22); overflow: hidden; }
+    .modal-prod .modal-header { padding: 20px 28px; background: #0c1a35; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+    .modal-prod .modal-title  { font-size: 16px; font-weight: 700; color: #fff; letter-spacing: 0.01em; }
+    .modal-prod .modal-close  { width: 32px; height: 32px; border-radius: 8px; border: none; background: rgba(255,255,255,0.1); cursor: pointer; font-size: 16px; color: rgba(255,255,255,0.7); display: flex; align-items: center; justify-content: center; transition: background 0.15s, color 0.15s; }
+    .modal-prod .modal-close:hover { background: rgba(255,255,255,0.2); color: #fff; }
+    .modal-prod .modal-body   { padding: 20px 24px; overflow-y: auto; flex: 1; background: #f4f6fb; }
+    .modal-prod .modal-footer { padding: 14px 24px; border-top: 1px solid #e8ebf2; display: flex; justify-content: flex-end; gap: 10px; flex-shrink: 0; background: #fff; }
+    .modal-prod .form-section { background: #fff; border-radius: 12px; border: 1px solid #e8ebf2; padding: 18px 18px 14px; margin-bottom: 14px; }
+    .modal-prod .form-section-title { font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #0bb5d5; margin-bottom: 14px; display: flex; align-items: center; gap: 7px; }
+    .modal-prod .form-section-title::after { content: ''; flex: 1; height: 1px; background: #e8ebf2; }
+    .modal-prod .form-grid    { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+    .modal-prod .form-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+    .modal-prod .form-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+    .modal-prod .form-group   { display: flex; flex-direction: column; gap: 5px; }
+    .modal-prod .form-group.full { grid-column: 1 / -1; }
+    .modal-prod .form-label   { font-size: 11px; font-weight: 600; color: #374151; letter-spacing: 0.04em; }
+    .modal-prod .form-control { padding: 9px 12px; border: 1.5px solid #e2e6ef; border-radius: 10px; font-size: 13px; font-family: inherit; color: #1e293b; background: #f8f9fc; transition: border-color 0.15s, background 0.15s, box-shadow 0.15s; outline: none; width: 100%; box-sizing: border-box; }
+    .modal-prod .form-control:focus { border-color: #0bb5d5; background: #fff; box-shadow: 0 0 0 3px rgba(11,181,213,0.12); }
+    .modal-prod select.form-control { cursor: pointer; }
+    .modal-prod textarea.form-control { resize: vertical; min-height: 86px; }
+    .modal-prod .btn-secondary { padding: 9px 20px; background: #f4f6fb; color: #374151; border: 1px solid #e2e6ef; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; transition: background 0.15s; }
+    .modal-prod .btn-secondary:hover { background: #e8ebf2; }
+    .modal-prod .btn-primary  { display: inline-flex; align-items: center; gap: 8px; padding: 9px 22px; background: linear-gradient(135deg, #0c1a35 0%, #1a3a6c 100%); color: #fff; border: none; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; transition: opacity 0.15s, transform 0.1s; }
+    .modal-prod .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+    .upload-dropzone { background: #f8f9fc; border-radius: 12px; border: 2px dashed #d1d5db; padding: 24px 20px; text-align: center; cursor: pointer; transition: border-color 0.2s, background 0.2s; }
+    .upload-dropzone:hover { border-color: #0bb5d5; background: #f0f9ff; }
+    .upload-dropzone-icon { font-size: 26px; margin-bottom: 8px; }
+    .upload-dropzone-text { font-size: 13px; font-weight: 600; color: #374151; }
+    .upload-dropzone-sub  { font-size: 11px; color: #9ca3af; margin-top: 4px; }
+    .upload-dropzone-file { font-size: 12px; color: #0bb5d5; margin-top: 10px; font-weight: 500; }
 
     /* SEGMENTO */
     .seg-bar { display: flex; gap: 0; margin-bottom: 28px; background: #fff; border-radius: 10px; border: 1px solid #e8ebf2; padding: 4px; width: fit-content; }
@@ -466,103 +495,118 @@
 <!-- MODAL PRODUTO MANUAL -->
 <div class="modal-overlay" id="modalProdOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:500;align-items:center;justify-content:center;padding:20px">
   <div class="modal-prod">
-    <div style="padding:22px 28px 18px;border-bottom:1px solid #f0f3f8;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
-      <div style="font-size:17px;font-weight:700;color:#0c1a35">Incluir Produto</div>
-      <button onclick="fecharModalProduto()" style="width:32px;height:32px;border-radius:8px;border:none;background:none;cursor:pointer;font-size:18px;color:#9ca3af">✕</button>
+
+    <div class="modal-header">
+      <div class="modal-title">Incluir Produto</div>
+      <button class="modal-close" onclick="fecharModalProduto()">✕</button>
     </div>
-    <div style="padding:24px 28px;overflow-y:auto;flex:1">
 
-      <!-- Identificação -->
-      <div style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#9ca3af;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid #f0f3f8">Identificação</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
-        <div style="grid-column:1/-1;display:flex;flex-direction:column;gap:5px">
-          <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase">Nome *</label>
-          <input id="pmNome" class="form-control" type="text" placeholder="Nome do produto">
-        </div>
-        <div style="display:flex;flex-direction:column;gap:5px">
-          <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase">Tipo *</label>
-          <select id="pmTipo" class="form-control">
-            <option value="">— Selecione —</option>
-            <option value="Fundo">Fundo</option>
-            <option value="Oferta Pública">Oferta Pública</option>
-            <option value="Produto Estruturado">Produto Estruturado</option>
-            <option value="Outro">Outro</option>
-          </select>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:5px">
-          <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase">Emissor / Gestora</label>
-          <input id="pmEmissor" class="form-control" type="text" placeholder="Ex: XP Asset, BTG Pactual">
-        </div>
-      </div>
+    <div class="modal-body">
 
-      <!-- Financeiro -->
-      <div style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#9ca3af;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid #f0f3f8">Financeiro</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
-        <div style="display:flex;flex-direction:column;gap:5px">
-          <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase">Rentabilidade alvo</label>
-          <input id="pmRent" class="form-control" type="text" placeholder="Ex: CDI + 2%, 15% a.a.">
-        </div>
-        <div style="display:flex;flex-direction:column;gap:5px">
-          <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase">Indexador</label>
-          <input id="pmIndex" class="form-control" type="text" placeholder="Ex: CDI, IPCA, PRE">
-        </div>
-        <div style="display:flex;flex-direction:column;gap:5px">
-          <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase">Mín. Aplicação (R$)</label>
-          <input id="pmMinAp" class="form-control" type="text" inputmode="numeric" placeholder="R$ 0" oninput="fmtInputPM(this)">
-        </div>
-        <div style="display:flex;flex-direction:column;gap:5px">
-          <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase">Liquidez</label>
-          <input id="pmLiquidez" class="form-control" type="text" placeholder="Ex: D+30, No vencimento">
+      <div class="form-section">
+        <div class="form-section-title">Identificação</div>
+        <div class="form-grid cols-2">
+          <div class="form-group full">
+            <label class="form-label">Nome *</label>
+            <input id="pmNome" class="form-control" type="text" placeholder="Nome do produto">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Tipo *</label>
+            <select id="pmTipo" class="form-control">
+              <option value="">— Selecione —</option>
+              <option value="Fundo">Fundo</option>
+              <option value="Oferta Pública">Oferta Pública</option>
+              <option value="Produto Estruturado">Produto Estruturado</option>
+              <option value="Outro">Outro</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Emissor / Gestora</label>
+            <input id="pmEmissor" class="form-control" type="text" placeholder="Ex: XP Asset, BTG Pactual">
+          </div>
         </div>
       </div>
 
-      <!-- Prazo / Risco -->
-      <div style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#9ca3af;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid #f0f3f8">Prazo e Risco</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">
-        <div style="display:flex;flex-direction:column;gap:5px">
-          <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase">Prazo (meses)</label>
-          <input id="pmPrazo" class="form-control" type="number" min="0" placeholder="0">
-        </div>
-        <div style="display:flex;flex-direction:column;gap:5px">
-          <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase">Data de Vencimento</label>
-          <input id="pmVenc" class="form-control" type="date">
-        </div>
-        <div style="display:flex;flex-direction:column;gap:5px">
-          <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase">Nível de Risco</label>
-          <select id="pmRisco" class="form-control">
-            <option value="">—</option>
-            <option>Baixo</option>
-            <option>Médio</option>
-            <option>Alto</option>
-          </select>
+      <div class="form-section">
+        <div class="form-section-title">Financeiro</div>
+        <div class="form-grid cols-2">
+          <div class="form-group">
+            <label class="form-label">Rentabilidade alvo</label>
+            <input id="pmRent" class="form-control" type="text" placeholder="Ex: CDI + 2%, 15% a.a.">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Indexador</label>
+            <input id="pmIndex" class="form-control" type="text" placeholder="Ex: CDI, IPCA, PRE">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Mín. Aplicação (R$)</label>
+            <input id="pmMinAp" class="form-control" type="text" inputmode="numeric" placeholder="R$ 0" oninput="fmtInputPM(this)">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Liquidez</label>
+            <input id="pmLiquidez" class="form-control" type="text" placeholder="Ex: D+30, No vencimento">
+          </div>
         </div>
       </div>
 
-      <!-- Descrição -->
-      <div style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#9ca3af;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid #f0f3f8">Descrição</div>
-      <div style="margin-bottom:16px;display:flex;flex-direction:column;gap:5px">
-        <textarea id="pmDesc" class="form-control" style="min-height:80px" placeholder="Descreva o produto, estratégia, público-alvo..."></textarea>
-      </div>
-      <div style="margin-bottom:16px;display:flex;flex-direction:column;gap:5px">
-        <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase">Link Externo</label>
-        <input id="pmLink" class="form-control" type="url" placeholder="https://...">
+      <div class="form-section">
+        <div class="form-section-title">Prazo e Risco</div>
+        <div class="form-grid cols-3">
+          <div class="form-group">
+            <label class="form-label">Prazo (meses)</label>
+            <input id="pmPrazo" class="form-control" type="number" min="0" placeholder="—">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Data de Vencimento</label>
+            <input id="pmVenc" class="form-control" type="date">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Nível de Risco</label>
+            <select id="pmRisco" class="form-control">
+              <option value="">—</option>
+              <option>Baixo</option>
+              <option>Médio</option>
+              <option>Alto</option>
+            </select>
+          </div>
+        </div>
       </div>
 
-      <!-- Arquivo -->
-      <div style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#9ca3af;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid #f0f3f8">Arquivo de Apoio</div>
-      <div style="background:#f8f9fc;border-radius:10px;border:1.5px dashed #d1d5db;padding:20px;text-align:center;cursor:pointer" onclick="document.getElementById('pmArquivo').click()">
-        <div style="font-size:24px;margin-bottom:6px">📎</div>
-        <div style="font-size:13px;font-weight:600;color:#374151">Clique para anexar</div>
-        <div style="font-size:11px;color:#9ca3af;margin-top:3px">PDF, DOCX, XLSX, imagem — máx 20 MB</div>
-        <div id="pmArquivoNome" style="font-size:12px;color:#0bb5d5;margin-top:8px;display:none"></div>
+      <div class="form-section">
+        <div class="form-section-title">Descrição</div>
+        <div class="form-grid cols-2">
+          <div class="form-group full">
+            <textarea id="pmDesc" class="form-control" placeholder="Descreva o produto, estratégia, público-alvo..."></textarea>
+          </div>
+          <div class="form-group full">
+            <label class="form-label">Link Externo</label>
+            <input id="pmLink" class="form-control" type="url" placeholder="https://...">
+          </div>
+        </div>
       </div>
-      <input type="file" id="pmArquivo" style="display:none" accept=".pdf,.docx,.xlsx,.xls,.pptx,.jpg,.jpeg,.png"
-             onchange="document.getElementById('pmArquivoNome').textContent=this.files[0]?.name||'';document.getElementById('pmArquivoNome').style.display=this.files[0]?'':'none'">
+
+      <div class="form-section">
+        <div class="form-section-title">Arquivo de Apoio</div>
+        <div class="upload-dropzone" onclick="document.getElementById('pmArquivo').click()">
+          <div class="upload-dropzone-icon">📎</div>
+          <div class="upload-dropzone-text">Clique para anexar</div>
+          <div class="upload-dropzone-sub">PDF, DOCX, XLSX, imagem — máx 20 MB</div>
+          <div id="pmArquivoNome" class="upload-dropzone-file" style="display:none"></div>
+        </div>
+        <input type="file" id="pmArquivo" style="display:none" accept=".pdf,.docx,.xlsx,.xls,.pptx,.jpg,.jpeg,.png"
+               onchange="document.getElementById('pmArquivoNome').textContent=this.files[0]?.name||'';document.getElementById('pmArquivoNome').style.display=this.files[0]?'':'none'">
+      </div>
+
     </div>
-    <div style="padding:16px 28px;border-top:1px solid #f0f3f8;display:flex;justify-content:flex-end;gap:10px;flex-shrink:0">
-      <button onclick="fecharModalProduto()" style="padding:9px 18px;background:#f4f6fb;color:#374151;border:1px solid #e8ebf2;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">Cancelar</button>
-      <button onclick="salvarProdutoManual()" style="display:inline-flex;align-items:center;gap:8px;padding:9px 18px;background:#0c1a35;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">Salvar Produto</button>
+
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="fecharModalProduto()">Cancelar</button>
+      <button class="btn-primary" onclick="salvarProdutoManual()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+        Salvar Produto
+      </button>
     </div>
+
   </div>
 </div>
 

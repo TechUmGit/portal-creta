@@ -7,6 +7,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { height: 100%; font-family: 'Inter', -apple-system, sans-serif; -webkit-font-smoothing: antialiased; background: #f0f3f8; }
@@ -311,43 +312,48 @@ let _isAdmin = false;
 let _assessorName = '';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBzPqsYnVRXHXSiT8y7FcnbBjsWuT4OQBQ",
+  apiKey: "AIzaSyDLJrg7Cmaq6DDlDdcLfe4kH9hUukMVuE0",
   authDomain: "creta-btg-bd3a8.firebaseapp.com",
   projectId: "creta-btg-bd3a8",
-  storageBucket: "creta-btg-bd3a8.appspot.com",
-  messagingSenderId: "978599698367",
-  appId: "1:978599698367:web:placeholder"
+  storageBucket: "creta-btg-bd3a8.firebasestorage.app",
+  messagingSenderId: "609636823379",
+  appId: "1:609636823379:web:fbf9de8c2960d7392c31a6",
+  measurementId: "G-WQSQD9CMJF"
 };
 
-firebase.initializeApp(firebaseConfig);
+if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db   = firebase.firestore();
 
-firebase.auth().onAuthStateChanged(async user => {
-  if (!user) { window.location.href = 'index.html'; return; }
-
-  _token = await user.getIdToken();
-  const claims = (await user.getIdTokenResult()).claims;
-  _assessorName = claims.assessor_name || user.displayName || user.email;
-  const role = claims.role || 'assessor';
-
-  // Check admin via Firestore
-  try {
-    const snap = await firebase.firestore().doc(`users/${user.uid}`).get();
-    _isAdmin = snap.exists && snap.data()?.role === 'admin';
-  } catch(e) { _isAdmin = false; }
-
-  const ini = (_assessorName || '?')[0].toUpperCase();
-  document.getElementById('avatarEl').textContent = ini;
-  document.getElementById('userNameEl').textContent = _assessorName;
-  document.getElementById('userRoleEl').textContent = _isAdmin ? 'Admin' : 'Assessor';
-  document.getElementById('userEmailEl').textContent = user.email;
-
-  if (_isAdmin) {
-    document.getElementById('sidebarSistema').style.display = 'block';
-    document.getElementById('listTitle').textContent = 'Todos os Chamados';
-  }
-
+auth.onAuthStateChanged(async user => {
   document.getElementById('loadingScreen').style.display = 'none';
+  if (!user) { window.location.replace('index.html'); return; }
   document.getElementById('app').style.display = 'block';
+
+  document.getElementById('userEmailEl').textContent = user.email || '';
+
+  try {
+    const snap = await db.collection('users').doc(user.uid).get();
+    const data = snap.exists ? snap.data() : {};
+    const name = data.displayName || user.displayName || (user.email || '').split('@')[0];
+    _isAdmin      = data.role === 'admin';
+    _assessorName = name;
+    _token        = await user.getIdToken();
+
+    document.getElementById('avatarEl').textContent    = (name || '?')[0].toUpperCase();
+    document.getElementById('userNameEl').textContent  = name;
+    document.getElementById('userRoleEl').textContent  = _isAdmin ? 'Admin' : 'Assessor';
+
+    if (_isAdmin) {
+      document.getElementById('sidebarSistema').style.display = 'block';
+      document.getElementById('listTitle').textContent = 'Todos os Chamados';
+    }
+  } catch(e) {
+    _token = await user.getIdToken();
+    document.getElementById('avatarEl').textContent = (user.email || '?')[0].toUpperCase();
+    document.getElementById('userNameEl').textContent = user.email || '';
+    document.getElementById('userRoleEl').textContent = 'Assessor';
+  }
 
   carregarChamados();
 });

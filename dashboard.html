@@ -623,7 +623,7 @@
       const rows = items.map((c, i) => {
         const score = c.score ?? 0;
         const sCls  = score >= 5 ? 'score-high' : score >= 3 ? 'score-mid' : 'score-low';
-        const chips = buildAlertChips(c.alertas_raw);
+        const chips = buildAlertChips(c.alertas);
         return `<tr>
           <td class="rank num">${i + 1}</td>
           <td><strong>${c.cliente || '—'}</strong></td>

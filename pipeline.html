@@ -811,6 +811,18 @@
 
 <div class="toast" id="toast"></div>
 
+<!-- Modal de confirmação customizado -->
+<div id="confirmOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:16px;padding:28px 32px;max-width:360px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
+    <div style="font-size:14px;font-weight:700;color:#0c1a35;margin-bottom:8px">Aviso</div>
+    <div id="confirmMsg" style="font-size:13px;color:#374151;margin-bottom:24px"></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button onclick="_confirmResolve(false)" style="padding:8px 20px;border-radius:8px;border:1px solid #e8ebf2;background:#fff;font-size:13px;font-weight:600;color:#374151;cursor:pointer">Cancelar</button>
+      <button onclick="_confirmResolve(true)" style="padding:8px 20px;border-radius:8px;border:none;background:#0c1a35;font-size:13px;font-weight:600;color:#fff;cursor:pointer">Confirmar</button>
+    </div>
+  </div>
+</div>
+
 <script>
   const API_URL = 'https://api-creta-978599698367.us-central1.run.app';
   const firebaseConfig = {
@@ -1142,8 +1154,18 @@
     } catch(e) { showToast(e.message, 'err'); }
   }
 
+  let _confirmResolve = () => {};
+  function customConfirm(msg) {
+    return new Promise(resolve => {
+      document.getElementById('confirmMsg').textContent = msg;
+      const el = document.getElementById('confirmOverlay');
+      el.style.display = 'flex';
+      _confirmResolve = (val) => { el.style.display = 'none'; resolve(val); };
+    });
+  }
+
   async function confirmarDelete(id) {
-    if (!confirm('Remover este cliente do pipeline?')) return;
+    if (!await customConfirm('Remover este cliente do pipeline?')) return;
     try {
       const res = await fetch(`${API_URL}/api/pipeline/${id}`, {
         method: 'DELETE',

@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aprovações por Email — Portal Creta</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f4f6fb; color: #0c1a35; }
+    a { text-decoration: none; color: inherit; }
+
+    /* ── Topbar ── */
+    .topbar { position: fixed; top: 0; left: 0; right: 0; height: 60px; background: #0c1a35; display: flex; align-items: center; padding: 0 20px; gap: 14px; z-index: 200; }
+    .topbar-logo { display: flex; align-items: center; gap: 10px; }
+    .topbar-logo img { height: 30px; }
+    .topbar-logo span { font-size: 16px; font-weight: 700; color: #fff; letter-spacing: -0.3px; }
+    .icon-btn { background: none; border: none; cursor: pointer; color: #fff; display: flex; align-items: center; justify-content: center; padding: 6px; border-radius: 6px; }
+    .icon-btn:hover { background: rgba(255,255,255,0.1); }
+    .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+    .user-chip { display: flex; align-items: center; gap: 8px; }
+    .avatar { width: 30px; height: 30px; border-radius: 50%; background: #2563eb; color: #fff; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+    .user-info { display: flex; flex-direction: column; }
+    .user-name  { font-size: 12px; font-weight: 600; color: #fff; }
+    .user-email { font-size: 10px; color: #94a3b8; }
+    .user-role  { font-size: 10px; color: #94a3b8; }
+
+    /* ── Sidebar ── */
+    .sidebar { position: fixed; top: 60px; left: 0; bottom: 0; width: 240px; background: #fff; border-right: 1px solid #e8ebf2; display: flex; flex-direction: column; overflow-y: auto; z-index: 100; transform: translateX(-100%); transition: transform 0.25s cubic-bezier(0.25,0,0.25,1); }
+    .sidebar.open { transform: translateX(0); }
+    .sidebar-section { padding: 20px 12px 8px; }
+    .sidebar-label { font-size: 9.5px; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; color: #9ca3af; padding: 0 10px; margin-bottom: 6px; }
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 8px; font-size: 13px; font-weight: 500; color: #374151; transition: background 0.15s, color 0.15s; cursor: pointer; }
+    .nav-item svg { width: 16px; height: 16px; flex-shrink: 0; }
+    .nav-item:hover { background: #f4f6fb; color: #0c1a35; }
+    .nav-item.active { background: #eff6ff; color: #1d4ed8; font-weight: 600; }
+    .sidebar-footer { margin-top: auto; padding: 16px 12px; border-top: 1px solid #f0f3f8; }
+    .sidebar-footer .nav-item { color: #9ca3af; }
+    .sidebar-footer .nav-item:hover { color: #dc2626; }
+    .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 99; }
+
+    /* ── Loading ── */
+    #loadingScreen { position: fixed; inset: 0; background: #0c1a35; display: flex; align-items: center; justify-content: center; z-index: 9999; }
+    #loadingScreen span { color: #fff; font-size: 18px; font-weight: 600; letter-spacing: -0.3px; }
+
+    /* ── Main ── */
+    .main { padding: 80px 28px 40px; }
+    .hero { margin-bottom: 28px; }
+    .hero-label { font-size: 11px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
+    .hero-name { font-size: 26px; font-weight: 800; color: #0c1a35; letter-spacing: -0.5px; margin-bottom: 4px; }
+    .hero-sub { font-size: 13px; color: #6b7280; }
+
+    /* ── KPIs ── */
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 14px; margin-bottom: 24px; }
+    .kpi-card { background: #fff; border: 1px solid #e8ebf2; border-radius: 12px; padding: 16px 18px; }
+    .kpi-label { font-size: 10.5px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 6px; }
+    .kpi-value { font-size: 26px; font-weight: 800; color: #0c1a35; line-height: 1; }
+    .kpi-value.verde   { color: #16a34a; }
+    .kpi-value.amarelo { color: #d97706; }
+    .kpi-value.vermelho { color: #dc2626; }
+
+    /* ── Toolbar ── */
+    .toolbar { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+    .toolbar-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .search-box { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid #e8ebf2; border-radius: 8px; padding: 8px 14px; min-width: 200px; max-width: 320px; }
+    .search-box input { border: none; outline: none; font-size: 13px; font-family: inherit; color: #374151; background: none; width: 100%; }
+    .search-box svg { color: #9ca3af; flex-shrink: 0; }
+    .filter-chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .filter-label { font-size: 10px; font-weight: 700; color: #9ca3af; text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; min-width: 52px; }
+    .chip { padding: 5px 12px; border-radius: 20px; border: 1px solid #e8ebf2; background: #fff; font-size: 12px; font-weight: 500; color: #374151; cursor: pointer; transition: all .15s; white-space: nowrap; }
+    .chip:hover { border-color: #93c5fd; color: #1d4ed8; }
+    .chip.active { background: #eff6ff; border-color: #93c5fd; color: #1d4ed8; font-weight: 600; }
+    .chip.c-ativa     { background: #f0fdf4; border-color: #86efac; color: #16a34a; }
+    .chip.c-ativa.active { background: #dcfce7; }
+    .chip.c-expirando { background: #fffbeb; border-color: #fcd34d; color: #d97706; }
+    .chip.c-expirando.active { background: #fef3c7; }
+    .chip.c-expirada  { background: #fef2f2; border-color: #fca5a5; color: #dc2626; }
+    .chip.c-expirada.active { background: #fee2e2; }
+
+    /* ── Buttons ── */
+    .btn-primary { display: inline-flex; align-items: center; gap: 6px; background: #1d4ed8; color: #fff; border: none; border-radius: 8px; padding: 9px 16px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background .15s; }
+    .btn-primary:hover { background: #1e40af; }
+    .btn-outline { display: inline-flex; align-items: center; gap: 6px; background: #fff; color: #374151; border: 1px solid #e8ebf2; border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all .15s; }
+    .btn-outline:hover { border-color: #93c5fd; color: #1d4ed8; }
+    .btn-sm { padding: 5px 10px; font-size: 12px; border-radius: 6px; }
+
+    /* ── Table ── */
+    .table-card { background: #fff; border: 1px solid #e8ebf2; border-radius: 14px; overflow: hidden; }
+    .table-wrap { overflow-x: auto; }
+    .data-table { width: 100%; border-collapse: collapse; }
+    .data-table thead tr { background: #f8f9fc; }
+    .data-table th { padding: 11px 14px; text-align: left; font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #9ca3af; border-bottom: 1px solid #e8ebf2; white-space: nowrap; }
+    .data-table td { padding: 12px 14px; font-size: 13px; border-bottom: 1px solid #f1f4f9; vertical-align: middle; }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table tbody tr:hover { background: #f8f9fc; }
+    .empty-state { text-align: center; padding: 50px; color: #9ca3af; }
+
+    /* ── Status badge ── */
+    .status-badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+    .s-ativa-r   { background: #dcfce7; color: #15803d; }
+    .s-ativa     { background: #dbeafe; color: #1d4ed8; }
+    .s-expirando { background: #fef3c7; color: #b45309; }
+    .s-expirada  { background: #fee2e2; color: #dc2626; }
+
+    /* ── Tipo badge ── */
+    .tipo-badge { display: inline-block; padding: 2px 8px; border-radius: 8px; font-size: 11px; font-weight: 600; }
+    .t-td { background: #eff6ff; color: #1d4ed8; }
+    .t-fc { background: #f5f3ff; color: #7c3aed; }
+
+    /* ── Resposta ── */
+    .resp-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 10px; }
+    .resp-ok  { background: #dcfce7; color: #16a34a; }
+    .resp-pend { background: #f3f4f6; color: #6b7280; }
+
+    /* ── Action buttons ── */
+    .action-row { display: flex; gap: 6px; }
+    .action-btn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 7px; border: 1px solid #e8ebf2; background: #fff; cursor: pointer; color: #374151; transition: all .15s; flex-shrink: 0; }
+    .action-btn:hover { border-color: #93c5fd; color: #1d4ed8; }
+    .action-btn.del:hover { border-color: #fca5a5; color: #dc2626; }
+    .action-btn.green:hover { border-color: #86efac; color: #16a34a; }
+
+    /* ── Modal ── */
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 500; align-items: center; justify-content: center; }
+    .modal-overlay.open { display: flex; }
+    .modal { background: #fff; border-radius: 16px; padding: 28px; width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
+    .modal-title { font-size: 18px; font-weight: 800; color: #0c1a35; margin-bottom: 20px; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .form-group { display: flex; flex-direction: column; gap: 5px; }
+    .form-group.full { grid-column: 1 / -1; }
+    .form-label { font-size: 11px; font-weight: 600; color: #374151; text-transform: uppercase; letter-spacing: 0.05em; }
+    .form-control { padding: 9px 12px; border: 1px solid #e8ebf2; border-radius: 8px; font-size: 13px; font-family: inherit; color: #0c1a35; background: #fff; outline: none; transition: border-color .15s; }
+    .form-control:focus { border-color: #93c5fd; }
+    select.form-control { cursor: pointer; }
+    textarea.form-control { resize: vertical; min-height: 72px; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
+    .btn-danger { background: #dc2626; color: #fff; border: none; border-radius: 8px; padding: 9px 16px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .btn-danger:hover { background: #b91c1c; }
+
+    /* ── Toast ── */
+    .toast { position: fixed; bottom: 24px; right: 24px; background: #0c1a35; color: #fff; padding: 12px 20px; border-radius: 10px; font-size: 13px; font-weight: 500; z-index: 9999; opacity: 0; transition: opacity .25s; pointer-events: none; }
+    .toast.show { opacity: 1; }
+
+    /* ── Confirm modal ── */
+    #confirmOverlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:600; align-items:center; justify-content:center; }
+    #confirmOverlay.open { display:flex; }
+  </style>
+</head>
+<body>
+
+<div id="loadingScreen"><span>Carregando…</span></div>
+<div id="app" style="display:none">
+
+<!-- TOPBAR -->
+<header class="topbar">
+  <button class="icon-btn" onclick="document.getElementById('sidebar').classList.toggle('open');document.getElementById('sidebarOverlay').style.display='block'">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+  </button>
+  <div class="topbar-logo">
+    <span>Portal Creta</span>
+  </div>
+  <div class="topbar-right">
+    <div class="user-chip">
+      <div class="avatar" id="avatarEl">?</div>
+      <div class="user-info">
+        <span class="user-name"  id="userNameEl">—</span>
+        <span class="user-role"  id="userRoleEl">—</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- SIDEBAR -->
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="document.getElementById('sidebar').classList.remove('open');this.style.display='none'"></div>
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-section">
+    <div class="sidebar-label">Início</div>
+    <a class="nav-item" href="dashboard.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      Visão Geral
+    </a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-label">Dados</div>
+    <a class="nav-item" href="posicoes.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      Posições
+    </a>
+    <a class="nav-item" href="opcoes.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+      Opções
+    </a>
+    <a class="nav-item" href="receitas.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+      Receitas e Repasses
+    </a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-label">Análise</div>
+    <a class="nav-item" href="relatorios.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      Histórico de Carteiras
+    </a>
+    <a class="nav-item" href="gestao.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+      Oportunidades &amp; Alertas
+    </a>
+    <a class="nav-item" href="pipeline.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      Pipeline de Clientes
+    </a>
+    <a class="nav-item active" href="aprovacoes.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.8 19.79 19.79 0 01.5 1.18 2 2 0 012.5 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.91 7.91a16 16 0 006.18 6.18l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
+      Aprovações por Email
+    </a>
+    <a class="nav-item" href="produtos.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+      Produtos BTG
+    </a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-label">Suporte</div>
+    <a class="nav-item" href="chamados.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+      Chamados &amp; Melhorias
+    </a>
+  </div>
+  <div class="sidebar-section" id="sidebarSistema" style="display:none">
+    <div class="sidebar-label">Sistema</div>
+    <a class="nav-item" href="configuracoes.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      Configurações
+    </a>
+  </div>
+  <div class="sidebar-footer">
+    <a class="nav-item" href="#" onclick="firebase.auth().signOut()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      Sair
+    </a>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+  <div class="hero">
+    <div class="hero-label">Relacionamento · Clientes</div>
+    <div class="hero-name">Aprovações por Email</div>
+    <div class="hero-sub">Controle de autorizações obtidas dos clientes por email</div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-label">Total</div>
+      <div class="kpi-value" id="kpiTotal">—</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Ativas</div>
+      <div class="kpi-value verde" id="kpiAtivas">—</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Expirando ≤30d</div>
+      <div class="kpi-value amarelo" id="kpiExpirando">—</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Expiradas</div>
+      <div class="kpi-value vermelho" id="kpiExpiradas">—</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Resposta Pendente</div>
+      <div class="kpi-value" id="kpiPendentes" style="color:#6b7280">—</div>
+    </div>
+  </div>
+
+  <!-- TOOLBAR -->
+  <div class="toolbar">
+    <div class="toolbar-row">
+      <div class="search-box">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="searchInput" placeholder="Buscar por cliente ou email..." oninput="renderTabela()">
+      </div>
+      <div style="margin-left:auto">
+        <button class="btn-primary" onclick="abrirModal()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Nova Aprovação
+        </button>
+      </div>
+    </div>
+    <div class="toolbar-row">
+      <div class="filter-chips">
+        <span class="filter-label">Status</span>
+        <button class="chip active" data-status="" onclick="setFiltroStatus(this)">Todos</button>
+        <button class="chip c-ativa"     data-status="ativa"     onclick="setFiltroStatus(this)">🟢 Ativa</button>
+        <button class="chip c-expirando" data-status="expirando" onclick="setFiltroStatus(this)">🟡 Expirando</button>
+        <button class="chip c-expirada"  data-status="expirada"  onclick="setFiltroStatus(this)">🔴 Expirada</button>
+      </div>
+    </div>
+    <div class="toolbar-row">
+      <div class="filter-chips">
+        <span class="filter-label">Tipo</span>
+        <button class="chip active" data-tipo="" onclick="setFiltroTipo(this)">Todos</button>
+        <button class="chip" data-tipo="tesouro_direto"  onclick="setFiltroTipo(this)">Tesouro Direto</button>
+        <button class="chip" data-tipo="fundos_carencia" onclick="setFiltroTipo(this)">Fundos com Carência</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TABLE -->
+  <div class="table-card">
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Cliente</th>
+            <th>Email</th>
+            <th>Tipo</th>
+            <th>Válido de</th>
+            <th>Válido até</th>
+            <th>Status</th>
+            <th>Resposta</th>
+            <th id="thAssessor" style="display:none">Assessor</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody id="aprovacoesTbody">
+          <tr><td colspan="9" class="empty-state">⏳ Carregando…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+</div><!-- /app -->
+
+<!-- ── MODAL NOVA / EDITAR ── -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <div class="modal-title" id="modalTitle">Nova Aprovação</div>
+    <div class="form-grid">
+      <div class="form-group full">
+        <label class="form-label">Nome do Cliente *</label>
+        <input class="form-control" id="fNome" type="text" placeholder="Ex: João da Silva">
+      </div>
+      <div class="form-group full">
+        <label class="form-label">Email do Cliente *</label>
+        <input class="form-control" id="fEmail" type="email" placeholder="cliente@email.com">
+      </div>
+      <div class="form-group full">
+        <label class="form-label">Tipo de Aprovação *</label>
+        <select class="form-control" id="fTipo">
+          <option value="">Selecione…</option>
+          <option value="tesouro_direto">Tesouro Direto</option>
+          <option value="fundos_carencia">Fundos com Carência</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Data de Início *</label>
+        <input class="form-control" id="fInicio" type="date">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Data de Fim *</label>
+        <input class="form-control" id="fFim" type="date">
+      </div>
+      <div class="form-group full">
+        <label class="form-label">Observação</label>
+        <textarea class="form-control" id="fObs" placeholder="Informações adicionais…"></textarea>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-danger" id="btnDeletar" style="display:none;margin-right:auto" onclick="deletarAprovacao()">Excluir</button>
+      <button class="btn-outline" onclick="fecharModal()">Cancelar</button>
+      <button class="btn-primary" onclick="salvarAprovacao()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── CONFIRM MODAL ── -->
+<div id="confirmOverlay" onclick="if(event.target===this)_confirmResolve(false)">
+  <div style="background:#fff;border-radius:16px;padding:28px;max-width:360px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
+    <div style="font-size:16px;font-weight:700;color:#0c1a35;margin-bottom:10px">Aviso</div>
+    <div id="confirmMsg" style="font-size:13px;color:#374151;margin-bottom:20px"></div>
+    <div style="display:flex;justify-content:flex-end;gap:10px">
+      <button class="btn-outline" onclick="_confirmResolve(false)">Cancelar</button>
+      <button class="btn-danger"  onclick="_confirmResolve(true)">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── TOAST ── -->
+<div class="toast" id="toast"></div>
+
+<!-- ── INPUT UPLOAD (hidden) ── -->
+<input type="file" id="uploadInput" style="display:none" accept=".eml,.msg,.pdf,.png,.jpg,.jpeg" onchange="onUploadFile(this)">
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+<script>
+  // ── Config ──────────────────────────────────────────────────────────────────
+  const API_URL = 'https://api-creta-978599698367.us-central1.run.app';
+
+  firebase.initializeApp({
+    apiKey:            "AIzaSyDLJrg7Cmaq6DDlDdcLfe4kH9hUukMVuE0",
+    authDomain:        "creta-btg-bd3a8.firebaseapp.com",
+    projectId:         "creta-btg-bd3a8",
+    storageBucket:     "creta-btg-bd3a8.appspot.com",
+    messagingSenderId: "609636823379",
+    appId:             "1:609636823379:web:fbf9de8c2960d7392c31a6"
+  });
+  const auth = firebase.auth();
+
+  // ── Estado ──────────────────────────────────────────────────────────────────
+  let _token          = null;
+  let _isAdmin        = false;
+  let _assessorName   = '';
+  let _aprovacoes     = [];
+  let _filtroStatus   = '';
+  let _filtroTipo     = '';
+  let _editId         = null;
+  let _uploadTargetId = null;
+
+  // ── Auth ────────────────────────────────────────────────────────────────────
+  auth.onAuthStateChanged(async user => {
+    document.getElementById('loadingScreen').style.display = 'none';
+    if (!user) { window.location.replace('index.html'); return; }
+    document.getElementById('app').style.display = 'block';
+
+    const email = user.email || '';
+    const db    = firebase.firestore();
+    try {
+      const snap = await db.collection('users').doc(user.uid).get();
+      const data = snap.exists ? snap.data() : {};
+      const name = data.displayName || user.displayName || email.split('@')[0];
+      const role = data.role || '';
+      _isAdmin      = (role === 'admin');
+      _assessorName = name;
+      document.getElementById('userNameEl').textContent = name;
+      document.getElementById('avatarEl').textContent   = name.charAt(0).toUpperCase();
+      document.getElementById('userRoleEl').textContent = _isAdmin ? 'Administrador' : 'Assessor BTG';
+      if (_isAdmin) {
+        document.getElementById('sidebarSistema').style.display = 'block';
+        document.getElementById('thAssessor').style.display = '';
+      }
+    } catch(e) {
+      document.getElementById('userNameEl').textContent = email.split('@')[0];
+      document.getElementById('avatarEl').textContent   = email.charAt(0).toUpperCase();
+    }
+
+    _token = await user.getIdToken();
+    await carregarAprovacoes();
+  });
+
+  // ── Carregar ─────────────────────────────────────────────────────────────────
+  async function carregarAprovacoes() {
+    try {
+      const res  = await fetch(`${API_URL}/api/aprovacoes`, { headers: { Authorization: `Bearer ${_token}` } });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      _aprovacoes = json.aprovacoes || [];
+      atualizarKPIs();
+      renderTabela();
+    } catch(e) {
+      document.getElementById('aprovacoesTbody').innerHTML =
+        `<tr><td colspan="9" class="empty-state" style="color:#dc2626">Erro ao carregar: ${e.message}</td></tr>`;
+    }
+  }
+
+  // ── KPIs ─────────────────────────────────────────────────────────────────────
+  function calcStatus(ap) {
+    const hoje  = new Date(); hoje.setHours(0,0,0,0);
+    const fim   = new Date(ap.data_fim + 'T00:00:00');
+    const diff  = Math.floor((fim - hoje) / 86400000);
+    if (diff < 0)   return 'expirada';
+    if (diff <= 30) return 'expirando';
+    return 'ativa';
+  }
+
+  function atualizarKPIs() {
+    const total     = _aprovacoes.length;
+    const ativas    = _aprovacoes.filter(a => calcStatus(a) === 'ativa').length;
+    const expirando = _aprovacoes.filter(a => calcStatus(a) === 'expirando').length;
+    const expiradas = _aprovacoes.filter(a => calcStatus(a) === 'expirada').length;
+    const pendentes = _aprovacoes.filter(a => !a.resposta_gcs && calcStatus(a) !== 'expirada').length;
+    document.getElementById('kpiTotal').textContent     = total;
+    document.getElementById('kpiAtivas').textContent    = ativas;
+    document.getElementById('kpiExpirando').textContent = expirando;
+    document.getElementById('kpiExpiradas').textContent = expiradas;
+    document.getElementById('kpiPendentes').textContent = pendentes;
+  }
+
+  // ── Filtros ───────────────────────────────────────────────────────────────────
+  function setFiltroStatus(btn) {
+    _filtroStatus = btn.dataset.status;
+    document.querySelectorAll('.filter-chips .chip[data-status]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderTabela();
+  }
+
+  function setFiltroTipo(btn) {
+    _filtroTipo = btn.dataset.tipo;
+    document.querySelectorAll('.filter-chips .chip[data-tipo]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderTabela();
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────────
+  const TIPO_LABEL = { tesouro_direto: 'Tesouro Direto', fundos_carencia: 'Fundos c/ Carência' };
+  const TIPO_CLS   = { tesouro_direto: 't-td', fundos_carencia: 't-fc' };
+
+  function fmtData(str) {
+    if (!str) return '—';
+    const [y,m,d] = str.split('-');
+    return `${d}/${m}/${y}`;
+  }
+
+  function statusHtml(ap) {
+    const s   = calcStatus(ap);
+    const resp = !!ap.resposta_gcs;
+    if (s === 'expirada')  return `<span class="status-badge s-expirada">🔴 Expirada</span>`;
+    if (s === 'expirando') return `<span class="status-badge s-expirando">🟡 Expirando</span>`;
+    if (resp)              return `<span class="status-badge s-ativa-r">✅ Ativa · Respondida</span>`;
+    return `<span class="status-badge s-ativa">🟢 Ativa</span>`;
+  }
+
+  function respostaHtml(ap) {
+    if (ap.resposta_gcs) {
+      return `<span class="resp-badge resp-ok">✔ ${ap.resposta_data || '—'}</span>`;
+    }
+    return `<span class="resp-badge resp-pend">Pendente</span>`;
+  }
+
+  function renderTabela() {
+    const busca = (document.getElementById('searchInput').value || '').toLowerCase();
+    let dados = _aprovacoes.filter(ap => {
+      if (_filtroStatus && calcStatus(ap) !== _filtroStatus) return false;
+      if (_filtroTipo   && ap.tipo !== _filtroTipo)           return false;
+      if (busca && !(ap.cliente_nome||'').toLowerCase().includes(busca)
+                && !(ap.cliente_email||'').toLowerCase().includes(busca)) return false;
+      return true;
+    });
+
+    if (!dados.length) {
+      document.getElementById('aprovacoesTbody').innerHTML =
+        `<tr><td colspan="9" class="empty-state"><div style="font-size:28px;margin-bottom:8px">📭</div><div style="font-weight:600;color:#374151">Nenhuma aprovação encontrada</div></td></tr>`;
+      return;
+    }
+
+    const adminCol = _isAdmin ? '<td style="font-size:12px;color:#6b7280">${esc(ap.assessor_name||\'—\')}</td>' : '';
+
+    document.getElementById('aprovacoesTbody').innerHTML = dados.map(ap => {
+      const tipoCls   = TIPO_CLS[ap.tipo]   || '';
+      const tipoLabel = TIPO_LABEL[ap.tipo]  || ap.tipo;
+      const admCell   = _isAdmin ? `<td style="font-size:12px;color:#6b7280">${esc(ap.assessor_name||'—')}</td>` : '';
+      const uploadTitle = ap.resposta_gcs ? 'Substituir resposta' : 'Upload resposta';
+
+      return `<tr>
+        <td style="font-weight:600;color:#0c1a35">${esc(ap.cliente_nome||'—')}</td>
+        <td style="font-size:12px;color:#374151">${esc(ap.cliente_email||'—')}</td>
+        <td><span class="tipo-badge ${tipoCls}">${tipoLabel}</span></td>
+        <td style="font-size:12px">${fmtData(ap.data_inicio)}</td>
+        <td style="font-size:12px">${fmtData(ap.data_fim)}</td>
+        <td>${statusHtml(ap)}</td>
+        <td>
+          ${respostaHtml(ap)}
+          ${ap.resposta_gcs ? `<a href="#" onclick="downloadResposta('${ap.id}');return false" title="Baixar resposta" style="margin-left:6px;font-size:11px;color:#1d4ed8">⬇</a>` : ''}
+        </td>
+        ${admCell}
+        <td>
+          <div class="action-row">
+            <button class="action-btn" title="Enviar email de aprovação" onclick="abrirEmail('${ap.id}')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+            </button>
+            <button class="action-btn green" title="${uploadTitle}" onclick="iniciarUpload('${ap.id}')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            </button>
+            <button class="action-btn" title="Editar" onclick="abrirModal('${ap.id}')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </button>
+            <button class="action-btn del" title="Excluir" onclick="confirmarDelete('${ap.id}')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+            </button>
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── Email via mailto ──────────────────────────────────────────────────────────
+  const EMAIL_TEMPLATES = {
+    tesouro_direto: {
+      subject: 'Autorização de Resgate – Tesouro Direto',
+      body: (nome, assessor) =>
+`Prezado(a) ${nome},
+
+Conforme nossa conversa, solicito sua autorização para realizar o resgate de valores investidos em Tesouro Direto na sua conta na BTG Pactual.
+
+Por favor, responda este e-mail confirmando: "Autorizo o resgate dos meus valores em Tesouro Direto."
+
+Fico à disposição para qualquer dúvida.
+
+Atenciosamente,
+${assessor}
+Creta Investimentos | BTG Pactual`
+    },
+    fundos_carencia: {
+      subject: 'Autorização de Resgate Antecipado – Fundo com Carência',
+      body: (nome, assessor) =>
+`Prezado(a) ${nome},
+
+Conforme nossa conversa, solicito sua autorização para realizar o resgate antecipado de cotas em fundo de investimento com carência na sua conta na BTG Pactual.
+
+Por favor, responda este e-mail confirmando: "Autorizo o resgate antecipado das minhas cotas no fundo com carência."
+
+Fico à disposição para qualquer dúvida.
+
+Atenciosamente,
+${assessor}
+Creta Investimentos | BTG Pactual`
+    }
+  };
+
+  function abrirEmail(id) {
+    const ap = _aprovacoes.find(a => a.id === id);
+    if (!ap) return;
+    const tpl = EMAIL_TEMPLATES[ap.tipo];
+    if (!tpl) { showToast('Tipo de aprovação sem template configurado.'); return; }
+
+    const subject = encodeURIComponent(tpl.subject);
+    const body    = encodeURIComponent(tpl.body(ap.cliente_nome, _assessorName));
+    const email   = encodeURIComponent(ap.cliente_email);
+    window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
+  }
+
+  // ── Upload resposta ───────────────────────────────────────────────────────────
+  function iniciarUpload(id) {
+    _uploadTargetId = id;
+    document.getElementById('uploadInput').value = '';
+    document.getElementById('uploadInput').click();
+  }
+
+  async function onUploadFile(input) {
+    if (!input.files.length || !_uploadTargetId) return;
+    const file = input.files[0];
+    const fd   = new FormData();
+    fd.append('file', file);
+    try {
+      showToast('Enviando arquivo…');
+      const res = await fetch(`${API_URL}/api/aprovacoes/${_uploadTargetId}/resposta`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${_token}` },
+        body: fd
+      });
+      if (!res.ok) throw new Error((await res.json()).detail || `HTTP ${res.status}`);
+      showToast('Resposta salva com sucesso!');
+      await carregarAprovacoes();
+    } catch(e) {
+      showToast('Erro: ' + e.message);
+    }
+    _uploadTargetId = null;
+  }
+
+  async function downloadResposta(id) {
+    try {
+      const res = await fetch(`${API_URL}/api/aprovacoes/${id}/resposta`, {
+        headers: { Authorization: `Bearer ${_token}` }
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob     = await res.blob();
+      const cd       = res.headers.get('Content-Disposition') || '';
+      const match    = cd.match(/filename="?([^"]+)"?/);
+      const fname    = match ? match[1] : 'resposta';
+      const url      = URL.createObjectURL(blob);
+      const a        = document.createElement('a');
+      a.href         = url; a.download = fname; a.click();
+      URL.revokeObjectURL(url);
+    } catch(e) {
+      showToast('Erro ao baixar: ' + e.message);
+    }
+  }
+
+  // ── Modal ─────────────────────────────────────────────────────────────────────
+  function abrirModal(id) {
+    _editId = id || null;
+    limparForm();
+    document.getElementById('btnDeletar').style.display = id ? '' : 'none';
+    document.getElementById('modalTitle').textContent   = id ? 'Editar Aprovação' : 'Nova Aprovação';
+
+    if (id) {
+      const ap = _aprovacoes.find(a => a.id === id);
+      if (ap) {
+        document.getElementById('fNome').value   = ap.cliente_nome  || '';
+        document.getElementById('fEmail').value  = ap.cliente_email || '';
+        document.getElementById('fTipo').value   = ap.tipo          || '';
+        document.getElementById('fInicio').value = ap.data_inicio   || '';
+        document.getElementById('fFim').value    = ap.data_fim      || '';
+        document.getElementById('fObs').value    = ap.observacao    || '';
+      }
+    }
+    document.getElementById('modalOverlay').classList.add('open');
+  }
+
+  function fecharModal() {
+    document.getElementById('modalOverlay').classList.remove('open');
+    _editId = null;
+  }
+
+  function limparForm() {
+    ['fNome','fEmail','fTipo','fInicio','fFim','fObs'].forEach(id => {
+      document.getElementById(id).value = '';
+    });
+  }
+
+  async function salvarAprovacao() {
+    const nome   = document.getElementById('fNome').value.trim();
+    const email  = document.getElementById('fEmail').value.trim();
+    const tipo   = document.getElementById('fTipo').value;
+    const inicio = document.getElementById('fInicio').value;
+    const fim    = document.getElementById('fFim').value;
+    const obs    = document.getElementById('fObs').value.trim();
+
+    if (!nome || !email || !tipo || !inicio || !fim) {
+      showToast('Preencha todos os campos obrigatórios.');
+      return;
+    }
+    if (fim < inicio) {
+      showToast('Data de fim deve ser após a data de início.');
+      return;
+    }
+
+    const body = { cliente_nome: nome, cliente_email: email, tipo, data_inicio: inicio, data_fim: fim, observacao: obs || null };
+    const url    = _editId ? `${API_URL}/api/aprovacoes/${_editId}` : `${API_URL}/api/aprovacoes`;
+    const method = _editId ? 'PUT' : 'POST';
+
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${_token}` },
+        body: JSON.stringify(body)
+      });
+      if (!res.ok) throw new Error((await res.json()).detail || `HTTP ${res.status}`);
+      showToast(_editId ? 'Aprovação atualizada.' : 'Aprovação criada.');
+      fecharModal();
+      await carregarAprovacoes();
+    } catch(e) {
+      showToast('Erro: ' + e.message);
+    }
+  }
+
+  // ── Delete ────────────────────────────────────────────────────────────────────
+  async function deletarAprovacao() {
+    if (!_editId) return;
+    const ok = await customConfirm('Remover esta aprovação? O arquivo de resposta também será excluído.');
+    if (!ok) return;
+    try {
+      const res = await fetch(`${API_URL}/api/aprovacoes/${_editId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${_token}` }
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      showToast('Aprovação removida.');
+      fecharModal();
+      await carregarAprovacoes();
+    } catch(e) {
+      showToast('Erro: ' + e.message);
+    }
+  }
+
+  async function confirmarDelete(id) {
+    const ok = await customConfirm('Remover esta aprovação permanentemente?');
+    if (!ok) return;
+    try {
+      const res = await fetch(`${API_URL}/api/aprovacoes/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${_token}` }
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      showToast('Aprovação removida.');
+      await carregarAprovacoes();
+    } catch(e) {
+      showToast('Erro: ' + e.message);
+    }
+  }
+
+  // ── Confirm modal ─────────────────────────────────────────────────────────────
+  let _confirmResolve = () => {};
+  function customConfirm(msg) {
+    return new Promise(resolve => {
+      document.getElementById('confirmMsg').textContent = msg;
+      document.getElementById('confirmOverlay').classList.add('open');
+      _confirmResolve = (val) => {
+        document.getElementById('confirmOverlay').classList.remove('open');
+        resolve(val);
+      };
+    });
+  }
+
+  // ── Toast ─────────────────────────────────────────────────────────────────────
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 3000);
+  }
+</script>
+</body>
+</html>

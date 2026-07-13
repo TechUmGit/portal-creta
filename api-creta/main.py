@@ -2751,6 +2751,236 @@ async def atualizar_status_chamado(
     return {"id": doc_id, "status": novo_status}
 
 
+# ── Aprovações por Email ──────────────────────────────────────────────────────
+
+class AprovacaoEmail(BaseModel):
+    cliente_nome:  str
+    cliente_email: str
+    tipo:          str            # tesouro_direto | fundos_carencia
+    data_inicio:   str            # YYYY-MM-DD
+    data_fim:      str            # YYYY-MM-DD
+    observacao:    Optional[str] = None
+
+GCS_PREFIX_APROVACOES = "aprovacoes/"
+
+def _aprovacoes_col():
+    return fb_firestore.client().collection("aprovacoes")
+
+def _ser_aprovacao(doc) -> dict:
+    d = doc.to_dict() or {}
+    d["id"] = doc.id
+    return d
+
+
+@app.get("/api/aprovacoes")
+async def aprovacoes_listar(
+    authorization: Optional[str] = Header(default=None),
+):
+    token_data   = await verificar_token(authorization)
+    role         = token_data.get("role", "assessor")
+    assessor_uid = token_data.get("uid")
+    try:
+        col = _aprovacoes_col()
+        if role == "admin":
+            docs = col.order_by("data_fim").stream()
+        else:
+            docs = col.where("assessor_uid", "==", assessor_uid).order_by("data_fim").stream()
+        return {"aprovacoes": [_ser_aprovacao(d) for d in docs]}
+    except Exception as e:
+        log.error(f"aprovacoes_listar: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/aprovacoes")
+async def aprovacoes_criar(
+    body: AprovacaoEmail,
+    authorization: Optional[str] = Header(default=None),
+):
+    token_data    = await verificar_token(authorization)
+    assessor_uid  = token_data.get("uid")
+    assessor_name = token_data.get("assessor_name", "") or token_data.get("email", "")
+    dados = body.dict()
+    dados["assessor_uid"]   = assessor_uid
+    dados["assessor_name"]  = assessor_name
+    dados["criado_em"]      = datetime.utcnow().isoformat()
+    dados["resposta_gcs"]   = None
+    dados["resposta_nome"]  = None
+    dados["resposta_data"]  = None
+    try:
+        ref = _aprovacoes_col().add(dados)
+        return {"ok": True, "id": ref[1].id}
+    except Exception as e:
+        log.error(f"aprovacoes_criar: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/aprovacoes/{doc_id}")
+async def aprovacoes_atualizar(
+    doc_id: str,
+    body: AprovacaoEmail,
+    authorization: Optional[str] = Header(default=None),
+):
+    token_data   = await verificar_token(authorization)
+    role         = token_data.get("role", "assessor")
+    assessor_uid = token_data.get("uid")
+    try:
+        ref = _aprovacoes_col().document(doc_id)
+        doc = ref.get()
+        if not doc.exists:
+            raise HTTPException(status_code=404, detail="Aprovação não encontrada.")
+        if role != "admin" and doc.to_dict().get("assessor_uid") != assessor_uid:
+            raise HTTPException(status_code=403, detail="Sem permissão.")
+        dados = {k: v for k, v in body.dict().items() if v is not None}
+        dados["updated_at"] = datetime.utcnow().isoformat()
+        ref.update(dados)
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"aprovacoes_atualizar: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/aprovacoes/{doc_id}")
+async def aprovacoes_deletar(
+    doc_id: str,
+    authorization: Optional[str] = Header(default=None),
+):
+    token_data   = await verificar_token(authorization)
+    role         = token_data.get("role", "assessor")
+    assessor_uid = token_data.get("uid")
+    try:
+        ref = _aprovacoes_col().document(doc_id)
+        doc = ref.get()
+        if not doc.exists:
+            raise HTTPException(status_code=404, detail="Aprovação não encontrada.")
+        d = doc.to_dict() or {}
+        if role != "admin" and d.get("assessor_uid") != assessor_uid:
+            raise HTTPException(status_code=403, detail="Sem permissão.")
+        # Remove arquivo GCS se existir
+        if d.get("resposta_gcs"):
+            try:
+                gcs_client.bucket(GCS_BUCKET).blob(d["resposta_gcs"]).delete()
+            except Exception:
+                pass
+        ref.delete()
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"aprovacoes_deletar: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/aprovacoes/{doc_id}/resposta")
+async def aprovacoes_upload_resposta(
+    doc_id: str,
+    file: UploadFile = File(...),
+    authorization: Optional[str] = Header(default=None),
+):
+    token_data   = await verificar_token(authorization)
+    role         = token_data.get("role", "assessor")
+    assessor_uid = token_data.get("uid")
+    try:
+        ref = _aprovacoes_col().document(doc_id)
+        doc = ref.get()
+        if not doc.exists:
+            raise HTTPException(status_code=404, detail="Aprovação não encontrada.")
+        if role != "admin" and doc.to_dict().get("assessor_uid") != assessor_uid:
+            raise HTTPException(status_code=403, detail="Sem permissão.")
+
+        # Remove arquivo anterior se existir
+        old = doc.to_dict().get("resposta_gcs")
+        if old:
+            try:
+                gcs_client.bucket(GCS_BUCKET).blob(old).delete()
+            except Exception:
+                pass
+
+        fname    = file.filename or "resposta"
+        gcs_path = f"{GCS_PREFIX_APROVACOES}{assessor_uid}/{doc_id}/{fname}"
+        conteudo = await file.read()
+        blob     = gcs_client.bucket(GCS_BUCKET).blob(gcs_path)
+        blob.upload_from_string(conteudo, content_type=file.content_type or "application/octet-stream")
+
+        ref.update({
+            "resposta_gcs":  gcs_path,
+            "resposta_nome": fname,
+            "resposta_tipo": file.content_type or "application/octet-stream",
+            "resposta_data": datetime.utcnow().strftime("%Y-%m-%d"),
+        })
+        return {"ok": True, "gcs_path": gcs_path}
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"aprovacoes_upload_resposta: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/aprovacoes/{doc_id}/resposta")
+async def aprovacoes_remover_resposta(
+    doc_id: str,
+    authorization: Optional[str] = Header(default=None),
+):
+    token_data   = await verificar_token(authorization)
+    role         = token_data.get("role", "assessor")
+    assessor_uid = token_data.get("uid")
+    try:
+        ref = _aprovacoes_col().document(doc_id)
+        doc = ref.get()
+        if not doc.exists:
+            raise HTTPException(status_code=404, detail="Aprovação não encontrada.")
+        if role != "admin" and doc.to_dict().get("assessor_uid") != assessor_uid:
+            raise HTTPException(status_code=403, detail="Sem permissão.")
+        gcs_path = doc.to_dict().get("resposta_gcs")
+        if gcs_path:
+            try:
+                gcs_client.bucket(GCS_BUCKET).blob(gcs_path).delete()
+            except Exception:
+                pass
+        ref.update({"resposta_gcs": None, "resposta_nome": None, "resposta_data": None, "resposta_tipo": None})
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"aprovacoes_remover_resposta: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/aprovacoes/{doc_id}/resposta")
+async def aprovacoes_download_resposta(
+    doc_id: str,
+    authorization: Optional[str] = Header(default=None),
+):
+    token_data   = await verificar_token(authorization)
+    role         = token_data.get("role", "assessor")
+    assessor_uid = token_data.get("uid")
+    try:
+        ref = _aprovacoes_col().document(doc_id)
+        doc = ref.get()
+        if not doc.exists:
+            raise HTTPException(status_code=404, detail="Aprovação não encontrada.")
+        if role != "admin" and doc.to_dict().get("assessor_uid") != assessor_uid:
+            raise HTTPException(status_code=403, detail="Sem permissão.")
+        d        = doc.to_dict() or {}
+        gcs_path = d.get("resposta_gcs")
+        fname    = d.get("resposta_nome", "resposta")
+        ct       = d.get("resposta_tipo", "application/octet-stream")
+        if not gcs_path:
+            raise HTTPException(status_code=404, detail="Nenhum arquivo de resposta.")
+        blob = gcs_client.bucket(GCS_BUCKET).blob(gcs_path)
+        buf  = io.BytesIO()
+        blob.download_to_file(buf)
+        buf.seek(0)
+        disposition = "inline" if "pdf" in ct else f'attachment; filename="{fname}"'
+        return StreamingResponse(buf, media_type=ct, headers={"Content-Disposition": disposition})
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"aprovacoes_download_resposta: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/chamados/{doc_id}/arquivo")
 async def download_chamado_arquivo(
     doc_id: str,

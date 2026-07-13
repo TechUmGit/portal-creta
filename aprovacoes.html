@@ -632,7 +632,8 @@ Creta Investimentos | BTG Pactual`
     const subject = encodeURIComponent(tpl.subject);
     const body    = encodeURIComponent(tpl.body(ap.cliente_nome, _assessorName));
     const email   = encodeURIComponent(ap.cliente_email);
-    window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
+    const url = `https://outlook.office.com/mail/deeplink/compose?to=${email}&subject=${subject}&body=${body}`;
+    window.open(url, '_blank');
   }
 
   // ── Upload resposta ───────────────────────────────────────────────────────────

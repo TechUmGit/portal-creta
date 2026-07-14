@@ -12,6 +12,7 @@ import os
 import re
 import json
 import time
+import uuid
 import base64
 import logging
 import requests
@@ -88,16 +89,28 @@ def _get_btg_token() -> str:
     creds_b64 = base64.b64encode(f"{BTG_CLIENT_ID}:{BTG_CLIENT_SECRET}".encode()).decode()
     resp = requests.post(
         BTG_TOKEN_URL,
-        headers={"Authorization": f"Basic {creds_b64}",
-                 "Content-Type":  "application/x-www-form-urlencoded"},
+        headers={
+            "Authorization":        f"Basic {creds_b64}",
+            "Content-Type":         "application/x-www-form-urlencoded",
+            "x-id-partner-request": str(uuid.uuid4()),
+        },
         data={"grant_type": "client_credentials"},
         timeout=15,
     )
     resp.raise_for_status()
-    data = resp.json()
-    _btg_token_cache["token"]      = data["access_token"]
-    _btg_token_cache["expires_at"] = agora + data.get("expires_in", 3600)
-    return _btg_token_cache["token"]
+    # Token vem no header da resposta (padrão BTG)
+    token = resp.headers.get("access_token")
+    if not token:
+        # fallback: tenta no body JSON
+        try:
+            token = resp.json().get("access_token")
+        except Exception:
+            pass
+    if not token:
+        raise RuntimeError(f"Token BTG não encontrado. Headers: {dict(resp.headers)}")
+    _btg_token_cache["token"]      = token
+    _btg_token_cache["expires_at"] = agora + 3600
+    return token
 
 GCS_PREFIX         = "entradas/"
 GCS_PREFIX_PRODUTOS  = "produtos-manuais/"

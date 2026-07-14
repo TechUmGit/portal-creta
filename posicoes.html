@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Creta Capital — Posições</title>
+  <title>Creta Capital — Meu Portfólio</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
@@ -143,6 +143,36 @@
     .data-overlay { position: fixed; inset: 0; background: rgba(240,243,248,0.82); z-index: 500; display: none; align-items: center; justify-content: center; backdrop-filter: blur(2px); flex-direction: column; gap: 12px; }
     .data-overlay .spinner { width: 32px; height: 32px; border: 3px solid rgba(11,181,213,0.2); border-top-color: #0bb5d5; border-radius: 50%; animation: spin 0.7s linear infinite; }
     .data-overlay-label { font-size: 13px; color: #9ca3af; font-weight: 500; }
+
+    /* TABS */
+    .tabs-bar { display: flex; gap: 4px; margin-bottom: 28px; border-bottom: 2px solid #e8ebf2; }
+    .tab-btn { background: none; border: none; padding: 10px 20px; font-size: 14px; font-weight: 600; font-family: inherit; color: #9ca3af; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: color .15s, border-color .15s; }
+    .tab-btn.active { color: #0bb5d5; border-bottom-color: #0bb5d5; }
+    .tab-btn:hover:not(.active) { color: #374151; }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* MOVIMENTAÇÕES */
+    .mov-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 24px; }
+    .mov-select { height: 38px; min-width: 280px; border: 1px solid #e2e6ef; border-radius: 8px; background: #fff; padding: 0 14px; font-size: 13px; font-family: inherit; color: #374151; outline: none; cursor: pointer; }
+    .mov-select:focus { border-color: #0bb5d5; box-shadow: 0 0 0 3px rgba(11,181,213,0.1); }
+    .btn-solicitar { height: 38px; padding: 0 20px; background: #0c1a35; color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; font-family: inherit; cursor: pointer; transition: background .15s; display: flex; align-items: center; gap: 8px; }
+    .btn-solicitar:hover { background: #1a3a6c; }
+    .btn-solicitar:disabled { background: #9ca3af; cursor: not-allowed; }
+    .mov-status { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #6b7280; padding: 6px 12px; background: #f8fafc; border: 1px solid #e8ebf2; border-radius: 8px; }
+    .mov-status .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .dot-aguardando { background: #f59e0b; animation: pulse 1.2s ease-in-out infinite; }
+    .dot-disponivel  { background: #10b981; }
+    .dot-sem_dados   { background: #d1d5db; }
+    .mov-empty { text-align: center; padding: 60px 0; color: #9ca3af; font-size: 14px; }
+    .mov-empty svg { margin-bottom: 12px; opacity: .4; }
+    .badge-tipo { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+    .tipo-A { background: #dbeafe; color: #1e40af; }
+    .tipo-R { background: #fee2e2; color: #991b1b; }
+    .tipo-T { background: #fef3c7; color: #92400e; }
+    .tipo-D { background: #f3e8ff; color: #6b21a8; }
+    .tipo-_ { background: #f3f4f6; color: #6b7280; }
+    .mov-atualizado { font-size: 11px; color: #9ca3af; margin-bottom: 16px; }
   </style>
 </head>
 <body>
@@ -215,7 +245,7 @@
     <div class="sidebar-label">Dados</div>
     <a class="nav-item active" href="posicoes.html">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-      Posições
+      Meu Portfólio
     </a>
     <a class="nav-item" href="opcoes.html">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
@@ -275,75 +305,118 @@
 <main class="main">
   <div class="hero">
     <div class="hero-label">Portal do Assessor · BTG Pactual</div>
-    <div class="hero-name">Posições Consolidadas</div>
-    <div class="hero-sub">Patrimônio sob custódia por conta, classe e perfil de suitability.</div>
+    <div class="hero-name">Meu Portfólio</div>
+    <div class="hero-sub">Posições consolidadas e histórico de movimentações por conta.</div>
     <div class="hero-date" id="heroDate"></div>
   </div>
 
   <div class="content">
 
-    <!-- Filtros -->
-    <div class="filter-bar">
-      <input class="filter-input" type="text" id="searchInput" placeholder="🔍 Buscar conta ou cliente...">
-      <select class="filter-select" id="filtroAssessor" style="display:none">
-        <option value="">Todos os assessores</option>
-      </select>
-      <select class="filter-select" id="filtroPerfil">
-        <option value="">Todos os perfis</option>
-      </select>
-      <select class="filter-select" id="filtroClasse">
-        <option value="">Todas as classes</option>
-      </select>
-      <button class="btn-clear" onclick="limparFiltros()">Limpar filtros</button>
+    <!-- Tabs -->
+    <div class="tabs-bar">
+      <button class="tab-btn active" id="tabBtnPosicao" onclick="switchTab('posicao')">Posição</button>
+      <button class="tab-btn" id="tabBtnMovimentacao" onclick="switchTab('movimentacao')">Movimentação</button>
     </div>
 
-    <!-- KPIs -->
-    <div class="kpi-grid">
-      <div class="kpi">
-        <div class="kpi-icon" style="background:#eef3ff">📊</div>
-        <div class="kpi-label">AuC Total</div>
-        <div class="kpi-value loading-kpi" id="kpiAuc">—</div>
-        <div class="kpi-sub">Patrimônio sob custódia</div>
-      </div>
-      <div class="kpi">
-        <div class="kpi-icon" style="background:#fff7ed">👥</div>
-        <div class="kpi-label">Contas</div>
-        <div class="kpi-value loading-kpi" id="kpiContas">—</div>
-        <div class="kpi-sub">Clientes na carteira</div>
-      </div>
-      <div class="kpi">
-        <div class="kpi-icon" style="background:#f0fdf4">💰</div>
-        <div class="kpi-label">AuC Médio</div>
-        <div class="kpi-value loading-kpi" id="kpiMedio">—</div>
-        <div class="kpi-sub">Por conta</div>
-      </div>
-    </div>
+    <!-- ── TAB: POSIÇÃO ─────────────────────────────────────────────────────── -->
+    <div class="tab-panel active" id="tabPosicao">
 
-    <!-- Gráfico + legenda -->
-    <div class="two-col">
-      <div class="card">
-        <div class="card-title">AuC por Classe</div>
-        <div class="chart-wrap"><canvas id="donutChart"></canvas></div>
+      <!-- Filtros -->
+      <div class="filter-bar">
+        <input class="filter-input" type="text" id="searchInput" placeholder="🔍 Buscar conta ou cliente...">
+        <select class="filter-select" id="filtroAssessor" style="display:none">
+          <option value="">Todos os assessores</option>
+        </select>
+        <select class="filter-select" id="filtroPerfil">
+          <option value="">Todos os perfis</option>
+        </select>
+        <select class="filter-select" id="filtroClasse">
+          <option value="">Todas as classes</option>
+        </select>
+        <button class="btn-clear" onclick="limparFiltros()">Limpar filtros</button>
       </div>
-      <div class="card">
-        <div class="card-title">Detalhamento por Classe</div>
-        <div class="classe-list" id="classeList"></div>
-      </div>
-    </div>
 
-    <!-- Tabela -->
-    <div class="table-card">
-      <div class="table-header">
-        <div class="table-title">Posições por Conta</div>
-        <div class="table-count" id="tableCount"></div>
+      <!-- KPIs -->
+      <div class="kpi-grid">
+        <div class="kpi">
+          <div class="kpi-icon" style="background:#eef3ff">📊</div>
+          <div class="kpi-label">AuC Total</div>
+          <div class="kpi-value loading-kpi" id="kpiAuc">—</div>
+          <div class="kpi-sub">Patrimônio sob custódia</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-icon" style="background:#fff7ed">👥</div>
+          <div class="kpi-label">Contas</div>
+          <div class="kpi-value loading-kpi" id="kpiContas">—</div>
+          <div class="kpi-sub">Clientes na carteira</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-icon" style="background:#f0fdf4">💰</div>
+          <div class="kpi-label">AuC Médio</div>
+          <div class="kpi-value loading-kpi" id="kpiMedio">—</div>
+          <div class="kpi-sub">Por conta</div>
+        </div>
       </div>
-      <div class="table-wrap">
-        <table>
-          <thead id="tableHead"></thead>
-          <tbody id="tableBody"></tbody>
-        </table>
+
+      <!-- Gráfico + legenda -->
+      <div class="two-col">
+        <div class="card">
+          <div class="card-title">AuC por Classe</div>
+          <div class="chart-wrap"><canvas id="donutChart"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Detalhamento por Classe</div>
+          <div class="classe-list" id="classeList"></div>
+        </div>
       </div>
-    </div>
+
+      <!-- Tabela posição -->
+      <div class="table-card">
+        <div class="table-header">
+          <div class="table-title">Posições por Conta</div>
+          <div class="table-count" id="tableCount"></div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead id="tableHead"></thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div><!-- /tabPosicao -->
+
+    <!-- ── TAB: MOVIMENTAÇÃO ─────────────────────────────────────────────────── -->
+    <div class="tab-panel" id="tabMovimentacao">
+
+      <!-- Toolbar -->
+      <div class="mov-toolbar">
+        <select class="mov-select" id="movContaSelect" onchange="onMovContaChange()">
+          <option value="">Selecione uma conta...</option>
+        </select>
+        <button class="btn-solicitar" id="btnSolicitar" onclick="solicitarMovimentacoes()" disabled>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.47"/></svg>
+          Solicitar dados
+        </button>
+        <div class="mov-status" id="movStatus" style="display:none">
+          <span class="dot dot-sem_dados" id="movStatusDot"></span>
+          <span id="movStatusTxt">—</span>
+        </div>
+      </div>
+
+      <!-- Atualizado em -->
+      <div class="mov-atualizado" id="movAtualizado" style="display:none"></div>
+
+      <!-- Tabela movimentações -->
+      <div id="movConteudo">
+        <div class="mov-empty">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          <div>Selecione uma conta e clique em <strong>Solicitar dados</strong></div>
+          <div style="font-size:12px;margin-top:4px;color:#c4c9d4">Os dados chegam em instantes via BTG</div>
+        </div>
+      </div>
+
+    </div><!-- /tabMovimentacao -->
 
   </div>
 </main>
@@ -675,6 +748,205 @@
     const chip = document.getElementById('userChip');
     if (chip && !chip.contains(e.target)) chip.classList.remove('open');
   });
+
+  // ── Tabs ──────────────────────────────────────────────────────────────────
+  function switchTab(tab) {
+    ['posicao','movimentacao'].forEach(t => {
+      document.getElementById('tabPanel' + t.charAt(0).toUpperCase() + t.slice(1)) &&
+        document.getElementById('tabPanel' + t.charAt(0).toUpperCase() + t.slice(1));
+      document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1)).classList.toggle('active', t === tab);
+      document.getElementById('tabBtn' + t.charAt(0).toUpperCase() + t.slice(1)).classList.toggle('active', t === tab);
+    });
+    if (tab === 'movimentacao') popularMovContaSelect();
+  }
+
+  // ── Movimentação ──────────────────────────────────────────────────────────
+  let _movUnsubscribe = null;
+  let _movContaAtual  = null;
+
+  function popularMovContaSelect() {
+    const sel = document.getElementById('movContaSelect');
+    const contas = Object.values(contasMap).sort((a,b) => (a.cliente||'').localeCompare(b.cliente||''));
+    while (sel.options.length > 1) sel.remove(1);
+    contas.forEach(c => {
+      const opt = new Option(`${c.conta}${c.cliente ? ' — ' + c.cliente : ''}`, c.conta);
+      sel.add(opt);
+    });
+  }
+
+  function onMovContaChange() {
+    const conta = document.getElementById('movContaSelect').value;
+    document.getElementById('btnSolicitar').disabled = !conta;
+
+    // Cancela listener anterior
+    if (_movUnsubscribe) { _movUnsubscribe(); _movUnsubscribe = null; }
+    _movContaAtual = conta;
+
+    if (!conta) {
+      document.getElementById('movStatus').style.display = 'none';
+      document.getElementById('movAtualizado').style.display = 'none';
+      document.getElementById('movConteudo').innerHTML = `
+        <div class="mov-empty">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          <div>Selecione uma conta e clique em <strong>Solicitar dados</strong></div>
+          <div style="font-size:12px;margin-top:4px;color:#c4c9d4">Os dados chegam em instantes via BTG</div>
+        </div>`;
+      return;
+    }
+
+    // Listener em tempo real no Firestore
+    _movUnsubscribe = db.collection('movimentacoes').doc(conta)
+      .onSnapshot(snap => {
+        if (!snap.exists) {
+          renderMovStatus('sem_dados', 'Sem dados ainda');
+          document.getElementById('movAtualizado').style.display = 'none';
+          document.getElementById('movConteudo').innerHTML = `
+            <div class="mov-empty">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <div>Nenhum dado para esta conta</div>
+              <div style="font-size:12px;margin-top:4px;color:#c4c9d4">Clique em <strong>Solicitar dados</strong> para buscar no BTG</div>
+            </div>`;
+          return;
+        }
+        const d = snap.data();
+        const status = d.status || 'sem_dados';
+        const labels = { aguardando: 'Aguardando BTG…', disponivel: 'Dados disponíveis', sem_dados: 'Sem dados' };
+        renderMovStatus(status, labels[status] || status);
+
+        if (d.atualizado_em) {
+          const dt = new Date(d.atualizado_em);
+          document.getElementById('movAtualizado').textContent =
+            'Atualizado em ' + dt.toLocaleString('pt-BR', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+          document.getElementById('movAtualizado').style.display = 'block';
+        }
+
+        if (status === 'aguardando') {
+          document.getElementById('movConteudo').innerHTML = `
+            <div class="mov-empty">
+              <div class="spinner" style="margin:0 auto 12px"></div>
+              <div>Aguardando resposta do BTG…</div>
+              <div style="font-size:12px;margin-top:4px;color:#c4c9d4">Os dados chegam automaticamente</div>
+            </div>`;
+          return;
+        }
+
+        renderMovTabela(d.dados || []);
+      }, err => {
+        console.error('Firestore listener erro:', err);
+      });
+  }
+
+  function renderMovStatus(status, texto) {
+    const el    = document.getElementById('movStatus');
+    const dot   = document.getElementById('movStatusDot');
+    const txt   = document.getElementById('movStatusTxt');
+    el.style.display = 'flex';
+    dot.className    = 'dot dot-' + status;
+    txt.textContent  = texto;
+  }
+
+  async function solicitarMovimentacoes() {
+    const conta = document.getElementById('movContaSelect').value;
+    if (!conta) return;
+    const btn = document.getElementById('btnSolicitar');
+    btn.disabled = true;
+    btn.innerHTML = '<div class="spinner" style="width:14px;height:14px;border-width:2px;border-color:rgba(255,255,255,0.3);border-top-color:#fff"></div> Solicitando…';
+
+    try {
+      const token = await getIdToken();
+      const resp  = await fetch(`${API_URL}/api/movimentacoes/solicitar/${conta}`, {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.detail || 'Erro ' + resp.status);
+      }
+      // O listener do Firestore vai atualizar automaticamente
+    } catch(e) {
+      showAlert('Erro ao solicitar dados: ' + e.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.47"/></svg> Solicitar dados';
+    }
+  }
+
+  function renderMovTabela(dados) {
+    if (!dados || !dados.length) {
+      document.getElementById('movConteudo').innerHTML = `
+        <div class="mov-empty">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          <div>Nenhuma movimentação encontrada</div>
+        </div>`;
+      return;
+    }
+
+    // Detecta colunas disponíveis
+    const tipoLabel = t => {
+      if (!t) return '—';
+      const u = t.toUpperCase();
+      if (u === 'A' || u.includes('APLIC') || u.includes('COMPRA')) return '<span class="badge-tipo tipo-A">Aplicação</span>';
+      if (u === 'R' || u.includes('RESG')  || u.includes('VENDA'))  return '<span class="badge-tipo tipo-R">Resgate</span>';
+      if (u === 'T' || u.includes('TRANS'))                          return '<span class="badge-tipo tipo-T">Transferência</span>';
+      if (u === 'D' || u.includes('DIV')   || u.includes('REND'))   return '<span class="badge-tipo tipo-D">Rendimento</span>';
+      return `<span class="badge-tipo tipo-_">${t}</span>`;
+    };
+
+    const fmtData = s => {
+      if (!s) return '—';
+      const d = new Date(s);
+      if (isNaN(d)) return s;
+      return d.toLocaleDateString('pt-BR');
+    };
+
+    const fmtVal = v => {
+      if (v == null || isNaN(Number(v))) return '—';
+      const n = Number(v);
+      const cls = n < 0 ? 'color:#dc2626' : n > 0 ? 'color:#059669' : '';
+      return `<span style="${cls}">${n.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</span>`;
+    };
+
+    // Campos que tentamos extrair (em ordem de prioridade)
+    const getField = (obj, ...keys) => {
+      for (const k of keys) {
+        const v = obj[k] ?? obj[k.toLowerCase()] ?? obj[k.toUpperCase()];
+        if (v !== undefined && v !== null) return v;
+      }
+      return null;
+    };
+
+    document.getElementById('movConteudo').innerHTML = `
+      <div class="table-card">
+        <div class="table-header">
+          <div class="table-title">Histórico de Movimentações</div>
+          <div class="table-count">${dados.length} operações</div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Data</th>
+              <th>Tipo</th>
+              <th>Produto / Descrição</th>
+              <th class="num">Valor</th>
+              <th>Status</th>
+            </tr></thead>
+            <tbody>
+              ${dados.map(op => `<tr>
+                <td>${fmtData(getField(op,'date','data','dataOperacao','dataMovimento','operationDate'))}</td>
+                <td>${tipoLabel(getField(op,'type','tipo','operationType','tipoOperacao'))}</td>
+                <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${
+                  getField(op,'productName','product','produto','description','descricao','name') || '—'
+                }</td>
+                <td class="num">${fmtVal(getField(op,'value','amount','valor','gross','financialValue'))}</td>
+                <td style="font-size:12px;color:#6b7280">${
+                  getField(op,'status','situacao') || '—'
+                }</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+  }
 </script>
 </body>
 </html>

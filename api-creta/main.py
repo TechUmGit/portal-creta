@@ -12,6 +12,7 @@ import os
 import re
 import json
 import time
+import base64
 import logging
 import requests
 from datetime import datetime
@@ -58,6 +59,46 @@ TABLE_CDB_LCA            = f"`{GCP_PROJECT}.{DATASET}.partner_report_cdb_lca_lci
 
 # ── GCS ───────────────────────────────────────────────────────────────────────
 GCS_BUCKET         = os.getenv("GCS_BUCKET", "creta-btg-pipeline")
+
+# ── NewsAPI (para refresh manual de notícias) ─────────────────────────────────
+NEWSAPI_KEY             = os.getenv("NEWSAPI_KEY")          # secret montado no Cloud Run
+NEWSAPI_URL_TUDO        = "https://newsapi.org/v2/everything"
+NOTICIAS_LIMITE_MANUAL  = int(os.getenv("NOTICIAS_LIMITE_MANUAL", "5"))  # refreshes/dia
+NOTICIAS_CATEGORIAS = [
+    {"nome": "Renda Variável",  "slug": "rv",            "query": 'Ibovespa OR "bolsa de valores" OR B3'},
+    {"nome": "Renda Fixa",      "slug": "rf",            "query": '"renda fixa" OR "tesouro direto" OR CDB OR LCI'},
+    {"nome": "Macro",           "slug": "macro",         "query": 'PIB OR "banco central" OR "economia brasileira"'},
+    {"nome": "Curva de Juros",  "slug": "juros",         "query": '"curva de juros" OR "juros futuros" OR "DI futuro" OR Selic'},
+    {"nome": "IPCA",            "slug": "ipca",          "query": 'IPCA OR inflação OR INPC'},
+    {"nome": "Internacional",   "slug": "internacional", "query": '"mercados internacionais" OR "wall street" OR fed OR dólar'},
+]
+# ── BTG OAuth2 (movimentações) ────────────────────────────────────────────────
+BTG_CLIENT_ID     = os.getenv("BTG_CLIENT_ID")
+BTG_CLIENT_SECRET = os.getenv("BTG_CLIENT_SECRET")
+BTG_TOKEN_URL     = "https://api.btgpactual.com/iaas-auth/api/v1/authorization/oauth2/accesstoken"
+BTG_MOV_URL       = "https://api.btgpactual.com/iaas-api-operation/api/v1/operation-history/full"
+_btg_token_cache: dict = {"token": None, "expires_at": 0.0}
+
+def _get_btg_token() -> str:
+    agora = time.time()
+    if _btg_token_cache["token"] and agora < _btg_token_cache["expires_at"] - 30:
+        return _btg_token_cache["token"]
+    if not BTG_CLIENT_ID or not BTG_CLIENT_SECRET:
+        raise RuntimeError("BTG_CLIENT_ID / BTG_CLIENT_SECRET não configurados.")
+    creds_b64 = base64.b64encode(f"{BTG_CLIENT_ID}:{BTG_CLIENT_SECRET}".encode()).decode()
+    resp = requests.post(
+        BTG_TOKEN_URL,
+        headers={"Authorization": f"Basic {creds_b64}",
+                 "Content-Type":  "application/x-www-form-urlencoded"},
+        data={"grant_type": "client_credentials"},
+        timeout=15,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    _btg_token_cache["token"]      = data["access_token"]
+    _btg_token_cache["expires_at"] = agora + data.get("expires_in", 3600)
+    return _btg_token_cache["token"]
+
 GCS_PREFIX         = "entradas/"
 GCS_PREFIX_PRODUTOS  = "produtos-manuais/"
 GCS_PREFIX_CHAMADOS  = "chamados/"
@@ -1660,7 +1701,7 @@ async def gestao_carteira(
     sql_roa = f"""
         WITH {contas_cte}
         receita_conta AS (
-            SELECT CAST(Conta AS STRING) AS Conta,
+            SELECT Conta,
                    ROUND(SUM(Receita_Bruta),2) AS receita_bruta
             FROM {TABLE}
             WHERE DATE(Data_De_Referencia) >= DATE_SUB(CURRENT_DATE(), INTERVAL 12 MONTH)
@@ -1669,15 +1710,19 @@ async def gestao_carteira(
             GROUP BY Conta
         ),
         auc_medio AS (
-            SELECT TRIM(p.Conta) AS Conta, ROUND(AVG(auc_dia),2) AS avg_auc
+            SELECT p.conta_num,
+                   ROUND(AVG(p.auc_dia),2) AS avg_auc
             FROM (
-                SELECT DATE(p2.Data) AS d, TRIM(p2.Conta) AS Conta, SUM(p2.ValorBruto) AS auc_dia
+                SELECT DATE(p2.Data) AS d,
+                       SAFE_CAST(TRIM(p2.Conta) AS INT64) AS conta_num,
+                       SUM(p2.ValorBruto) AS auc_dia
                 FROM {TABLE_POSICAO} p2
                 {contas_join_p.replace('p.', 'p2.')}
                 WHERE DATE(p2.Data) >= DATE_SUB(CURRENT_DATE(), INTERVAL 12 MONTH)
                   AND p2.Classe != 'Aluguel de Ações'
-                GROUP BY d, TRIM(p2.Conta)
-            ) p GROUP BY TRIM(p.Conta)
+                GROUP BY d, SAFE_CAST(TRIM(p2.Conta) AS INT64)
+            ) p
+            GROUP BY p.conta_num
         ),
         nomes AS (
             SELECT Conta AS conta_num, MAX(Cliente) AS cliente
@@ -1692,9 +1737,9 @@ async def gestao_carteira(
             CASE WHEN COALESCE(a.avg_auc,0) > 0
                  THEN ROUND(r.receita_bruta / a.avg_auc * 12 * 100, 4) ELSE NULL END AS roa_pct
         FROM receita_conta r
-        LEFT JOIN auc_medio a ON r.Conta = a.Conta
-        LEFT JOIN nomes n ON SAFE_CAST(r.Conta AS INT64) = n.conta_num
-        LEFT JOIN {_mapa_assessor_sq()} ma ON SAFE_CAST(r.Conta AS INT64) = ma.Conta
+        LEFT JOIN auc_medio a ON r.Conta = a.conta_num
+        LEFT JOIN nomes n ON r.Conta = n.conta_num
+        LEFT JOIN {_mapa_assessor_sq()} ma ON r.Conta = ma.Conta
         WHERE COALESCE(a.avg_auc,0) > 0
         ORDER BY roa_pct ASC
         LIMIT 50
@@ -1712,9 +1757,8 @@ async def gestao_carteira(
             GROUP BY TRIM(p.Conta)
         ),
         ultima_receita AS (
-            SELECT CAST(Conta AS STRING) AS Conta, MAX(DATE(Data_De_Referencia)) AS ultima_data
+            SELECT Conta, MAX(DATE(Data_De_Referencia)) AS ultima_data
             FROM {TABLE}
-            {'WHERE UPPER(TRIM(Assessor_Manual)) = UPPER(@assessor)' if filter_assessor else ''}
             GROUP BY Conta
         ),
         nomes AS (
@@ -1729,7 +1773,7 @@ async def gestao_carteira(
             ur.ultima_data AS ultima_receita,
             DATE_DIFF(CURRENT_DATE(), COALESCE(ur.ultima_data, DATE('2020-01-01')), DAY) AS dias_sem_receita
         FROM contas_ativas ca
-        LEFT JOIN ultima_receita ur ON ca.Conta = ur.Conta
+        LEFT JOIN ultima_receita ur ON SAFE_CAST(ca.Conta AS INT64) = ur.Conta
         LEFT JOIN nomes n ON SAFE_CAST(ca.Conta AS INT64) = n.conta_num
         LEFT JOIN {_mapa_assessor_sq()} ma ON SAFE_CAST(ca.Conta AS INT64) = ma.Conta
         WHERE (ur.ultima_data IS NULL OR ur.ultima_data < DATE_SUB(CURRENT_DATE(), INTERVAL 60 DAY))
@@ -2981,6 +3025,122 @@ async def aprovacoes_download_resposta(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ── Notícias: refresh manual ──────────────────────────────────────────────────
+
+def _buscar_noticia_api(categoria: dict, urls_vistos: set) -> dict | None:
+    """Busca 1 notícia válida da categoria via NewsAPI."""
+    if not NEWSAPI_KEY:
+        return None
+    try:
+        resp = requests.get(
+            NEWSAPI_URL_TUDO,
+            params={"q": categoria["query"], "language": "pt",
+                    "sortBy": "publishedAt", "pageSize": 5, "apiKey": NEWSAPI_KEY},
+            timeout=10,
+        )
+    except Exception as e:
+        log.warning(f"NewsAPI rede ({categoria['nome']}): {e}")
+        return None
+    if resp.status_code != 200:
+        log.warning(f"NewsAPI {resp.status_code} ({categoria['nome']}): {resp.text[:200]}")
+        return None
+    for a in resp.json().get("articles", []):
+        titulo    = (a.get("title")       or "").strip()
+        descricao = (a.get("description") or "").strip()
+        url       = (a.get("url")         or "").strip()
+        if not titulo or titulo == "[Removed]": continue
+        if not descricao or descricao == "[Removed]": continue
+        if url in urls_vistos: continue
+        urls_vistos.add(url)
+        return {
+            "categoria": categoria["nome"], "slug": categoria["slug"],
+            "titulo": titulo, "descricao": descricao, "url": url,
+            "fonte":  (a.get("source") or {}).get("name", ""),
+            "data_pub": a.get("publishedAt", ""),
+        }
+    return None
+
+
+@app.post("/api/noticias/refresh")
+async def noticias_refresh(
+    authorization: Optional[str] = Header(default=None),
+):
+    """Atualiza as notícias manualmente. Limite: NOTICIAS_LIMITE_MANUAL por dia."""
+    await verificar_token(authorization)
+
+    if not NEWSAPI_KEY:
+        raise HTTPException(status_code=503, detail="NewsAPI não configurada neste serviço. Adicione NEWSAPI_KEY ao Cloud Run.")
+
+    fs     = fb_firestore.client()
+    hoje   = datetime.utcnow().strftime("%Y-%m-%d")
+
+    # ── Controle de limite diário ─────────────────────────────────────────────
+    ctrl_ref  = fs.collection("noticias").document("_controle")
+    ctrl_snap = ctrl_ref.get()
+    ctrl_data = ctrl_snap.to_dict() if ctrl_snap.exists else {}
+
+    if ctrl_data.get("data") == hoje:
+        count = int(ctrl_data.get("manual_count", 0))
+    else:
+        count = 0   # novo dia — zera
+
+    if count >= NOTICIAS_LIMITE_MANUAL:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Limite diário de {NOTICIAS_LIMITE_MANUAL} atualizações manuais atingido. Tente amanhã ou aguarde o job automático."
+        )
+
+    # ── Determina período (horário de Brasília) ───────────────────────────────
+    from datetime import timezone, timedelta as td
+    agora_brt = datetime.now(timezone(td(hours=-3)))
+    periodo   = "manha" if agora_brt.hour < 12 else "tarde"
+
+    # ── Busca notícias ────────────────────────────────────────────────────────
+    urls_vistos: set = set()
+    itens: list = []
+
+    for cat in NOTICIAS_CATEGORIAS:
+        noticia = _buscar_noticia_api(cat, urls_vistos)
+        if noticia:
+            itens.append(noticia)
+        time.sleep(1)   # respeita rate limit NewsAPI (1 req/s)
+
+    if not itens:
+        raise HTTPException(status_code=502, detail="Nenhuma notícia encontrada na NewsAPI.")
+
+    # ── Salva no Firestore ────────────────────────────────────────────────────
+    fs.collection("noticias").document(periodo).set({
+        "periodo":   periodo,
+        "gerado_em": datetime.utcnow().isoformat(),
+        "itens":     itens,
+    })
+
+    # ── Atualiza contador ─────────────────────────────────────────────────────
+    novo_count = count + 1
+    ctrl_ref.set({"data": hoje, "manual_count": novo_count})
+
+    return {
+        "ok":        True,
+        "itens":     itens,
+        "usos_hoje": novo_count,
+        "limite":    NOTICIAS_LIMITE_MANUAL,
+    }
+
+
+@app.get("/api/noticias/controle")
+async def noticias_controle(
+    authorization: Optional[str] = Header(default=None),
+):
+    """Retorna o uso manual de hoje para exibir no dashboard."""
+    await verificar_token(authorization)
+    fs    = fb_firestore.client()
+    hoje  = datetime.utcnow().strftime("%Y-%m-%d")
+    snap  = fs.collection("noticias").document("_controle").get()
+    data  = snap.to_dict() if snap.exists else {}
+    count = int(data.get("manual_count", 0)) if data.get("data") == hoje else 0
+    return {"usos_hoje": count, "limite": NOTICIAS_LIMITE_MANUAL}
+
+
 @app.get("/api/chamados/{doc_id}/arquivo")
 async def download_chamado_arquivo(
     doc_id: str,
@@ -3017,3 +3177,79 @@ async def download_chamado_arquivo(
 
     disposition = "inline" if "pdf" in ct else f'attachment; filename="{fname}"'
     return StreamingResponse(buf, media_type=ct, headers={"Content-Disposition": disposition})
+
+
+# ── Movimentações BTG ─────────────────────────────────────────────────────────
+
+@app.post("/api/movimentacoes/solicitar/{conta}")
+async def movimentacoes_solicitar(
+    conta: str,
+    authorization: Optional[str] = Header(default=None),
+):
+    """
+    Solicita histórico de movimentações ao BTG via OAuth2.
+    A resposta é assíncrona — o BTG chama o webhook-btg que salva no Firestore.
+    """
+    token_data = await verificar_token(authorization)
+    uid        = token_data.get("uid", "")
+
+    # Obtém token BTG
+    try:
+        btg_token = _get_btg_token()
+    except Exception as e:
+        log.error(f"Erro ao obter token BTG: {e}")
+        raise HTTPException(status_code=502, detail="Erro de autenticação com a BTG. Verifique BTG_CLIENT_ID/SECRET.")
+
+    # Chama API BTG (resposta assíncrona — dados chegam via webhook)
+    try:
+        resp = requests.get(
+            f"{BTG_MOV_URL}/{conta}",
+            headers={"Authorization": f"Bearer {btg_token}"},
+            timeout=30,
+        )
+        resp.raise_for_status()
+    except requests.HTTPError as e:
+        log.error(f"Erro BTG API movimentações conta {conta}: {e} — {getattr(e.response,'text','')}")
+        raise HTTPException(status_code=502, detail=f"Erro ao solicitar dados BTG: {resp.status_code}")
+    except Exception as e:
+        log.error(f"Erro de comunicação BTG: {e}")
+        raise HTTPException(status_code=502, detail="Erro de comunicação com a BTG.")
+
+    # Registra solicitação no Firestore (status = aguardando)
+    fs = fb_firestore.client()
+    fs.collection("movimentacoes").document(conta).set({
+        "conta":            conta,
+        "uid_solicitante":  uid,
+        "solicitado_em":    datetime.utcnow().isoformat() + "Z",
+        "status":           "aguardando",
+        "dados":            None,
+        "atualizado_em":    None,
+    }, merge=True)
+
+    log.info(f"Movimentações solicitadas: conta={conta} uid={uid}")
+    return {"ok": True, "conta": conta, "status": "aguardando",
+            "msg": "Solicitação enviada. Os dados chegam em instantes via webhook."}
+
+
+@app.get("/api/movimentacoes/{conta}")
+async def movimentacoes_get(
+    conta: str,
+    authorization: Optional[str] = Header(default=None),
+):
+    """Retorna dados de movimentação salvos no Firestore para a conta."""
+    await verificar_token(authorization)
+
+    fs  = fb_firestore.client()
+    doc = fs.collection("movimentacoes").document(conta).get()
+    if not doc.exists:
+        return {"conta": conta, "status": "sem_dados", "dados": None,
+                "solicitado_em": None, "atualizado_em": None}
+
+    d = doc.to_dict() or {}
+    return {
+        "conta":          conta,
+        "status":         d.get("status", "sem_dados"),
+        "dados":          d.get("dados"),
+        "solicitado_em":  d.get("solicitado_em"),
+        "atualizado_em":  d.get("atualizado_em"),
+    }

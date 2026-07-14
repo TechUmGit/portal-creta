@@ -768,8 +768,12 @@ function abrirAlertas(conta, label) {
   const caixas = (_data['caixa']||[]).filter(r => String(r.Conta||'').trim() === String(conta).trim());
   if (caixas.length) {
     html += '<div class="g-alert-section"><div class="g-alert-section-title">💰 Caixa Parado</div>'+
-      '<table class="g-alert-table"><thead><tr><th>Produto</th><th class="num">Valor</th><th>Desde</th></tr></thead><tbody>'+
-      caixas.map(r => '<tr><td>'+(r.produto||r.Subclasse||'—')+'</td><td class="num">'+fmtM(r.auc)+'</td><td>'+(r.data_ref||'—')+'</td></tr>').join('')+
+      '<table class="g-alert-table"><thead><tr><th class="num">Valor em Caixa</th><th class="num">AuC Total</th><th class="num">% do PL</th></tr></thead><tbody>'+
+      caixas.map(r => '<tr>'+
+        '<td class="num"><strong>'+fmtM(r.valor_caixa)+'</strong></td>'+
+        '<td class="num">'+fmtM(r.total_auc)+'</td>'+
+        '<td class="num">'+(r.pct_caixa!=null ? r.pct_caixa.toFixed(1)+'%' : '—')+'</td>'+
+        '</tr>').join('')+
       '</tbody></table></div>';
   }
 

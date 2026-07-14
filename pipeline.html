@@ -619,26 +619,13 @@
             <input class="form-control" id="fAucGlobal" type="text" inputmode="numeric" placeholder="R$ 0" oninput="fmtInput(this);calcAucPot()">
           </div>
           <div class="form-group">
-            <label class="form-label">Renda Fixa</label>
-            <input class="form-control" id="fRF" type="text" inputmode="numeric" placeholder="R$ 0" oninput="fmtInput(this)">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Renda Variável</label>
-            <input class="form-control" id="fRV" type="text" inputmode="numeric" placeholder="R$ 0" oninput="fmtInput(this)">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Fundos</label>
-            <input class="form-control" id="fFundos" type="text" inputmode="numeric" placeholder="R$ 0" oninput="fmtInput(this)">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Previdência</label>
-            <input class="form-control" id="fPrev" type="text" inputmode="numeric" placeholder="R$ 0" oninput="fmtInput(this)">
-          </div>
-          <div class="form-group">
-            <label class="form-label">OffShore</label>
-            <input class="form-control" id="fCOE" type="text" inputmode="numeric" placeholder="R$ 0" oninput="fmtInput(this)">
+            <label class="form-label">Net New Money</label>
+            <input class="form-control" id="fNNM" type="text" inputmode="numeric" placeholder="R$ 0" oninput="fmtInput(this)">
           </div>
         </div>
+        <!-- campos legados mantidos ocultos para compatibilidade -->
+        <input type="hidden" id="fRF"><input type="hidden" id="fRV">
+        <input type="hidden" id="fFundos"><input type="hidden" id="fPrev"><input type="hidden" id="fCOE">
       </div>
 
       <!-- 3. Mapeamento -->
@@ -1171,7 +1158,7 @@
 
   function limparForm() {
     ['fNome','fContaAntiga','fOrigem','fTelefone','fEmail',
-     'fAucGlobal','fRF','fRV','fFundos','fPrev','fCOE',
+     'fAucGlobal','fNNM','fRF','fRV','fFundos','fPrev','fCOE',
      'fRanking','fPipe',
      'fPrimeiroContato','fRetornoPositivo','fStatus','fContaBTG','fPipeQuente','fAucBTG',
      'fPlanoAcao','fClienteRevertido',
@@ -1201,11 +1188,7 @@
     set('fTelefone',       c.telefone);
     set('fEmail',          c.email);
     set('fAucGlobal',      c.auc_global);
-    set('fRF',             c.rf);
-    set('fRV',             c.rv);
-    set('fFundos',         c.fundos);
-    set('fPrev',           c.prev);
-    set('fCOE',            c.coe);
+    set('fNNM',            c.nnm);
     set('fRanking',        c.ranking);
     set('fPipe',           c.pipe);
     set('fPrimeiroContato',c.primeiro_contato);
@@ -1240,11 +1223,7 @@
       telefone:          get('fTelefone'),
       email:             get('fEmail'),
       auc_global:        parseMonetary('fAucGlobal'),
-      rf:                parseMonetary('fRF'),
-      rv:                parseMonetary('fRV'),
-      fundos:            parseMonetary('fFundos'),
-      prev:              parseMonetary('fPrev'),
-      coe:               parseMonetary('fCOE'),
+      nnm:               parseMonetary('fNNM'),
       ranking:           get('fRanking'),
       pipe:              get('fPipe'),
       primeiro_contato:  get('fPrimeiroContato'),
@@ -1308,7 +1287,7 @@
   function deletarCliente() { confirmarDelete(_editId); }
 
   // ── Formatação de input monetário ────────────────────────────────────────
-  const MONETARY_IDS = new Set(['fAucGlobal','fRF','fRV','fFundos','fPrev','fCOE','fPipeQuente','fAucBTG']);
+  const MONETARY_IDS = new Set(['fAucGlobal','fNNM','fPipeQuente','fAucBTG']);
 
   function fmtInput(el) {
     const pos = el.selectionStart;

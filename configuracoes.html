@@ -857,7 +857,7 @@
   async function carregarUsuarios() {
     const tbody = document.getElementById('tabelaUsuarios');
     try {
-      const res  = await fetch(`${API_URL}/api/usuarios`, { headers: { Authorization: `Bearer ${_token}` } });
+      const res  = await fetch(`${API_URL}/api/usuarios`, { headers: { Authorization: `Bearer ${await getIdToken()}` } });
       const json = await res.json();
       const lista = json.usuarios || [];
       if (!lista.length) {
@@ -932,11 +932,12 @@
 
     btn.disabled = true; btn.textContent = 'Salvando…';
     try {
+      const tok = await getIdToken();
       if (uid) {
         // Editar
         await fetch(`${API_URL}/api/usuarios/${uid}`, {
           method: 'PATCH',
-          headers: { Authorization: `Bearer ${_token}`, 'Content-Type': 'application/json' },
+          headers: { Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ role, assessor_name: assessorName, nome }),
         });
       } else {
@@ -944,7 +945,7 @@
         if (!email || !senha) { showToastCfg('Preencha e-mail e senha.', true); return; }
         const res = await fetch(`${API_URL}/api/usuarios`, {
           method: 'POST',
-          headers: { Authorization: `Bearer ${_token}`, 'Content-Type': 'application/json' },
+          headers: { Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, senha, nome, role, assessor_name: assessorName }),
         });
         if (!res.ok) { const j = await res.json(); throw new Error(j.detail || 'Erro'); }

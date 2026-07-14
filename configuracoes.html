@@ -859,6 +859,9 @@
     try {
       const res  = await fetch(`${API_URL}/api/usuarios`, { headers: { Authorization: `Bearer ${await getIdToken()}` } });
       const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.detail || `HTTP ${res.status}`);
+      }
       const lista = json.usuarios || [];
       if (!lista.length) {
         tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Nenhum usuário encontrado.</td></tr>';

@@ -2198,6 +2198,7 @@ class PipelineCliente(BaseModel):
     telefone:           Optional[str]  = None
     email:              Optional[str]  = None
     auc_global:         Optional[float] = None
+    nnm:                Optional[float] = None
     rf:                 Optional[float] = None
     rv:                 Optional[float] = None
     fundos:             Optional[float] = None

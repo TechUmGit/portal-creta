@@ -330,10 +330,10 @@
       </div>
     </div>
 
-    <!-- PRIORIDADES + NOTÍCIAS -->
+    <!-- PRIORIDADES LADO A LADO -->
     <div class="two-col">
 
-      <!-- Prioridades -->
+      <!-- Prioridades da Semana -->
       <div class="panel">
         <div class="panel-header">
           <div class="panel-title">🎯 Prioridades da Semana</div>
@@ -344,35 +344,20 @@
         </div>
       </div>
 
-      <!-- Notícias -->
-      <div class="panel">
+      <!-- Lista de Prioridades -->
+      <div class="panel" id="prioPanelFull">
         <div class="panel-header">
-          <div class="panel-title">📰 Mercado</div>
-          <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
-            <span id="noticiasUsos" style="font-size:10px;color:rgba(255,255,255,0.35)"></span>
-            <button id="btnRefreshNoticias" onclick="refreshNoticias()" title="Atualizar notícias" style="background:rgba(255,255,255,0.1);border:none;border-radius:6px;color:rgba(255,255,255,0.7);cursor:pointer;padding:4px 7px;font-size:14px;line-height:1;transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,0.2)'" onmouseout="this.style.background='rgba(255,255,255,0.1)'">↻</button>
-            <span id="noticiasHora" style="font-size:11px;color:rgba(255,255,255,0.4)"></span>
+          <div class="panel-title" style="display:flex;align-items:center;gap:8px">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+            Lista de Prioridades
           </div>
+          <span class="prio-count" id="prioCountBadge">—</span>
         </div>
-        <div id="noticiasWrap" class="panel-body">
+        <div class="prio-table-wrap panel-body" id="prioTableWrap">
           <div class="prio-empty">Carregando...</div>
         </div>
       </div>
 
-    </div>
-
-    <!-- LISTA DE PRIORIDADES FULL-WIDTH -->
-    <div class="prio-panel" id="prioPanelFull">
-      <div class="prio-panel-header">
-        <div class="prio-panel-title">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
-          Lista de Prioridades
-        </div>
-        <span class="prio-count" id="prioCountBadge">—</span>
-      </div>
-      <div class="prio-table-wrap" id="prioTableWrap">
-        <div class="prio-empty">Carregando...</div>
-      </div>
     </div>
 
     <!-- MÓDULOS -->
@@ -523,7 +508,6 @@
     // Carrega KPIs da página inicial
     carregarPosicao();
     carregarPrioridades();
-    carregarNoticias();
   });
 
   async function getIdToken() {
@@ -686,96 +670,6 @@
       if (diffH < 24) return `Há ${diffH}h`;
       return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
     } catch { return ''; }
-  }
-
-  function renderNoticias(itens, geradoEm) {
-    const wrap = document.getElementById('noticiasWrap');
-    const hora = document.getElementById('noticiasHora');
-    if (!itens.length) {
-      wrap.innerHTML = '<div class="prio-empty">Nenhuma notícia disponível.</div>';
-      return;
-    }
-    if (geradoEm) hora.textContent = 'Atualizado ' + fmtDataPub(geradoEm);
-    wrap.innerHTML = itens.map(n => `
-      <div class="news-item" style="cursor:pointer" onclick="window.open('${n.url}','_blank')">
-        <div style="flex-shrink:0;padding-top:2px">
-          <span class="news-cat ${SLUG_CSS[n.slug] || 'cat-mm'}">${n.categoria}</span>
-          <div class="news-title">${n.titulo}</div>
-          <div class="news-desc">${n.descricao || ''}</div>
-          <div class="news-date">${n.fonte ? n.fonte + ' · ' : ''}${fmtDataPub(n.data_pub)}</div>
-        </div>
-      </div>
-    `).join('');
-  }
-
-  function atualizarBotaoRefresh(usos, limite) {
-    const label = document.getElementById('noticiasUsos');
-    const btn   = document.getElementById('btnRefreshNoticias');
-    const restam = limite - usos;
-    if (restam <= 0) {
-      label.textContent = 'Limite atingido';
-      btn.disabled = true;
-      btn.style.opacity = '0.35';
-      btn.style.cursor  = 'default';
-    } else {
-      label.textContent = `${restam}/${limite} restantes`;
-      btn.disabled = false;
-      btn.style.opacity = '1';
-      btn.style.cursor  = 'pointer';
-    }
-  }
-
-  async function carregarNoticias() {
-    const wrap = document.getElementById('noticiasWrap');
-    try {
-      const periodos = ['tarde', 'manha'];
-      let itens = [], geradoEm = '';
-      for (const p of periodos) {
-        const snap = await db.collection('noticias').doc(p).get();
-        if (snap.exists) { itens = snap.data().itens || []; geradoEm = snap.data().gerado_em || ''; break; }
-      }
-      renderNoticias(itens, geradoEm);
-    } catch(e) {
-      console.error('Erro ao carregar notícias:', e);
-      wrap.innerHTML = '<div class="prio-empty">Erro ao carregar notícias.</div>';
-    }
-
-    // Carrega contador de uso
-    try {
-      const res  = await fetch(`${API_URL}/api/noticias/controle`, { headers: { Authorization: `Bearer ${await getIdToken()}` } });
-      if (res.ok) { const j = await res.json(); atualizarBotaoRefresh(j.usos_hoje, j.limite); }
-    } catch(e) {}
-  }
-
-  async function refreshNoticias() {
-    const btn = document.getElementById('btnRefreshNoticias');
-    const wrap = document.getElementById('noticiasWrap');
-    btn.disabled = true;
-    btn.textContent = '…';
-    wrap.innerHTML = '<div class="prio-empty">Buscando novas notícias…</div>';
-    try {
-      const res = await fetch(`${API_URL}/api/noticias/refresh`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${await getIdToken()}` }
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        wrap.innerHTML = `<div class="prio-empty">${json.detail || 'Erro ao atualizar.'}</div>`;
-        // Recarrega estado real do botão
-        try {
-          const r2 = await fetch(`${API_URL}/api/noticias/controle`, { headers: { Authorization: `Bearer ${await getIdToken()}` } });
-          if (r2.ok) { const j = await r2.json(); atualizarBotaoRefresh(j.usos_hoje, j.limite); }
-        } catch(e) {}
-        btn.textContent = '↻';
-        return;
-      }
-      renderNoticias(json.itens, new Date().toISOString());
-      atualizarBotaoRefresh(json.usos_hoje, json.limite);
-    } catch(e) {
-      wrap.innerHTML = '<div class="prio-empty">Erro de conexão.</div>';
-    }
-    btn.textContent = '↻';
-    btn.disabled = false;
   }
 
   async function logout() {

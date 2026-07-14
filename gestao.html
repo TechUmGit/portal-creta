@@ -778,7 +778,7 @@ function abrirAlertas(conta, label) {
   }
 
   // Vencimentos
-  const venc = (_data['venc']||[]).filter(r => String(r.Conta||'').trim() === String(conta).trim());
+  const venc = (_data['venc']||[]).filter(r => String(r.Conta||'').trim() === String(conta).trim() && (r.valor||0) >= 1000);
   if (venc.length) {
     html += '<div class="g-alert-section"><div class="g-alert-section-title">📅 Vencimentos Próximos</div>'+
       '<table class="g-alert-table"><thead><tr><th>Produto</th><th class="num">Valor</th><th>Vencimento</th><th class="num">Dias</th></tr></thead><tbody>'+

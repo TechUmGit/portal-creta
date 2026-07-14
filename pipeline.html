@@ -900,7 +900,6 @@
         document.getElementById('sidebarSistema').style.display = 'block';
         document.getElementById('adminFilter').classList.add('visible');
         document.getElementById('thAssessor').style.display = '';
-        await carregarAssessores();
       }
     } catch(e) {
       document.getElementById('userNameEl').textContent = email.split('@')[0];
@@ -910,17 +909,21 @@
     await carregarPipeline();
   });
 
-  // ── Carregar assessores (admin) ──────────────────────────────────────────
-  async function carregarAssessores() {
-    try {
-      const res = await fetch(`${API_URL}/api/assessores`, { headers: { Authorization: `Bearer ${_token}` } });
-      const json = await res.json();
-      const sel = document.getElementById('assessorFilter');
-      (json.assessores || []).forEach(a => {
-        const opt = document.createElement('option');
-        opt.value = a; opt.textContent = a; sel.appendChild(opt);
-      });
-    } catch(e) {}
+  // ── Popular filtro de assessor a partir dos clientes carregados ──────────
+  function popularFiltroAssessor() {
+    const sel = document.getElementById('assessorFilter');
+    const valorAtual = sel.value;
+    // Remove opções antigas (mantém "Todos")
+    while (sel.options.length > 1) sel.remove(1);
+    const nomes = [...new Set(
+      _clientes.map(c => (c.assessor_name || '').trim()).filter(Boolean)
+    )].sort();
+    nomes.forEach(a => {
+      const opt = document.createElement('option');
+      opt.value = a; opt.textContent = a; sel.appendChild(opt);
+    });
+    // Restaura seleção anterior se ainda existir
+    if (valorAtual) sel.value = valorAtual;
   }
 
   function aplicarFiltroAssessor() {
@@ -935,6 +938,7 @@
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       _clientes = json.clientes || [];
+      if (_isAdmin) popularFiltroAssessor();
       atualizarKPIs();
       renderTabela();
     } catch(e) {

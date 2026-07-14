@@ -634,7 +634,7 @@ async function carregarDados() {
   try {
     const sel = document.getElementById('assessorSelect');
     let url = API_BASE + '/api/gestao';
-    if (userRole === 'admin' && sel && sel.value) url += '?assessor=' + encodeURIComponent(sel.value);
+    if ((userRole === 'admin' || userRole === 'backoffice') && sel && sel.value) url += '?assessor=' + encodeURIComponent(sel.value);
     const res = await fetch(url, { headers: { Authorization: 'Bearer ' + idToken } });
     if (!res.ok) throw new Error(await res.text());
     const json = await res.json();
@@ -666,12 +666,13 @@ firebase.auth().onAuthStateChanged(async user => {
   const initials = (user.displayName||user.email||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
   document.getElementById('avatarEl').textContent    = initials;
   document.getElementById('userNameEl').textContent  = user.displayName || user.email;
-  document.getElementById('userRoleEl').textContent  = userRole === 'admin' ? 'Administrador' : 'Assessor';
+  document.getElementById('userRoleEl').textContent  = userRole === 'admin' ? 'Administrador' : userRole === 'backoffice' ? 'BackOffice' : 'Assessor';
   document.getElementById('userEmailEl').textContent = user.email;
 
-  if (userRole === 'admin') {
+  if (userRole === 'admin' || userRole === 'backoffice') {
     document.getElementById('filterBar').style.display = 'flex';
     document.getElementById('sidebarSistema').style.display = 'block';
+    if (userRole === 'backoffice') { document.querySelectorAll('a[href="receitas.html"],a[href="relatorios.html"]').forEach(el => el.style.display='none'); }
     await carregarAssessores();
   }
 

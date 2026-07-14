@@ -105,6 +105,7 @@
     .tipo-badge { display: inline-block; padding: 2px 8px; border-radius: 8px; font-size: 11px; font-weight: 600; }
     .t-td { background: #eff6ff; color: #1d4ed8; }
     .t-fc { background: #f5f3ff; color: #7c3aed; }
+    .t-deriv { background: #fef9c3; color: #a16207; }
 
     /* ── Resposta ── */
     .resp-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 10px; }
@@ -299,6 +300,7 @@
         <button class="chip active" data-tipo="" onclick="setFiltroTipo(this)">Todos</button>
         <button class="chip" data-tipo="tesouro_direto"  onclick="setFiltroTipo(this)">Tesouro Direto</button>
         <button class="chip" data-tipo="fundos_carencia" onclick="setFiltroTipo(this)">Fundos com Carência</button>
+        <button class="chip" data-tipo="derivativos"     onclick="setFiltroTipo(this)">Derivativos</button>
       </div>
     </div>
   </div>
@@ -349,6 +351,7 @@
           <option value="">Selecione…</option>
           <option value="tesouro_direto">Tesouro Direto</option>
           <option value="fundos_carencia">Fundos com Carência</option>
+          <option value="derivativos">Derivativos</option>
         </select>
       </div>
       <div class="form-group">
@@ -432,7 +435,9 @@
       const data = snap.exists ? snap.data() : {};
       const name = data.displayName || user.displayName || email.split('@')[0];
       const role = data.role || '';
-      _isAdmin      = (role === 'admin');
+      _isAdmin      = (role === 'admin' || role === 'backoffice')
+      // BackOffice: oculta links de receita e relatório
+      if (role === 'backoffice') { document.querySelectorAll('a[href="receitas.html"],a[href="relatorios.html"]').forEach(el => el.style.display='none'); };
       _assessorName = name;
       document.getElementById('userNameEl').textContent = name;
       document.getElementById('avatarEl').textContent   = name.charAt(0).toUpperCase();
@@ -504,8 +509,8 @@
   }
 
   // ── Render ────────────────────────────────────────────────────────────────────
-  const TIPO_LABEL = { tesouro_direto: 'Tesouro Direto', fundos_carencia: 'Fundos c/ Carência' };
-  const TIPO_CLS   = { tesouro_direto: 't-td', fundos_carencia: 't-fc' };
+  const TIPO_LABEL = { tesouro_direto: 'Tesouro Direto', fundos_carencia: 'Fundos c/ Carência', derivativos: 'Derivativos' };
+  const TIPO_CLS   = { tesouro_direto: 't-td', fundos_carencia: 't-fc', derivativos: 't-deriv' };
 
   function fmtData(str) {
     if (!str) return '—';
@@ -614,6 +619,21 @@ Creta Investimentos | BTG Pactual`
 Conforme nossa conversa, solicito sua autorização para realizar o resgate antecipado de cotas em fundo de investimento com carência na sua conta na BTG Pactual.
 
 Por favor, responda este e-mail confirmando: "Autorizo o resgate antecipado das minhas cotas no fundo com carência."
+
+Fico à disposição para qualquer dúvida.
+
+Atenciosamente,
+${assessor}
+Creta Investimentos | BTG Pactual`
+    },
+    derivativos: {
+      subject: 'Autorização de Operação com Derivativos',
+      body: (nome, assessor) =>
+`Prezado(a) ${nome},
+
+Conforme nossa conversa, solicito sua autorização para realizar operações com derivativos na sua conta na BTG Pactual.
+
+Por favor, responda este e-mail confirmando: "Autorizo a realização de operações com derivativos na minha conta."
 
 Fico à disposição para qualquer dúvida.
 

@@ -494,8 +494,9 @@
       const tr           = await user.getIdTokenResult();
       const role         = tr.claims.role || 'assessor';
       const assessorName = tr.claims.assessor_name || '';
-      if (role === 'admin') {
+      if (role === 'admin' || role === 'backoffice') {
         document.getElementById('sidebarSistema').style.display = 'block';
+        if (role === 'backoffice') { document.querySelectorAll('a[href="receitas.html"],a[href="relatorios.html"],.module-card[onclick*="receitas"],[onclick*="relatorios"]').forEach(el => el.style.display='none'); }
         document.getElementById('kpiAucLabel').textContent    = 'AuC Total da Equipe';
         document.getElementById('kpiContasLabel').textContent = 'Contas Ativas (Total)';
       } else {

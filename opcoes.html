@@ -420,8 +420,9 @@
       const role = data.role || '';
       document.getElementById('userName').textContent    = name;
       document.getElementById('userAvatar').textContent  = name.charAt(0).toUpperCase();
-      document.getElementById('userRoleLabel').textContent = role === 'admin' ? 'Administrador' : 'Assessor BTG';
-      if (role === 'admin') document.getElementById('sidebarSistema').style.display = 'block';
+      document.getElementById('userRoleLabel').textContent = role === 'admin' ? 'Administrador' : role === 'backoffice' ? 'BackOffice' : 'Assessor BTG';
+      if (role === 'admin' || role === 'backoffice') document.getElementById('sidebarSistema').style.display = 'block';
+      if (role === 'backoffice') { document.querySelectorAll('a[href="receitas.html"],a[href="relatorios.html"]').forEach(el => el.style.display='none'); }
     } catch(e) {
       document.getElementById('userName').textContent = email.split('@')[0];
     }

@@ -468,6 +468,7 @@
         <label class="form-label">Perfil de acesso</label>
         <select class="form-input" id="uRole" onchange="toggleAssessorField()">
           <option value="assessor">Assessor</option>
+          <option value="backoffice">BackOffice</option>
           <option value="admin">Administrador</option>
         </select>
       </div>
@@ -527,12 +528,13 @@
     // Pega claims para saber se é admin
     const claims = (await user.getIdTokenResult()).claims;
     const role   = claims.role || '';
-    isAdmin = role === 'admin';
+    isAdmin = (role === 'admin' || role === 'backoffice')
+    if (role === 'backoffice') { document.querySelectorAll('a[href="receitas.html"],a[href="relatorios.html"]').forEach(el => el.style.display='none'); };
 
     // Atualiza topbar
     const nome = user.displayName || user.email.split('@')[0];
     document.getElementById('userName').textContent   = nome;
-    document.getElementById('userRoleLabel').textContent = isAdmin ? 'Administrador' : 'Assessor BTG';
+    document.getElementById('userRoleLabel').textContent = isAdmin ? (role === 'admin' ? 'Administrador' : 'BackOffice') : 'Assessor BTG';
     document.getElementById('userEmailDd').textContent   = user.email;
     document.getElementById('userAvatar').textContent    = nome.charAt(0).toUpperCase();
 
@@ -543,6 +545,8 @@
       document.getElementById('acessoNegado').style.display = 'block';
     } else {
       document.getElementById('adminContent').style.display = 'block';
+      // Garante que o admin atual está no Firestore (fallback de listagem)
+      fetch(`${API_URL}/api/usuarios/seed-me`, { method: 'POST', headers: { Authorization: `Bearer ${await getIdToken()}` } }).catch(() => {});
       await Promise.all([carregarArquivos(), carregarExcecoes(), carregarAssessores(), carregarUsuarios()]);
     }
   });
@@ -870,6 +874,8 @@
       tbody.innerHTML = lista.map(u => {
         const roleBadge = u.role === 'admin'
           ? '<span style="background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Admin</span>'
+          : u.role === 'backoffice'
+          ? '<span style="background:#fef3c7;color:#d97706;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">BackOffice</span>'
           : '<span style="background:#f0f3f8;color:#6b7280;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Assessor</span>';
         return `<tr>
           <td style="font-weight:600;color:#0c1a35">${esc(u.nome || '—')}</td>

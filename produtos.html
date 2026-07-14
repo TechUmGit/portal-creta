@@ -673,7 +673,9 @@
       const data = snap.exists ? snap.data() : {};
       const name = data.displayName || user.displayName || email.split('@')[0];
       const role = data.role || '';
-      _isAdmin = (role === 'admin');
+      _isAdmin = (role === 'admin' || role === 'backoffice')
+      // BackOffice: oculta links de receita e relatório
+      if (role === 'backoffice') { document.querySelectorAll('a[href="receitas.html"],a[href="relatorios.html"]').forEach(el => el.style.display='none'); };
       document.getElementById('userNameEl').textContent = name;
       document.getElementById('avatarEl').textContent   = name.charAt(0).toUpperCase();
       document.getElementById('userRoleEl').textContent = _isAdmin ? 'Administrador' : 'Assessor BTG';

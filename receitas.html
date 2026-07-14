@@ -635,6 +635,9 @@
 
     const ehAdmin = perfilUsuario.role === 'admin';
 
+    // BackOffice não tem acesso a receitas
+    if (perfilUsuario.role === 'backoffice') { window.location.replace('dashboard.html'); return; }
+
     if (ehAdmin) document.getElementById('sidebarSistema').style.display = 'block';
 
     /* Esconde seções exclusivas de admin para assessores */

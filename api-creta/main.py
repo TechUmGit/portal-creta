@@ -238,6 +238,11 @@ app.add_middleware(
 # ── Emails de admin (fallback caso Firestore/claims não estejam configurados) ──
 ADMIN_EMAILS = {"fillipemsousa@gmail.com", "manu.lombardi@cretainvestimentos.com.br"}
 
+# ── Roles com acesso privilegiado (admin + backoffice) ───────────────────────
+PRIVILEGED_ROLES = {"admin", "backoffice"}
+# Endpoints de receita/relatório financeiro → somente admin
+REVENUE_ROLES = {"admin"}
+
 # ── Firestore client (lazy, para buscar perfil quando claims não existem) ──────
 _fs = None
 def get_fs():
@@ -367,6 +372,9 @@ async def receitas(
     token_data = await verificar_token(authorization)
     role          = token_data.get("role", "assessor")
     assessor_name = token_data.get("assessor_name")
+
+    if role not in REVENUE_ROLES:
+        raise HTTPException(status_code=403, detail="Acesso restrito a administradores.")
 
     # Admins veem tudo; assessores veem apenas seus próprios dados
     is_admin        = role == "admin"
@@ -538,6 +546,10 @@ async def detalhe(
     token_data    = await verificar_token(authorization)
     role          = token_data.get("role", "assessor")
     assessor_name = token_data.get("assessor_name")
+
+    if role not in REVENUE_ROLES:
+        raise HTTPException(status_code=403, detail="Acesso restrito a administradores.")
+
     is_admin      = role == "admin"
 
     # Não-admins só podem ver seus próprios dados
@@ -602,6 +614,10 @@ async def evolucao_cliente(
     token_data    = await verificar_token(authorization)
     role          = token_data.get("role", "assessor")
     assessor_name = token_data.get("assessor_name")
+
+    if role not in REVENUE_ROLES:
+        raise HTTPException(status_code=403, detail="Acesso restrito a administradores.")
+
     is_admin      = role == "admin"
 
     if not cliente:
@@ -669,7 +685,7 @@ async def posicoes_endpoint(
     token_data    = await verificar_token(authorization)
     role          = token_data.get("role", "assessor")
     assessor_name = token_data.get("assessor_name")
-    is_admin      = role == "admin"
+    is_admin      = role in PRIVILEGED_ROLES
     forced_assessor = None if is_admin else assessor_name
 
     cache_key = f"posicoes:{forced_assessor or 'all'}"
@@ -771,7 +787,7 @@ async def posicao_produtos(
     token_data    = await verificar_token(authorization)
     role          = token_data.get("role", "assessor")
     assessor_name = token_data.get("assessor_name")
-    is_admin      = role == "admin"
+    is_admin      = role in PRIVILEGED_ROLES
 
     # Verifica se assessor tem acesso à conta
     if not is_admin:
@@ -839,7 +855,7 @@ async def opcoes_endpoint(
     token_data    = await verificar_token(authorization)
     role          = token_data.get("role", "assessor")
     assessor_name = token_data.get("assessor_name")
-    is_admin      = role == "admin"
+    is_admin      = role in PRIVILEGED_ROLES
 
     cache_key = f"opcoes:{assessor_name if not is_admin else 'all'}"
     cached = cache_get(cache_key)
@@ -936,7 +952,7 @@ async def posicao(
     token_data    = await verificar_token(authorization)
     role          = token_data.get("role", "assessor")
     assessor_name = token_data.get("assessor_name")
-    is_admin      = role == "admin"
+    is_admin      = role in PRIVILEGED_ROLES
 
     filter_assessor = None if is_admin else assessor_name
 
@@ -1008,7 +1024,7 @@ async def listar_excecoes(
 ):
     """Lista todas as exceções de assessor — apenas admins."""
     token_data = await verificar_token(authorization)
-    if token_data.get("role") != "admin":
+    if token_data.get("role") not in PRIVILEGED_ROLES:
         raise HTTPException(status_code=403, detail="Apenas administradores.")
 
     sql = f"""
@@ -1034,7 +1050,7 @@ async def criar_excecao(
 ):
     """Cria uma nova exceção de assessor — apenas admins."""
     token_data = await verificar_token(authorization)
-    if token_data.get("role") != "admin":
+    if token_data.get("role") not in PRIVILEGED_ROLES:
         raise HTTPException(status_code=403, detail="Apenas administradores.")
 
     email = token_data.get("email", "")
@@ -1073,7 +1089,7 @@ async def deletar_excecao(
 ):
     """Remove uma exceção pelo par (Conta, DataInicio) — apenas admins."""
     token_data = await verificar_token(authorization)
-    if token_data.get("role") != "admin":
+    if token_data.get("role") not in PRIVILEGED_ROLES:
         raise HTTPException(status_code=403, detail="Apenas administradores.")
 
     sql = f"""
@@ -1102,7 +1118,7 @@ async def listar_arquivos(
 ):
     """Lista arquivos na pasta entradas/ do bucket — apenas admins."""
     token_data = await verificar_token(authorization)
-    if token_data.get("role") != "admin":
+    if token_data.get("role") not in PRIVILEGED_ROLES:
         raise HTTPException(status_code=403, detail="Apenas administradores.")
 
     bucket = gcs_client.bucket(GCS_BUCKET)
@@ -1130,7 +1146,7 @@ async def upload_arquivo(
 ):
     """Faz upload de um arquivo para entradas/ no bucket — apenas admins."""
     token_data = await verificar_token(authorization)
-    if token_data.get("role") != "admin":
+    if token_data.get("role") not in PRIVILEGED_ROLES:
         raise HTTPException(status_code=403, detail="Apenas administradores.")
 
     if not file.filename.endswith(".xlsx"):
@@ -1154,7 +1170,7 @@ async def deletar_arquivo(
 ):
     """Remove um arquivo de entradas/ no bucket — apenas admins."""
     token_data = await verificar_token(authorization)
-    if token_data.get("role") != "admin":
+    if token_data.get("role") not in PRIVILEGED_ROLES:
         raise HTTPException(status_code=403, detail="Apenas administradores.")
 
     try:
@@ -1175,7 +1191,7 @@ async def download_arquivo(
 ):
     """Faz download de um arquivo do bucket — apenas admins."""
     token_data = await verificar_token(authorization)
-    if token_data.get("role") != "admin":
+    if token_data.get("role") not in PRIVILEGED_ROLES:
         raise HTTPException(status_code=403, detail="Apenas administradores.")
 
     try:
@@ -1200,7 +1216,7 @@ async def excecoes_excel(
 ):
     """Exporta todas as exceções como arquivo Excel — apenas admins."""
     token_data = await verificar_token(authorization)
-    if token_data.get("role") != "admin":
+    if token_data.get("role") not in PRIVILEGED_ROLES:
         raise HTTPException(status_code=403, detail="Apenas administradores.")
 
     sql = f"""
@@ -1240,7 +1256,7 @@ class NovoUsuario(BaseModel):
     email:         str
     senha:         str
     nome:          str
-    role:          str = "assessor"      # "admin" | "assessor"
+    role:          str = "assessor"      # "admin" | "assessor" | "backoffice"
     assessor_name: Optional[str] = None
 
 class AtualizarUsuario(BaseModel):
@@ -1253,26 +1269,51 @@ class AtualizarUsuario(BaseModel):
 async def listar_usuarios(authorization: Optional[str] = Header(default=None)):
     """Lista todos os usuários Firebase — apenas admins."""
     token_data = await verificar_token(authorization)
-    if token_data.get("role") != "admin":
+    if token_data.get("role") not in PRIVILEGED_ROLES:
         raise HTTPException(status_code=403, detail="Apenas administradores.")
+
+    usuarios = []
+
+    # Tenta Firebase Auth (pode falhar por permissão IAM)
     try:
         page = firebase_auth.list_users()
-        usuarios = []
         for u in page.users:
             claims = u.custom_claims or {}
-            usuarios.append({
+            entry = {
                 "uid":           u.uid,
                 "email":         u.email or "",
                 "nome":          u.display_name or "",
                 "role":          claims.get("role", "assessor"),
                 "assessor_name": claims.get("assessor_name", ""),
                 "disabled":      u.disabled,
-            })
-        usuarios.sort(key=lambda x: (x["role"] != "admin", x["nome"].lower()))
-        return {"usuarios": usuarios}
+            }
+            usuarios.append(entry)
+            # Sincroniza no Firestore para fallback futuro
+            try:
+                get_fs().collection("portal_usuarios").document(u.uid).set(entry, merge=True)
+            except Exception:
+                pass
     except Exception as e:
-        log.error(f"listar_usuarios: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        log.warning(f"list_users falhou, usando Firestore: {e}")
+        # Fallback: lê do Firestore
+        try:
+            docs = get_fs().collection("portal_usuarios").stream()
+            for doc in docs:
+                d = doc.to_dict()
+                usuarios.append({
+                    "uid":           doc.id,
+                    "email":         d.get("email", ""),
+                    "nome":          d.get("nome", ""),
+                    "role":          d.get("role", "assessor"),
+                    "assessor_name": d.get("assessor_name", ""),
+                    "disabled":      False,
+                })
+        except Exception as fe:
+            log.error(f"Firestore fallback: {fe}")
+            raise HTTPException(status_code=500, detail=f"Erro ao listar usuários: {str(e)}")
+
+    usuarios.sort(key=lambda x: (x["role"] != "admin", x.get("nome", "").lower()))
+    return {"usuarios": usuarios}
 
 
 @app.post("/api/usuarios")
@@ -1291,6 +1332,17 @@ async def criar_usuario(body: NovoUsuario, authorization: Optional[str] = Header
         if body.assessor_name:
             claims["assessor_name"] = body.assessor_name
         firebase_auth.set_custom_user_claims(user.uid, claims)
+        # Persiste no Firestore para fallback de listagem
+        try:
+            get_fs().collection("portal_usuarios").document(user.uid).set({
+                "uid":           user.uid,
+                "email":         body.email,
+                "nome":          body.nome,
+                "role":          body.role,
+                "assessor_name": body.assessor_name or "",
+            })
+        except Exception as fe:
+            log.warning(f"Firestore write criar_usuario: {fe}")
         log.info(f"Usuário criado: {body.email} role={body.role}")
         return {"ok": True, "uid": user.uid}
     except firebase_admin.exceptions.FirebaseError as e:
@@ -1298,6 +1350,26 @@ async def criar_usuario(body: NovoUsuario, authorization: Optional[str] = Header
     except Exception as e:
         log.error(f"criar_usuario: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/usuarios/seed-me")
+async def seed_me(authorization: Optional[str] = Header(default=None)):
+    """Registra o usuário autenticado no Firestore (fallback de listagem)."""
+    token_data = await verificar_token(authorization)
+    uid   = token_data.get("uid", "")
+    email = token_data.get("email", "")
+    role  = token_data.get("role", "assessor")
+    assessor_name = token_data.get("assessor_name", "") or ""
+    try:
+        u = firebase_auth.get_user(uid)
+        nome = u.display_name or ""
+    except Exception:
+        nome = ""
+    get_fs().collection("portal_usuarios").document(uid).set({
+        "uid": uid, "email": email, "nome": nome,
+        "role": role, "assessor_name": assessor_name,
+    }, merge=True)
+    return {"ok": True, "uid": uid, "role": role}
 
 
 @app.patch("/api/usuarios/{uid}")
@@ -1316,6 +1388,13 @@ async def atualizar_usuario(uid: str, body: AtualizarUsuario, authorization: Opt
         firebase_auth.set_custom_user_claims(uid, claims)
         if body.nome:
             firebase_auth.update_user(uid, display_name=body.nome)
+        # Atualiza Firestore também
+        try:
+            fs_data = {k: v for k, v in {"role": body.role, "assessor_name": body.assessor_name, "nome": body.nome}.items() if v is not None}
+            if fs_data:
+                get_fs().collection("portal_usuarios").document(uid).set(fs_data, merge=True)
+        except Exception as fe:
+            log.warning(f"Firestore write atualizar_usuario: {fe}")
         log.info(f"Usuário {uid} atualizado: {claims}")
         return {"ok": True}
     except firebase_admin.exceptions.FirebaseError as e:
@@ -1333,7 +1412,7 @@ async def assessores_endpoint(
 ):
     """Lista assessores distintos — apenas admins (filtro do relatório)."""
     token_data = await verificar_token(authorization)
-    if token_data.get("role") != "admin":
+    if token_data.get("role") not in PRIVILEGED_ROLES:
         raise HTTPException(status_code=403, detail="Apenas administradores.")
 
     cached = cache_get("assessores")
@@ -1379,6 +1458,10 @@ async def relatorio_historico(
     token_data    = await verificar_token(authorization)
     role          = token_data.get("role", "assessor")
     assessor_name = token_data.get("assessor_name")
+
+    if role not in REVENUE_ROLES:
+        raise HTTPException(status_code=403, detail="Acesso restrito a administradores.")
+
     is_admin      = role == "admin"
 
     filter_assessor = (assessor.strip() if assessor else None) if is_admin else assessor_name
@@ -1770,7 +1853,7 @@ async def gestao_carteira(
     token_data    = await verificar_token(authorization)
     role          = token_data.get("role", "assessor")
     assessor_name = token_data.get("assessor_name")
-    is_admin      = role == "admin"
+    is_admin      = role in PRIVILEGED_ROLES
 
     filter_assessor = (assessor.strip() if assessor else None) if is_admin else assessor_name
 
@@ -2207,7 +2290,7 @@ async def set_comite_recomendacao(
 ):
     """Marca ou desmarca uma carteira como recomendada pelo comitê — apenas admins."""
     token_data = await verificar_token(authorization)
-    if token_data.get("role") != "admin":
+    if token_data.get("role") not in PRIVILEGED_ROLES:
         raise HTTPException(status_code=403, detail="Apenas administradores.")
 
     try:
@@ -2258,7 +2341,7 @@ async def set_comite_rf(
 ):
     """Marca ou desmarca um produto de RF como recomendado pelo comitê — apenas admins."""
     token_data = await verificar_token(authorization)
-    if token_data.get("role") != "admin":
+    if token_data.get("role") not in PRIVILEGED_ROLES:
         raise HTTPException(status_code=403, detail="Apenas administradores.")
     try:
         ref = get_fs().collection("comite").document("recomendacoes_rf")
@@ -2337,7 +2420,7 @@ async def pipeline_listar(
 
     try:
         col = _pipeline_col()
-        if role == "admin":
+        if role in PRIVILEGED_ROLES:
             docs = col.stream()
         else:
             docs = col.where("assessor_uid", "==", assessor_uid).stream()
@@ -2393,7 +2476,7 @@ async def pipeline_atualizar(
         doc = ref.get()
         if not doc.exists:
             raise HTTPException(status_code=404, detail="Cliente não encontrado.")
-        if role != "admin" and doc.to_dict().get("assessor_uid") != assessor_uid:
+        if role not in PRIVILEGED_ROLES and doc.to_dict().get("assessor_uid") != assessor_uid:
             raise HTTPException(status_code=403, detail="Sem permissão.")
 
         dados = {k: v for k, v in body.dict().items() if v is not None}
@@ -2427,7 +2510,7 @@ async def pipeline_deletar(
         doc = ref.get()
         if not doc.exists:
             raise HTTPException(status_code=404, detail="Cliente não encontrado.")
-        if role != "admin" and doc.to_dict().get("assessor_uid") != assessor_uid:
+        if role not in PRIVILEGED_ROLES and doc.to_dict().get("assessor_uid") != assessor_uid:
             raise HTTPException(status_code=403, detail="Sem permissão.")
         ref.delete()
         return {"ok": True}
@@ -2466,7 +2549,7 @@ async def pipeline_contatos_listar(
         doc = ref.get()
         if not doc.exists:
             raise HTTPException(status_code=404, detail="Cliente não encontrado.")
-        if role != "admin" and doc.to_dict().get("assessor_uid") != assessor_uid:
+        if role not in PRIVILEGED_ROLES and doc.to_dict().get("assessor_uid") != assessor_uid:
             raise HTTPException(status_code=403, detail="Sem permissão.")
 
         docs = _contatos_col(doc_id).order_by("data", direction="DESCENDING").stream()
@@ -2503,7 +2586,7 @@ async def pipeline_contatos_adicionar(
         doc = ref.get()
         if not doc.exists:
             raise HTTPException(status_code=404, detail="Cliente não encontrado.")
-        if role != "admin" and doc.to_dict().get("assessor_uid") != assessor_uid:
+        if role not in PRIVILEGED_ROLES and doc.to_dict().get("assessor_uid") != assessor_uid:
             raise HTTPException(status_code=403, detail="Sem permissão.")
 
         entrada = body.dict()
@@ -2757,7 +2840,7 @@ async def criar_produto_manual(
 ):
     """Cria produto manual — apenas admin."""
     token_data = await verificar_token(authorization)
-    if token_data.get("role") != "admin":
+    if token_data.get("role") not in PRIVILEGED_ROLES:
         raise HTTPException(status_code=403, detail="Acesso restrito a admins.")
 
     gcs_path    = None
@@ -2811,7 +2894,7 @@ async def deletar_produto_manual(
 ):
     """Remove produto manual — apenas admin."""
     token_data = await verificar_token(authorization)
-    if token_data.get("role") != "admin":
+    if token_data.get("role") not in PRIVILEGED_ROLES:
         raise HTTPException(status_code=403, detail="Acesso restrito a admins.")
 
     ref = _prod_manuais_col().document(doc_id)
@@ -2931,7 +3014,7 @@ async def listar_chamados(
     payload    = await verificar_token(authorization)
     uid        = payload.get("uid", "")
     role       = payload.get("role", "assessor")
-    is_admin   = role == "admin"
+    is_admin   = role in PRIVILEGED_ROLES
 
     col = _chamados_col()
     if is_admin:
@@ -2959,7 +3042,7 @@ async def atualizar_status_chamado(
     payload  = await verificar_token(authorization)
     uid      = payload.get("uid", "")
     role     = payload.get("role", "assessor")
-    is_admin = role == "admin"
+    is_admin = role in PRIVILEGED_ROLES
     if not is_admin:
         raise HTTPException(status_code=403, detail="Apenas admins podem alterar status.")
 
@@ -3005,7 +3088,7 @@ async def aprovacoes_listar(
     assessor_uid = token_data.get("uid")
     try:
         col = _aprovacoes_col()
-        if role == "admin":
+        if role in PRIVILEGED_ROLES:
             docs = col.order_by("data_fim").stream()
         else:
             docs = col.where("assessor_uid", "==", assessor_uid).order_by("data_fim").stream()
@@ -3052,7 +3135,7 @@ async def aprovacoes_atualizar(
         doc = ref.get()
         if not doc.exists:
             raise HTTPException(status_code=404, detail="Aprovação não encontrada.")
-        if role != "admin" and doc.to_dict().get("assessor_uid") != assessor_uid:
+        if role not in PRIVILEGED_ROLES and doc.to_dict().get("assessor_uid") != assessor_uid:
             raise HTTPException(status_code=403, detail="Sem permissão.")
         dados = {k: v for k, v in body.dict().items() if v is not None}
         dados["updated_at"] = datetime.utcnow().isoformat()
@@ -3079,7 +3162,7 @@ async def aprovacoes_deletar(
         if not doc.exists:
             raise HTTPException(status_code=404, detail="Aprovação não encontrada.")
         d = doc.to_dict() or {}
-        if role != "admin" and d.get("assessor_uid") != assessor_uid:
+        if role not in PRIVILEGED_ROLES and d.get("assessor_uid") != assessor_uid:
             raise HTTPException(status_code=403, detail="Sem permissão.")
         # Remove arquivo GCS se existir
         if d.get("resposta_gcs"):
@@ -3110,7 +3193,7 @@ async def aprovacoes_upload_resposta(
         doc = ref.get()
         if not doc.exists:
             raise HTTPException(status_code=404, detail="Aprovação não encontrada.")
-        if role != "admin" and doc.to_dict().get("assessor_uid") != assessor_uid:
+        if role not in PRIVILEGED_ROLES and doc.to_dict().get("assessor_uid") != assessor_uid:
             raise HTTPException(status_code=403, detail="Sem permissão.")
 
         # Remove arquivo anterior se existir
@@ -3154,7 +3237,7 @@ async def aprovacoes_remover_resposta(
         doc = ref.get()
         if not doc.exists:
             raise HTTPException(status_code=404, detail="Aprovação não encontrada.")
-        if role != "admin" and doc.to_dict().get("assessor_uid") != assessor_uid:
+        if role not in PRIVILEGED_ROLES and doc.to_dict().get("assessor_uid") != assessor_uid:
             raise HTTPException(status_code=403, detail="Sem permissão.")
         gcs_path = doc.to_dict().get("resposta_gcs")
         if gcs_path:
@@ -3184,7 +3267,7 @@ async def aprovacoes_download_resposta(
         doc = ref.get()
         if not doc.exists:
             raise HTTPException(status_code=404, detail="Aprovação não encontrada.")
-        if role != "admin" and doc.to_dict().get("assessor_uid") != assessor_uid:
+        if role not in PRIVILEGED_ROLES and doc.to_dict().get("assessor_uid") != assessor_uid:
             raise HTTPException(status_code=403, detail="Sem permissão.")
         d        = doc.to_dict() or {}
         gcs_path = d.get("resposta_gcs")
@@ -3330,7 +3413,7 @@ async def download_chamado_arquivo(
     payload  = await verificar_token(authorization)
     uid      = payload.get("uid", "")
     role     = payload.get("role", "assessor")
-    is_admin = role == "admin"
+    is_admin = role in PRIVILEGED_ROLES
 
     ref = _chamados_col().document(doc_id)
     doc = ref.get()

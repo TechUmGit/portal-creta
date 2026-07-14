@@ -494,6 +494,9 @@
     const result = await user.getIdTokenResult();
     userRole = result.claims.role || 'assessor';
 
+    // BackOffice não tem acesso a relatórios
+    if (userRole === 'backoffice') { window.location.replace('dashboard.html'); return; }
+
     // UI: user info
     const nome = user.displayName || user.email || '';
     document.getElementById('user-name').textContent = nome;

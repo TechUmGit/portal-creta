@@ -340,7 +340,9 @@ auth.onAuthStateChanged(async user => {
     const snap = await db.collection('users').doc(user.uid).get();
     const data = snap.exists ? snap.data() : {};
     const name = data.displayName || user.displayName || (user.email || '').split('@')[0];
-    _isAdmin      = data.role === 'admin';
+    _isAdmin      = (data.role === 'admin' || data.role === 'backoffice')
+      // BackOffice: oculta links de receita e relatório
+      if (role === 'backoffice') { document.querySelectorAll('a[href="receitas.html"],a[href="relatorios.html"]').forEach(el => el.style.display='none'); };
     _assessorName = name;
     _token        = await user.getIdToken();
 

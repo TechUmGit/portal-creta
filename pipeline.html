@@ -112,10 +112,11 @@
 
     /* PIPE BADGES */
     .pipe-badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; white-space: nowrap; }
-    .pipe-Quente { background: #fee2e2; color: #991b1b; }
-    .pipe-Morno  { background: #ffedd5; color: #c2410c; }
-    .pipe-Frio   { background: #dbeafe; color: #1e40af; }
-    .pipe-LEAD   { background: #ede9fe; color: #6d28d9; }
+    .pipe-Quente    { background: #fee2e2; color: #991b1b; }
+    .pipe-Morno     { background: #ffedd5; color: #c2410c; }
+    .pipe-Frio      { background: #dbeafe; color: #1e40af; }
+    .pipe-LEAD      { background: #ede9fe; color: #6d28d9; }
+    .pipe-Concluido { background: #d1fae5; color: #065f46; }
 
     /* RANKING BADGE */
     .rank-badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 5px; background: #f1f5f9; color: #475569; white-space: nowrap; }
@@ -435,6 +436,7 @@
           <option value="Morno">🟠 Morno</option>
           <option value="Frio">🔵 Frio</option>
           <option value="LEAD">🟣 Lead</option>
+          <option value="Concluido">✅ Concluído</option>
         </select>
         <select class="filter-select" id="filtroRankSelect" onchange="setFiltroRank(this.value)" style="min-width:190px">
           <option value="">Todos os Rankings</option>
@@ -632,6 +634,7 @@
               <option value="Morno">🟠 Morno — curto prazo</option>
               <option value="Frio">🔵 Frio — horizonte indefinido</option>
               <option value="LEAD">🟣 LEAD — sem contato ainda</option>
+              <option value="Concluido">✅ Concluído — cliente convertido</option>
             </select>
           </div>
         </div>

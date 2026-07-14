@@ -559,7 +559,8 @@ function renderSemReceita() {
 }
 
 function renderQueda() {
-  const dados = _data['queda'] || [];
+  const todos  = _data['queda'] || [];
+  const dados  = todos.filter(r => Math.abs(r.delta || 0) >= 10000);
   document.getElementById('badge-queda').textContent = dados.length;
   const tbody = document.getElementById('tbody-queda');
   if (!dados.length) { tbody.innerHTML = emptyRow(7, 'Nenhum cliente com AuC em queda.'); return; }

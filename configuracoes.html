@@ -413,10 +413,75 @@
         </div>
       </div>
 
+      <!-- ── GESTÃO DE USUÁRIOS ── -->
+      <div class="section-title" style="margin-top:16px">Gestão de Usuários</div>
+      <div class="section-desc">Crie novos usuários e edite permissões de acesso ao portal.</div>
+
+      <div class="table-card">
+        <div class="table-header">
+          <span class="table-title">👤 Usuários</span>
+          <button class="btn-add" onclick="abrirModalNovoUsuario()">+ Novo Usuário</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Nome</th>
+              <th>E-mail</th>
+              <th>Perfil</th>
+              <th>Nome Assessor</th>
+              <th></th>
+            </tr></thead>
+            <tbody id="tabelaUsuarios">
+              <tr><td colspan="5" class="empty-state">Carregando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
     </div><!-- /adminContent -->
   </div>
 </main>
 </div><!-- /app -->
+
+<!-- Modal Novo Usuário -->
+<div id="modal-usuario" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:14px;padding:32px;max-width:480px;width:90%;box-shadow:0 20px 48px rgba(0,0,0,0.2);">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
+      <div style="font-size:15px;font-weight:700;color:#0c1a35" id="modalUsuarioTitulo">Novo Usuário</div>
+      <button onclick="fecharModalUsuario()" style="background:none;border:none;font-size:20px;color:#9ca3af;cursor:pointer">✕</button>
+    </div>
+    <input type="hidden" id="editUid">
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div class="form-group">
+        <label class="form-label">Nome completo</label>
+        <input class="form-input" id="uNome" placeholder="Ex: João Silva">
+      </div>
+      <div class="form-group" id="emailGroup">
+        <label class="form-label">E-mail</label>
+        <input class="form-input" id="uEmail" type="email" placeholder="joao@creta.com.br">
+      </div>
+      <div class="form-group" id="senhaGroup">
+        <label class="form-label">Senha provisória</label>
+        <input class="form-input" id="uSenha" type="password" placeholder="Mínimo 6 caracteres">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Perfil de acesso</label>
+        <select class="form-input" id="uRole" onchange="toggleAssessorField()">
+          <option value="assessor">Assessor</option>
+          <option value="admin">Administrador</option>
+        </select>
+      </div>
+      <div class="form-group" id="assessorNameGroup">
+        <label class="form-label">Nome do assessor (como aparece na base)</label>
+        <input class="form-input" id="uAssessorName" placeholder="Ex: JOAO SILVA">
+      </div>
+    </div>
+    <div style="display:flex;gap:12px;margin-top:24px;justify-content:flex-end">
+      <button onclick="fecharModalUsuario()" style="padding:9px 22px;background:#f4f6fb;color:#374151;border:1.5px solid #e8ebf2;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">Cancelar</button>
+      <button id="btnSalvarUsuario" onclick="salvarUsuario()" class="btn-add">Salvar</button>
+    </div>
+  </div>
+</div>
 
 <!-- Confirm modal customizado -->
 <div id="confirm-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;align-items:center;justify-content:center;">
@@ -431,6 +496,7 @@
 
 <script>
   const API_URL  = 'https://api-creta-978599698367.us-central1.run.app';
+  const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   const FB_CONFIG = {
     apiKey:            "AIzaSyDLJrg7Cmaq6DDlDdcLfe4kH9hUukMVuE0",
     authDomain:        "creta-btg-bd3a8.firebaseapp.com",
@@ -477,7 +543,7 @@
       document.getElementById('acessoNegado').style.display = 'block';
     } else {
       document.getElementById('adminContent').style.display = 'block';
-      await Promise.all([carregarArquivos(), carregarExcecoes(), carregarAssessores()]);
+      await Promise.all([carregarArquivos(), carregarExcecoes(), carregarAssessores(), carregarUsuarios()]);
     }
   });
 
@@ -785,6 +851,127 @@
       el.style.display = 'flex';
       _confirmResolve = (val) => { el.style.display = 'none'; resolve(val); };
     });
+  }
+
+  // ── Gestão de Usuários ───────────────────────────────────────────────────
+  async function carregarUsuarios() {
+    const tbody = document.getElementById('tabelaUsuarios');
+    try {
+      const res  = await fetch(`${API_URL}/api/usuarios`, { headers: { Authorization: `Bearer ${_token}` } });
+      const json = await res.json();
+      const lista = json.usuarios || [];
+      if (!lista.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Nenhum usuário encontrado.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = lista.map(u => {
+        const roleBadge = u.role === 'admin'
+          ? '<span style="background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Admin</span>'
+          : '<span style="background:#f0f3f8;color:#6b7280;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Assessor</span>';
+        return `<tr>
+          <td style="font-weight:600;color:#0c1a35">${esc(u.nome || '—')}</td>
+          <td style="color:#6b7280;font-size:12px">${esc(u.email)}</td>
+          <td>${roleBadge}</td>
+          <td style="font-size:12px;color:#6b7280">${esc(u.assessor_name || '—')}</td>
+          <td style="text-align:right">
+            <button onclick='editarUsuario(${JSON.stringify(u)})' style="padding:5px 14px;background:#f4f6fb;border:1px solid #e2e6ef;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;color:#374151">Editar</button>
+          </td>
+        </tr>`;
+      }).join('');
+    } catch(e) {
+      tbody.innerHTML = `<tr><td colspan="5" class="empty-state">Erro: ${e.message}</td></tr>`;
+    }
+  }
+
+  function abrirModalNovoUsuario() {
+    document.getElementById('editUid').value      = '';
+    document.getElementById('uNome').value        = '';
+    document.getElementById('uEmail').value       = '';
+    document.getElementById('uSenha').value       = '';
+    document.getElementById('uRole').value        = 'assessor';
+    document.getElementById('uAssessorName').value = '';
+    document.getElementById('emailGroup').style.display  = '';
+    document.getElementById('senhaGroup').style.display  = '';
+    document.getElementById('modalUsuarioTitulo').textContent = 'Novo Usuário';
+    toggleAssessorField();
+    document.getElementById('modal-usuario').style.display = 'flex';
+  }
+
+  function editarUsuario(u) {
+    document.getElementById('editUid').value       = u.uid;
+    document.getElementById('uNome').value         = u.nome || '';
+    document.getElementById('uEmail').value        = u.email || '';
+    document.getElementById('uRole').value         = u.role || 'assessor';
+    document.getElementById('uAssessorName').value = u.assessor_name || '';
+    document.getElementById('emailGroup').style.display  = 'none';
+    document.getElementById('senhaGroup').style.display  = 'none';
+    document.getElementById('modalUsuarioTitulo').textContent = 'Editar Usuário';
+    toggleAssessorField();
+    document.getElementById('modal-usuario').style.display = 'flex';
+  }
+
+  function fecharModalUsuario() {
+    document.getElementById('modal-usuario').style.display = 'none';
+  }
+
+  function toggleAssessorField() {
+    const role = document.getElementById('uRole').value;
+    document.getElementById('assessorNameGroup').style.display = role === 'assessor' ? '' : 'none';
+  }
+
+  async function salvarUsuario() {
+    const uid   = document.getElementById('editUid').value;
+    const nome  = document.getElementById('uNome').value.trim();
+    const email = document.getElementById('uEmail').value.trim();
+    const senha = document.getElementById('uSenha').value;
+    const role  = document.getElementById('uRole').value;
+    const assessorName = document.getElementById('uAssessorName').value.trim();
+    const btn   = document.getElementById('btnSalvarUsuario');
+
+    if (!nome) { showToastCfg('Preencha o nome.', true); return; }
+
+    btn.disabled = true; btn.textContent = 'Salvando…';
+    try {
+      if (uid) {
+        // Editar
+        await fetch(`${API_URL}/api/usuarios/${uid}`, {
+          method: 'PATCH',
+          headers: { Authorization: `Bearer ${_token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ role, assessor_name: assessorName, nome }),
+        });
+      } else {
+        // Criar
+        if (!email || !senha) { showToastCfg('Preencha e-mail e senha.', true); return; }
+        const res = await fetch(`${API_URL}/api/usuarios`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${_token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, senha, nome, role, assessor_name: assessorName }),
+        });
+        if (!res.ok) { const j = await res.json(); throw new Error(j.detail || 'Erro'); }
+      }
+      fecharModalUsuario();
+      await carregarUsuarios();
+      showToastCfg('Usuário salvo com sucesso.');
+    } catch(e) {
+      showToastCfg('Erro: ' + e.message, true);
+    } finally {
+      btn.disabled = false; btn.textContent = 'Salvar';
+    }
+  }
+
+  function showToastCfg(msg, erro = false) {
+    let t = document.getElementById('toastCfg');
+    if (!t) {
+      t = document.createElement('div');
+      t.id = 'toastCfg';
+      t.style.cssText = 'position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:10px;font-size:13px;font-weight:600;color:#fff;z-index:9999;transition:opacity .3s';
+      document.body.appendChild(t);
+    }
+    t.textContent = msg;
+    t.style.background = erro ? '#dc2626' : '#10b981';
+    t.style.opacity = '1';
+    clearTimeout(t._tid);
+    t._tid = setTimeout(() => { t.style.opacity = '0'; }, 3000);
   }
 </script>
 

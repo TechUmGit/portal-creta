@@ -1234,6 +1234,97 @@ async def excecoes_excel(
     )
 
 
+# ── Gestão de Usuários ───────────────────────────────────────────────────────
+
+class NovoUsuario(BaseModel):
+    email:         str
+    senha:         str
+    nome:          str
+    role:          str = "assessor"      # "admin" | "assessor"
+    assessor_name: Optional[str] = None
+
+class AtualizarUsuario(BaseModel):
+    role:          Optional[str] = None
+    assessor_name: Optional[str] = None
+    nome:          Optional[str] = None
+
+
+@app.get("/api/usuarios")
+async def listar_usuarios(authorization: Optional[str] = Header(default=None)):
+    """Lista todos os usuários Firebase — apenas admins."""
+    token_data = await verificar_token(authorization)
+    if token_data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Apenas administradores.")
+    try:
+        page = firebase_auth.list_users()
+        usuarios = []
+        for u in page.users:
+            claims = u.custom_claims or {}
+            usuarios.append({
+                "uid":           u.uid,
+                "email":         u.email or "",
+                "nome":          u.display_name or "",
+                "role":          claims.get("role", "assessor"),
+                "assessor_name": claims.get("assessor_name", ""),
+                "disabled":      u.disabled,
+            })
+        usuarios.sort(key=lambda x: (x["role"] != "admin", x["nome"].lower()))
+        return {"usuarios": usuarios}
+    except Exception as e:
+        log.error(f"listar_usuarios: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/usuarios")
+async def criar_usuario(body: NovoUsuario, authorization: Optional[str] = Header(default=None)):
+    """Cria novo usuário Firebase com claims — apenas admins."""
+    token_data = await verificar_token(authorization)
+    if token_data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Apenas administradores.")
+    try:
+        user = firebase_auth.create_user(
+            email=body.email,
+            password=body.senha,
+            display_name=body.nome,
+        )
+        claims = {"role": body.role}
+        if body.assessor_name:
+            claims["assessor_name"] = body.assessor_name
+        firebase_auth.set_custom_user_claims(user.uid, claims)
+        log.info(f"Usuário criado: {body.email} role={body.role}")
+        return {"ok": True, "uid": user.uid}
+    except firebase_admin.exceptions.FirebaseError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        log.error(f"criar_usuario: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.patch("/api/usuarios/{uid}")
+async def atualizar_usuario(uid: str, body: AtualizarUsuario, authorization: Optional[str] = Header(default=None)):
+    """Atualiza role/assessor_name de um usuário — apenas admins."""
+    token_data = await verificar_token(authorization)
+    if token_data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Apenas administradores.")
+    try:
+        user = firebase_auth.get_user(uid)
+        claims = dict(user.custom_claims or {})
+        if body.role is not None:
+            claims["role"] = body.role
+        if body.assessor_name is not None:
+            claims["assessor_name"] = body.assessor_name
+        firebase_auth.set_custom_user_claims(uid, claims)
+        if body.nome:
+            firebase_auth.update_user(uid, display_name=body.nome)
+        log.info(f"Usuário {uid} atualizado: {claims}")
+        return {"ok": True}
+    except firebase_admin.exceptions.FirebaseError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        log.error(f"atualizar_usuario: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ── Relatórios ───────────────────────────────────────────────────────────────
 
 @app.get("/api/assessores")

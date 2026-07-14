@@ -941,6 +941,15 @@
       if (_isAdmin) popularFiltroAssessor();
       atualizarKPIs();
       renderTabela();
+      // Abre modal automaticamente se vier de ?conta= na URL
+      const paramConta = new URLSearchParams(window.location.search).get('conta');
+      if (paramConta) {
+        const alvo = _clientes.find(c =>
+          String(c.conta_btg || '').trim() === paramConta.trim() ||
+          String(c.conta_antiga || '').trim() === paramConta.trim()
+        );
+        if (alvo) abrirModal(alvo.id);
+      }
     } catch(e) {
       document.getElementById('pipelineTbody').innerHTML =
         `<tr><td colspan="11" style="text-align:center;padding:40px;color:#9ca3af">Erro ao carregar: ${e.message}</td></tr>`;

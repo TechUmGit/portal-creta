@@ -454,10 +454,11 @@ function renderPrioridades() {
   tbody.innerHTML = dados.map((r, i) => {
     const sc = r.score;
     const scoreClass = sc >= 5 ? 'score-high' : sc >= 3 ? 'score-mid' : 'score-low';
-    const chips = buildAlertChips(r.alertas_raw || r.alertas || '');
+    const chips = buildAlertChips(r.alertas_raw || r.alertas || '', r.Conta);
+    const url = 'pipeline.html?conta=' + encodeURIComponent(r.Conta || '');
     return '<tr>' +
       '<td class="rank">' + (i+1) + '</td>' +
-      '<td><strong>' + (r.cliente || r.Conta || '—') + '</strong></td>' +
+      '<td><a href="' + url + '" style="font-weight:600;color:#0c1a35;text-decoration:none" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'">' + (r.cliente || r.Conta || '—') + '</a></td>' +
       '<td style="color:#6b7280;font-size:12px">' + (r.Conta||'—') + '</td>' +
       '<td>' + assessorTag(r.assessor) + '</td>' +
       '<td class="num ' + scoreClass + '">' + sc + '</td>' +
@@ -466,17 +467,17 @@ function renderPrioridades() {
   }).join('');
 }
 
-function buildAlertChips(alertas) {
+function buildAlertChips(alertas, conta) {
   if (!alertas) return '—';
-  // alertas é string separada por |
+  const url = 'pipeline.html?conta=' + encodeURIComponent(conta || '');
   return alertas.split('|').map(a => {
     a = a.trim();
     if (!a) return '';
     let cls = 'ac-queda';
-    if (a.startsWith('Caixa'))   cls = 'ac-caixa';
-    else if (a.startsWith('Vence'))  cls = 'ac-vence';
-    else if (a.startsWith('Sem'))    cls = 'ac-semrec';
-    return '<span class="alert-chip ' + cls + '">' + a + '</span>';
+    if (a.startsWith('Caixa'))      cls = 'ac-caixa';
+    else if (a.startsWith('Vence')) cls = 'ac-vence';
+    else if (a.startsWith('Sem'))   cls = 'ac-semrec';
+    return '<a href="' + url + '" style="text-decoration:none"><span class="alert-chip ' + cls + '" style="cursor:pointer">' + a + '</span></a>';
   }).join('');
 }
 

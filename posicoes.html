@@ -765,14 +765,7 @@
   let _movContaAtual  = null;
 
   function popularMovContaSelect() {
-    // Auto-seleciona o primeiro cliente da lista de posição
-    const contas = Object.values(contasMap).sort((a,b) => (a.cliente||'').localeCompare(b.cliente||''));
-    if (contas.length) {
-      const c = contas[0];
-      const label = c.cliente ? `${c.cliente} — ${c.conta}` : c.conta;
-      document.getElementById('movContaInput').value = label;
-      onMovContaSelecionada(c.conta);
-    }
+    // Deixa vazio — usuário busca a conta manualmente
   }
 
   function onMovBusca() {

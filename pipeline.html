@@ -1454,23 +1454,45 @@
         headers: { Authorization: `Bearer ${_token}` }
       });
       const json = await res.json();
-      renderLog(json.contatos || []);
+      // Passa também as observações do cliente para mostrar no histórico
+      const cliente = _clientes.find(x => x.id === id);
+      renderLog(json.contatos || [], cliente?.observacoes || '');
     } catch(e) {
       document.getElementById('logTimeline').innerHTML =
         `<div class="log-empty" style="color:#dc2626">Erro ao carregar histórico.</div>`;
     }
   }
 
-  function renderLog(contatos) {
-    document.getElementById('logCount').textContent = contatos.length || '';
-    if (!contatos.length) {
+  function renderLog(contatos, observacoes) {
+    const temObs = observacoes && observacoes.trim();
+    const total  = contatos.length + (temObs ? 1 : 0);
+    document.getElementById('logCount').textContent = total || '';
+
+    if (!total) {
       document.getElementById('logTimeline').innerHTML =
         '<div class="log-empty">Nenhum contato registrado.</div>';
       return;
     }
+
     const TIPO_ICONS = { Ligação: '📞', WhatsApp: '💬', Email: '✉️', Reunião: '🤝', Outro: '📌' };
-    document.getElementById('logTimeline').innerHTML = contatos.map((c, i) => {
-      const icon = TIPO_ICONS[c.tipo] || '📌';
+
+    // Observação geral do cliente (campo legado do formulário principal)
+    const obsHtml = temObs ? `<div class="log-entry">
+      <div class="log-dot-col">
+        <div class="log-dot" style="background:#9ca3af"></div>
+        ${contatos.length > 0 ? '<div class="log-line"></div>' : ''}
+      </div>
+      <div class="log-card" style="background:#fafafa;border:1px dashed #e2e6ef">
+        <div class="log-card-header">
+          <span class="log-tipo" style="background:#f1f5f9;color:#6b7280">📝 Observação</span>
+          <span class="log-data">nota geral</span>
+        </div>
+        <div class="log-resultado" style="color:#6b7280">${esc(observacoes.trim())}</div>
+      </div>
+    </div>` : '';
+
+    const contatosHtml = contatos.map((c, i) => {
+      const icon    = TIPO_ICONS[c.tipo] || '📌';
       const dataFmt = c.data ? new Date(c.data + 'T00:00:00').toLocaleDateString('pt-BR') : '—';
       const fupFmt  = c.proximo_fup ? new Date(c.proximo_fup + 'T00:00:00').toLocaleDateString('pt-BR') : null;
       return `<div class="log-entry">
@@ -1489,6 +1511,8 @@
         </div>
       </div>`;
     }).join('');
+
+    document.getElementById('logTimeline').innerHTML = obsHtml + contatosHtml;
   }
 
   async function registrarContato() {

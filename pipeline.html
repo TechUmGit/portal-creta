@@ -790,24 +790,10 @@
         </div>
       </div>
 
-      <!-- 7. Controle -->
-      <div class="form-section">
-        <div class="form-section-title">Controle de Contato</div>
-        <div class="form-grid cols-3">
-          <div class="form-group">
-            <label class="form-label">Último Contato</label>
-            <input class="form-control" id="fUltimoContato" type="date">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Próximo FUP</label>
-            <input class="form-control" id="fProximoFup" type="date">
-          </div>
-          <div class="form-group full">
-            <label class="form-label">Observações</label>
-            <textarea class="form-control" id="fObs" placeholder="Anotações livres..."></textarea>
-          </div>
-        </div>
-      </div>
+      <!-- Campos ocultos mantidos para compatibilidade com JS -->
+      <input type="hidden" id="fUltimoContato">
+      <input type="hidden" id="fProximoFup">
+      <textarea id="fObs" style="display:none"></textarea>
 
       <!-- 8. Log de Contatos (só aparece no modo edição) -->
       <div class="log-section" id="logSection" style="display:none">
@@ -1454,16 +1440,16 @@
         headers: { Authorization: `Bearer ${_token}` }
       });
       const json = await res.json();
-      // Passa também as observações do cliente para mostrar no histórico
+      // Passa observações e datas do cliente para mostrar no histórico
       const cliente = _clientes.find(x => x.id === id);
-      renderLog(json.contatos || [], cliente?.observacoes || '');
+      renderLog(json.contatos || [], cliente?.observacoes || '', cliente?.ultimo_contato || '', cliente?.proximo_fup || '');
     } catch(e) {
       document.getElementById('logTimeline').innerHTML =
         `<div class="log-empty" style="color:#dc2626">Erro ao carregar histórico.</div>`;
     }
   }
 
-  function renderLog(contatos, observacoes) {
+  function renderLog(contatos, observacoes, ultimoContato, proximoFup) {
     const temObs = observacoes && observacoes.trim();
     const total  = contatos.length + (temObs ? 1 : 0);
     document.getElementById('logCount').textContent = total || '';
@@ -1477,6 +1463,8 @@
     const TIPO_ICONS = { Ligação: '📞', WhatsApp: '💬', Email: '✉️', Reunião: '🤝', Outro: '📌' };
 
     // Observação geral do cliente (campo legado do formulário principal)
+    const ucFmt     = ultimoContato ? new Date(ultimoContato + 'T00:00:00').toLocaleDateString('pt-BR') : null;
+    const fupFmtObs = proximoFup    ? new Date(proximoFup    + 'T00:00:00').toLocaleDateString('pt-BR') : null;
     const obsHtml = temObs ? `<div class="log-entry">
       <div class="log-dot-col">
         <div class="log-dot" style="background:#9ca3af"></div>
@@ -1485,9 +1473,10 @@
       <div class="log-card" style="background:#fafafa;border:1px dashed #e2e6ef">
         <div class="log-card-header">
           <span class="log-tipo" style="background:#f1f5f9;color:#6b7280">📝 Observação</span>
-          <span class="log-data">nota geral</span>
+          ${ucFmt ? `<span class="log-data">último contato: ${ucFmt}</span>` : '<span class="log-data">nota geral</span>'}
         </div>
         <div class="log-resultado" style="color:#6b7280">${esc(observacoes.trim())}</div>
+        ${fupFmtObs ? `<div class="log-fup">📅 Próximo FUP: ${fupFmtObs}</div>` : ''}
       </div>
     </div>` : '';
 

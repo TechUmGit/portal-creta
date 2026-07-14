@@ -440,7 +440,13 @@ function renderChamados(lista) {
     return;
   }
 
-  el.innerHTML = lista.map(c => {
+  const PRIO_ORDER = { 'Alta': 0, 'Média': 1, 'Baixa': 2 };
+  const sortPrio = (a, b) => (PRIO_ORDER[a.prioridade] ?? 9) - (PRIO_ORDER[b.prioridade] ?? 9);
+
+  const ativos     = lista.filter(c => c.status !== 'Concluído').sort(sortPrio);
+  const concluidos = lista.filter(c => c.status === 'Concluído').sort(sortPrio);
+
+  const renderItem = c => {
     const tipoClass  = (c.tipo || '').toLowerCase().replace('ú','u');
     const prioClass  = (c.prioridade || 'baixa').toLowerCase().replace('é','e');
     const statClass  = c.status === 'Concluído' ? 'concluido' : c.status === 'Em análise' ? 'analise' : 'aberto';
@@ -478,7 +484,19 @@ function renderChamados(lista) {
       </div>
       <div class="chamado-actions">${adminControls}</div>
     </div>`;
-  }).join('');
+  };
+
+  let html = ativos.map(renderItem).join('');
+
+  if (concluidos.length) {
+    html += `<div style="margin:24px 0 12px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#9ca3af;display:flex;align-items:center;gap:10px">
+      <span>Concluídos</span>
+      <span style="background:#e8ebf2;border-radius:20px;padding:1px 8px;font-size:10px">${concluidos.length}</span>
+    </div>`;
+    html += concluidos.map(renderItem).join('');
+  }
+
+  el.innerHTML = html;
 }
 
 // ── Atualizar status (admin) ────────────────────────────────────────────────

@@ -753,10 +753,9 @@
   // ── Tabs ──────────────────────────────────────────────────────────────────
   function switchTab(tab) {
     ['posicao','movimentacao'].forEach(t => {
-      document.getElementById('tabPanel' + t.charAt(0).toUpperCase() + t.slice(1)) &&
-        document.getElementById('tabPanel' + t.charAt(0).toUpperCase() + t.slice(1));
-      document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1)).classList.toggle('active', t === tab);
-      document.getElementById('tabBtn' + t.charAt(0).toUpperCase() + t.slice(1)).classList.toggle('active', t === tab);
+      const cap = t.charAt(0).toUpperCase() + t.slice(1);
+      document.getElementById('tab'    + cap).classList.toggle('active', t === tab);
+      document.getElementById('tabBtn' + cap).classList.toggle('active', t === tab);
     });
     if (tab === 'movimentacao') popularMovContaSelect();
   }
@@ -876,7 +875,7 @@
   }
 
   async function solicitarMovimentacoes() {
-    const conta = document.getElementById('movContaSelect').value;
+    const conta = _movContaAtual;
     if (!conta) return;
     const btn = document.getElementById('btnSolicitar');
     btn.disabled = true;

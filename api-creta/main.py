@@ -759,6 +759,75 @@ async def posicoes_endpoint(
     return resultado
 
 
+@app.get("/api/posicoes/{conta}/produtos")
+async def posicao_produtos(
+    conta: str,
+    authorization: Optional[str] = Header(default=None),
+):
+    """
+    Retorna todos os produtos individuais de uma conta na data mais recente.
+    Assessores só podem consultar contas que pertencem a eles.
+    """
+    token_data    = await verificar_token(authorization)
+    role          = token_data.get("role", "assessor")
+    assessor_name = token_data.get("assessor_name")
+    is_admin      = role == "admin"
+
+    # Verifica se assessor tem acesso à conta
+    if not is_admin:
+        acesso_sql = f"""
+            SELECT COUNT(1) AS cnt
+            FROM ({_mapa_assessor_sq()}) ma
+            WHERE ma.Conta = SAFE_CAST(@conta AS INT64)
+              AND UPPER(ma.Assessor) = UPPER(@assessor)
+        """
+        rows_acesso = list(bq.query(
+            acesso_sql,
+            job_config=QueryJobConfig(query_parameters=[
+                ScalarQueryParameter("conta",    "STRING", conta.strip()),
+                ScalarQueryParameter("assessor", "STRING", (assessor_name or "").strip()),
+            ])
+        ).result())
+        if not rows_acesso or rows_acesso[0]["cnt"] == 0:
+            raise HTTPException(status_code=403, detail="Acesso negado a esta conta.")
+
+    sql = f"""
+        WITH ultima_data AS (
+            SELECT MAX(DATE(Data)) AS max_data
+            FROM {TABLE_POSICAO}
+        )
+        SELECT
+            p.Classe,
+            COALESCE(p.Subclasse, '')                                  AS Subclasse,
+            COALESCE(p.Nome, '')                                       AS Nome,
+            COALESCE(p.Ticker, '')                                     AS Ticker,
+            COALESCE(p.ISIN, '')                                       AS ISIN,
+            COALESCE(p.Emissor, '')                                    AS Emissor,
+            COALESCE(p.Indexador, '')                                  AS Indexador,
+            COALESCE(FORMAT_DATE('%Y-%m-%d', DATE(p.Vencimento)), '')  AS Vencimento,
+            COALESCE(p.Quantidade, 0)                                  AS Quantidade,
+            ROUND(COALESCE(p.Preco, 0), 4)                            AS Preco,
+            ROUND(COALESCE(p.ValorBruto, 0), 2)                       AS ValorBruto,
+            ROUND(COALESCE(p.ValorLiquido, 0), 2)                     AS ValorLiquido
+        FROM {TABLE_POSICAO} p
+        JOIN ultima_data ON DATE(p.Data) = ultima_data.max_data
+        WHERE TRIM(p.Conta) = @conta
+          AND p.Classe != 'Aluguel de Ações'
+        ORDER BY p.Classe, p.ValorBruto DESC
+    """
+
+    rows_raw = list(bq.query(
+        sql,
+        job_config=QueryJobConfig(query_parameters=[
+            ScalarQueryParameter("conta", "STRING", conta.strip()),
+        ])
+    ).result())
+
+    produtos = [dict(r) for r in rows_raw]
+    log.info(f"Produtos conta={conta}: {len(produtos)} itens")
+    return {"conta": conta, "produtos": produtos}
+
+
 @app.get("/api/opcoes")
 async def opcoes_endpoint(
     authorization: Optional[str] = Header(default=None),

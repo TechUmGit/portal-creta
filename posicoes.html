@@ -173,6 +173,29 @@
     .tipo-D { background: #f3e8ff; color: #6b21a8; }
     .tipo-_ { background: #f3f4f6; color: #6b7280; }
     .mov-atualizado { font-size: 11px; color: #9ca3af; margin-bottom: 16px; }
+
+    /* MODAL PRODUTOS */
+    .prod-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 600; align-items: flex-start; justify-content: center; padding: 40px 20px; overflow-y: auto; }
+    .prod-overlay.open { display: flex; }
+    .prod-modal { background: #fff; border-radius: 14px; width: 100%; max-width: 960px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); display: flex; flex-direction: column; max-height: calc(100vh - 80px); }
+    .prod-header { padding: 20px 24px 16px; border-bottom: 1px solid #f0f3f8; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+    .prod-title { font-size: 16px; font-weight: 700; color: #0c1a35; }
+    .prod-sub { font-size: 12px; color: #9ca3af; margin-top: 2px; }
+    .prod-close { width: 32px; height: 32px; border-radius: 8px; border: none; background: none; cursor: pointer; font-size: 18px; color: #9ca3af; display: flex; align-items: center; justify-content: center; }
+    .prod-close:hover { background: #f4f6fb; color: #374151; }
+    .prod-body { overflow-y: auto; flex: 1; }
+    .prod-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .prod-table thead tr { background: #f8f9fc; position: sticky; top: 0; }
+    .prod-table th { padding: 10px 12px; text-align: left; font-size: 10px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: #9ca3af; border-bottom: 1px solid #e8ebf2; white-space: nowrap; }
+    .prod-table th.num { text-align: right; }
+    .prod-table td { padding: 10px 12px; border-bottom: 1px solid #f5f7fb; vertical-align: middle; }
+    .prod-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .prod-table tbody tr:last-child td { border-bottom: none; }
+    .prod-table tbody tr:hover { background: #f8f9fc; }
+    .prod-classe-row td { background: #f0f4ff; font-weight: 700; font-size: 11px; color: #0c1a35; }
+    .prod-loading { text-align: center; padding: 60px; color: #9ca3af; }
+    tbody tr.clickable { cursor: pointer; }
+    tbody tr.clickable:hover td { background: #f0f9ff; }
   </style>
 </head>
 <body>
@@ -700,7 +723,7 @@
     }
 
     tbody.innerHTML = contas.map(c =>
-      '<tr>' +
+      `<tr class="clickable" onclick="abrirProdutos('${c.conta}', '${(c.cliente || c.conta).replace(/'/g,"\\'")}')">` +
       `<td class="td-conta">${c.conta}</td>` +
       `<td class="td-cliente">${c.cliente || '—'}</td>` +
       (ehAdmin ? `<td>${c.assessor || '—'}</td>` : '') +
@@ -981,6 +1004,112 @@
         </div>
       </div>`;
   }
+
+  // ── Modal Produtos ────────────────────────────────────────────────────────
+  async function abrirProdutos(conta, label) {
+    const overlay = document.getElementById('prodOverlay');
+    document.getElementById('prodTitle').textContent = label || conta;
+    document.getElementById('prodSub').textContent   = 'Conta ' + conta;
+    document.getElementById('prodBody').innerHTML    =
+      '<div class="prod-loading"><div class="spinner" style="margin:0 auto 12px"></div>Carregando produtos…</div>';
+    overlay.classList.add('open');
+
+    try {
+      const token = await getIdToken();
+      const resp  = await fetch(`${API_URL}/api/posicoes/${conta}/produtos`, {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const { produtos } = await resp.json();
+      renderProdutos(produtos);
+    } catch(e) {
+      document.getElementById('prodBody').innerHTML =
+        `<div class="prod-loading" style="color:#dc2626">Erro ao carregar: ${e.message}</div>`;
+    }
+  }
+
+  function fecharProdutos() {
+    document.getElementById('prodOverlay').classList.remove('open');
+  }
+
+  function renderProdutos(produtos) {
+    if (!produtos || !produtos.length) {
+      document.getElementById('prodBody').innerHTML =
+        '<div class="prod-loading">Nenhum produto encontrado para esta conta.</div>';
+      return;
+    }
+
+    const fmtM  = v => (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const fmtQ  = v => v ? Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 4 }) : '—';
+    const fmtD  = s => { if (!s) return '—'; const [y,m,d] = s.split('-'); return `${d}/${m}/${y}`; };
+
+    // Agrupa por Classe para separadores visuais
+    const porClasse = {};
+    produtos.forEach(p => {
+      const cl = p.Classe || 'Outros';
+      if (!porClasse[cl]) porClasse[cl] = [];
+      porClasse[cl].push(p);
+    });
+
+    let rows = '';
+    for (const [classe, itens] of Object.entries(porClasse)) {
+      const totalClasse = itens.reduce((s, p) => s + (p.ValorBruto || 0), 0);
+      rows += `<tr class="prod-classe-row">
+        <td colspan="9">${classe} <span style="font-weight:400;color:#6b7280;font-size:11px;margin-left:8px">${fmtM(totalClasse)}</span></td>
+      </tr>`;
+      itens.forEach(p => {
+        rows += `<tr>
+          <td style="max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${p.Nome || ''}">${p.Nome || '—'}</td>
+          <td style="color:#6b7280;font-size:11px">${p.Subclasse || '—'}</td>
+          <td style="font-size:11px">${p.Ticker || p.ISIN || '—'}</td>
+          <td style="font-size:11px;color:#6b7280">${p.Emissor || '—'}</td>
+          <td style="font-size:11px">${p.Indexador || '—'}</td>
+          <td style="font-size:11px">${fmtD(p.Vencimento)}</td>
+          <td class="num" style="font-size:11px">${fmtQ(p.Quantidade)}</td>
+          <td class="num">${fmtM(p.ValorBruto)}</td>
+          <td class="num" style="color:#6b7280">${fmtM(p.ValorLiquido)}</td>
+        </tr>`;
+      });
+    }
+
+    document.getElementById('prodBody').innerHTML = `
+      <table class="prod-table">
+        <thead><tr>
+          <th>Produto / Nome</th>
+          <th>Subclasse</th>
+          <th>Ticker / ISIN</th>
+          <th>Emissor</th>
+          <th>Indexador</th>
+          <th>Vencimento</th>
+          <th class="num">Qtd</th>
+          <th class="num">Valor Bruto</th>
+          <th class="num">Valor Líquido</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  }
+
+  // Fecha ao clicar fora do modal
+  document.getElementById('prodOverlay').addEventListener('click', function(e) {
+    if (e.target === this) fecharProdutos();
+  });
 </script>
+
+<!-- MODAL PRODUTOS -->
+<div class="prod-overlay" id="prodOverlay">
+  <div class="prod-modal">
+    <div class="prod-header">
+      <div>
+        <div class="prod-title" id="prodTitle">—</div>
+        <div class="prod-sub"  id="prodSub"></div>
+      </div>
+      <button class="prod-close" onclick="fecharProdutos()">✕</button>
+    </div>
+    <div class="prod-body" id="prodBody">
+      <div class="prod-loading">Carregando…</div>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

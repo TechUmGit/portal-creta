@@ -811,46 +811,50 @@
 
       <!-- 8. Log de Contatos (só aparece no modo edição) -->
       <div class="log-section" id="logSection" style="display:none">
-        <button class="log-toggle" id="logToggle" onclick="toggleLog()">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-          Histórico de Contatos
-          <span id="logCount" style="margin-left:auto;background:#e0f2fe;color:#0369a1;padding:1px 8px;border-radius:10px;font-size:10px"></span>
-        </button>
-        <div class="log-body" id="logBody">
-          <!-- Form para novo contato -->
-          <div class="log-add-form">
-            <div class="log-add-title">Registrar novo contato</div>
-            <div class="log-form-row">
-              <div class="form-group">
-                <label class="form-label">Data</label>
-                <input class="form-control" id="lData" type="date">
-              </div>
-              <div class="form-group">
-                <label class="form-label">Tipo</label>
-                <select class="form-control" id="lTipo">
-                  <option value="">— Selecione —</option>
-                  <option>Ligação</option>
-                  <option>WhatsApp</option>
-                  <option>Email</option>
-                  <option>Reunião</option>
-                  <option>Outro</option>
-                </select>
-              </div>
+        <!-- Cabeçalho fixo (não colapsável) -->
+        <div style="display:flex;align-items:center;gap:10px;padding-bottom:12px;border-bottom:1px solid #f0f3f8;margin-bottom:16px">
+          <span style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#9ca3af">Histórico de Contatos</span>
+          <span id="logCount" style="background:#e0f2fe;color:#0369a1;padding:1px 8px;border-radius:10px;font-size:10px;font-weight:700"></span>
+          <span style="margin-left:auto;font-size:11px;color:#9ca3af;display:flex;align-items:center;gap:4px">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+            Comentários não podem ser editados
+          </span>
+        </div>
+
+        <!-- Timeline (histórico) -->
+        <div class="log-timeline" id="logTimeline" style="margin-bottom:20px">
+          <div class="log-empty">Nenhum contato registrado.</div>
+        </div>
+
+        <!-- Formulário de novo contato (sempre visível, abaixo do histórico) -->
+        <div class="log-add-form">
+          <div class="log-add-title">+ Registrar novo contato</div>
+          <div class="log-form-row">
+            <div class="form-group">
+              <label class="form-label">Data</label>
+              <input class="form-control" id="lData" type="date">
             </div>
-            <div class="form-group" style="margin-bottom:10px">
-              <label class="form-label">Resultado / O que aconteceu</label>
-              <textarea class="form-control" id="lResultado" placeholder="Descreva o que aconteceu neste contato..." style="min-height:60px"></textarea>
+            <div class="form-group">
+              <label class="form-label">Tipo</label>
+              <select class="form-control" id="lTipo">
+                <option value="">— Selecione —</option>
+                <option>Ligação</option>
+                <option>WhatsApp</option>
+                <option>Email</option>
+                <option>Reunião</option>
+                <option>Outro</option>
+              </select>
             </div>
-            <div class="form-group" style="margin-bottom:12px">
-              <label class="form-label">Próximo FUP combinado</label>
-              <input class="form-control" id="lProximoFup" type="date">
-            </div>
-            <button class="btn-primary" style="padding:7px 16px;font-size:12px" onclick="registrarContato()">Salvar contato</button>
           </div>
-          <!-- Timeline -->
-          <div class="log-timeline" id="logTimeline">
-            <div class="log-empty">Nenhum contato registrado.</div>
+          <div class="form-group" style="margin-bottom:10px">
+            <label class="form-label">O que aconteceu</label>
+            <textarea class="form-control" id="lResultado" placeholder="Descreva o resultado deste contato..." style="min-height:72px"></textarea>
           </div>
+          <div class="form-group" style="margin-bottom:12px">
+            <label class="form-label">Próximo FUP combinado</label>
+            <input class="form-control" id="lProximoFup" type="date">
+          </div>
+          <button class="btn-primary" style="padding:7px 16px;font-size:12px" onclick="registrarContato()">Salvar contato</button>
         </div>
       </div>
 
@@ -1160,13 +1164,8 @@
     document.getElementById('modalTitle').textContent = id ? 'Editar Cliente' : 'Novo Cliente';
 
     // Log section: só aparece no modo edição
-    const logSection = document.getElementById('logSection');
-    const logToggle  = document.getElementById('logToggle');
-    const logBody    = document.getElementById('logBody');
-    logSection.style.display = id ? '' : 'none';
-    logToggle.classList.remove('open');
-    logBody.classList.remove('open');
-    document.getElementById('logTimeline').innerHTML = '<div class="log-empty">Nenhum contato registrado.</div>';
+    document.getElementById('logSection').style.display = id ? '' : 'none';
+    document.getElementById('logTimeline').innerHTML = '<div class="log-empty">Carregando histórico…</div>';
     document.getElementById('logCount').textContent = '';
     ['lData','lTipo','lResultado','lProximoFup'].forEach(i => { document.getElementById(i).value = ''; });
 
@@ -1449,13 +1448,6 @@
   }
 
   // ── Log de Contatos ──────────────────────────────────────────────────────
-  function toggleLog() {
-    const toggle = document.getElementById('logToggle');
-    const body   = document.getElementById('logBody');
-    toggle.classList.toggle('open');
-    body.classList.toggle('open');
-  }
-
   async function carregarLog(id) {
     try {
       const res = await fetch(`${API_URL}/api/pipeline/${id}/contatos`, {

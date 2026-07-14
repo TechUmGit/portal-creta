@@ -93,6 +93,21 @@
     .btn-primary { display: inline-flex; align-items: center; gap: 8px; padding: 9px 18px; background: #0c1a35; color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; transition: background 0.15s; white-space: nowrap; margin-left: auto; }
     .btn-primary:hover { background: #1a3a6c; }
 
+    /* MULTI-SELECT DROPDOWN */
+    .ms-wrap { position: relative; }
+    .ms-btn { display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; background: #fff; border: 1.5px solid #e8ebf2; border-radius: 8px; font-size: 13px; font-family: inherit; color: #374151; cursor: pointer; white-space: nowrap; min-width: 160px; transition: border-color .15s; }
+    .ms-btn:hover, .ms-wrap.open .ms-btn { border-color: #0bb5d5; }
+    .ms-btn-label { flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; }
+    .ms-btn svg { flex-shrink: 0; color: #9ca3af; transition: transform .2s; }
+    .ms-wrap.open .ms-btn svg { transform: rotate(180deg); }
+    .ms-badge { background: #0bb5d5; color: #fff; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 10px; flex-shrink: 0; }
+    .ms-panel { display: none; position: absolute; top: calc(100% + 6px); left: 0; background: #fff; border: 1px solid #e8ebf2; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); min-width: 200px; z-index: 400; padding: 6px; }
+    .ms-wrap.open .ms-panel { display: block; }
+    .ms-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; color: #374151; transition: background .12s; user-select: none; }
+    .ms-item:hover { background: #f4f6fb; }
+    .ms-item input[type=checkbox] { accent-color: #0bb5d5; width: 14px; height: 14px; flex-shrink: 0; cursor: pointer; }
+    .ms-sep { height: 1px; background: #f0f3f8; margin: 4px 0; }
+
     /* TABLE */
     .table-card { background: #fff; border-radius: 12px; border: 1px solid #e8ebf2; overflow: hidden; }
     .table-wrap { overflow-x: auto; }
@@ -430,22 +445,37 @@
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           <input type="text" id="searchInput" placeholder="Buscar por nome..." oninput="renderTabela()">
         </div>
-        <select class="filter-select" id="filtroPipeSelect" onchange="setFiltroPipe(this.value)" style="min-width:160px">
-          <option value="">Todos os Pipes</option>
-          <option value="Quente">🔴 Quente</option>
-          <option value="Morno">🟠 Morno</option>
-          <option value="Frio">🔵 Frio</option>
-          <option value="LEAD">🟣 Lead</option>
-          <option value="Concluido">✅ Concluído</option>
-        </select>
-        <select class="filter-select" id="filtroRankSelect" onchange="setFiltroRank(this.value)" style="min-width:190px">
-          <option value="">Todos os Rankings</option>
-          <option value="Com certeza">✅ Com certeza</option>
-          <option value="Possivelmente">🤔 Possivelmente</option>
-          <option value="Stand By">⏸ Stand By</option>
-          <option value="Desafio">⚡ Desafio</option>
-          <option value="Não Vem">❌ Não Vem</option>
-        </select>
+        <!-- Multi-select Pipe -->
+        <div class="ms-wrap" id="msPipe">
+          <button class="ms-btn" onclick="toggleMs('msPipe')">
+            <span class="ms-btn-label" id="msPipeLabel">Todos os Pipes</span>
+            <span class="ms-badge" id="msPipeBadge" style="display:none"></span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="ms-panel">
+            <label class="ms-item"><input type="checkbox" value="Quente"    onchange="onMsChange('pipe')"> 🔴 Quente</label>
+            <label class="ms-item"><input type="checkbox" value="Morno"     onchange="onMsChange('pipe')"> 🟠 Morno</label>
+            <label class="ms-item"><input type="checkbox" value="Frio"      onchange="onMsChange('pipe')"> 🔵 Frio</label>
+            <label class="ms-item"><input type="checkbox" value="LEAD"      onchange="onMsChange('pipe')"> 🟣 Lead</label>
+            <label class="ms-item"><input type="checkbox" value="Concluido" onchange="onMsChange('pipe')"> ✅ Concluído</label>
+          </div>
+        </div>
+
+        <!-- Multi-select Ranking -->
+        <div class="ms-wrap" id="msRank">
+          <button class="ms-btn" onclick="toggleMs('msRank')" style="min-width:190px">
+            <span class="ms-btn-label" id="msRankLabel">Todos os Rankings</span>
+            <span class="ms-badge" id="msRankBadge" style="display:none"></span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="ms-panel">
+            <label class="ms-item"><input type="checkbox" value="Com certeza"   onchange="onMsChange('rank')"> ✅ Com certeza</label>
+            <label class="ms-item"><input type="checkbox" value="Possivelmente" onchange="onMsChange('rank')"> 🤔 Possivelmente</label>
+            <label class="ms-item"><input type="checkbox" value="Stand By"      onchange="onMsChange('rank')"> ⏸ Stand By</label>
+            <label class="ms-item"><input type="checkbox" value="Desafio"       onchange="onMsChange('rank')"> ⚡ Desafio</label>
+            <label class="ms-item"><input type="checkbox" value="Não Vem"       onchange="onMsChange('rank')"> ❌ Não Vem</label>
+          </div>
+        </div>
         <div style="display:flex;gap:8px;margin-left:auto">
           <button class="btn-outline" onclick="baixarTemplate()">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -865,8 +895,8 @@
   let _isAdmin   = false;
   let _clientes  = [];
   let _filtroAssessor = '';
-  let _filtroPipe     = '';
-  let _filtroRanking  = '';
+  let _filtroPipe     = [];   // array de valores selecionados
+  let _filtroRanking  = [];   // array de valores selecionados
   let _sortCol        = null;
   let _sortDir        = 'asc';
   let _editId    = null;
@@ -958,16 +988,54 @@
     if (badge2) { badge2.textContent = nVenc2; badge2.style.display = nVenc2 > 0 ? '' : 'none'; }
   }
 
-  // ── Render tabela ────────────────────────────────────────────────────────
-  function setFiltroPipe(val) {
-    _filtroPipe = val;
+  // ── Multi-select helpers ─────────────────────────────────────────────────
+  function toggleMs(id) {
+    const wrap = document.getElementById(id);
+    const isOpen = wrap.classList.contains('open');
+    // Fecha todos
+    document.querySelectorAll('.ms-wrap.open').forEach(w => w.classList.remove('open'));
+    if (!isOpen) wrap.classList.add('open');
+  }
+
+  // Fecha ao clicar fora
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.ms-wrap')) {
+      document.querySelectorAll('.ms-wrap.open').forEach(w => w.classList.remove('open'));
+    }
+  });
+
+  function onMsChange(tipo) {
+    if (tipo === 'pipe') {
+      const vals = [...document.querySelectorAll('#msPipe input:checked')].map(i => i.value);
+      _filtroPipe = vals;
+      const badge = document.getElementById('msPipeBadge');
+      const label = document.getElementById('msPipeLabel');
+      if (vals.length) {
+        badge.textContent = vals.length; badge.style.display = '';
+        label.textContent = vals.join(', ');
+      } else {
+        badge.style.display = 'none';
+        label.textContent = 'Todos os Pipes';
+      }
+    } else {
+      const vals = [...document.querySelectorAll('#msRank input:checked')].map(i => i.value);
+      _filtroRanking = vals;
+      const badge = document.getElementById('msRankBadge');
+      const label = document.getElementById('msRankLabel');
+      if (vals.length) {
+        badge.textContent = vals.length; badge.style.display = '';
+        label.textContent = vals.join(', ');
+      } else {
+        badge.style.display = 'none';
+        label.textContent = 'Todos os Rankings';
+      }
+    }
     renderTabela();
   }
 
-  function setFiltroRank(val) {
-    _filtroRanking = val;
-    renderTabela();
-  }
+  // ── Render tabela ────────────────────────────────────────────────────────
+  function setFiltroPipe(val) { _filtroPipe = val ? [val] : []; renderTabela(); }
+  function setFiltroRank(val) { _filtroRanking = val ? [val] : []; renderTabela(); }
 
   const SORT_KEYS = {
     'Nome': 'nome',
@@ -997,8 +1065,8 @@
   function renderTabela() {
     const busca = (document.getElementById('searchInput').value || '').toLowerCase();
     let dados = _clientes.filter(c => {
-      if (_filtroPipe && c.pipe !== _filtroPipe) return false;
-      if (_filtroRanking && c.ranking !== _filtroRanking) return false;
+      if (_filtroPipe.length    && !_filtroPipe.includes(c.pipe))       return false;
+      if (_filtroRanking.length && !_filtroRanking.includes(c.ranking)) return false;
       if (_filtroAssessor && (c.assessor_name || '').toUpperCase() !== _filtroAssessor.toUpperCase()) return false;
       if (busca && !(c.nome || '').toLowerCase().includes(busca)) return false;
       return true;

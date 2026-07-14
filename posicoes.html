@@ -391,9 +391,10 @@
 
       <!-- Toolbar -->
       <div class="mov-toolbar">
-        <select class="mov-select" id="movContaSelect" onchange="onMovContaChange()">
-          <option value="">Selecione uma conta...</option>
-        </select>
+        <div style="position:relative">
+          <input class="mov-select" type="text" id="movContaInput" placeholder="🔍 Buscar por nome ou código..." autocomplete="off" oninput="onMovBusca()" onfocus="onMovBusca()">
+          <div id="movSugestoes" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #e2e6ef;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.1);z-index:100;max-height:220px;overflow-y:auto;margin-top:4px"></div>
+        </div>
         <button class="btn-solicitar" id="btnSolicitar" onclick="solicitarMovimentacoes()" disabled>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.47"/></svg>
           Solicitar dados
@@ -765,17 +766,46 @@
   let _movContaAtual  = null;
 
   function popularMovContaSelect() {
-    const sel = document.getElementById('movContaSelect');
+    // Auto-seleciona o primeiro cliente da lista de posição
     const contas = Object.values(contasMap).sort((a,b) => (a.cliente||'').localeCompare(b.cliente||''));
-    while (sel.options.length > 1) sel.remove(1);
-    contas.forEach(c => {
-      const opt = new Option(`${c.conta}${c.cliente ? ' — ' + c.cliente : ''}`, c.conta);
-      sel.add(opt);
-    });
+    if (contas.length) {
+      const c = contas[0];
+      const label = c.cliente ? `${c.cliente} — ${c.conta}` : c.conta;
+      document.getElementById('movContaInput').value = label;
+      onMovContaSelecionada(c.conta);
+    }
   }
 
-  function onMovContaChange() {
-    const conta = document.getElementById('movContaSelect').value;
+  function onMovBusca() {
+    const q = (document.getElementById('movContaInput').value || '').toLowerCase().trim();
+    const contas = Object.values(contasMap).sort((a,b) => (a.cliente||'').localeCompare(b.cliente||''));
+    const filtradas = q
+      ? contas.filter(c => (c.cliente||'').toLowerCase().includes(q) || c.conta.toLowerCase().includes(q))
+      : contas;
+
+    const box = document.getElementById('movSugestoes');
+    if (!filtradas.length) { box.style.display = 'none'; return; }
+
+    box.style.display = 'block';
+    box.innerHTML = filtradas.slice(0, 30).map(c => {
+      const label = c.cliente ? `<strong>${c.cliente}</strong> <span style="color:#9ca3af;font-size:12px">${c.conta}</span>` : `<span style="font-family:monospace">${c.conta}</span>`;
+      return `<div onclick="selecionarSugestao('${c.conta}','${(c.cliente||'').replace(/'/g,"\\'")}\')" style="padding:10px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid #f4f6fb" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">${label}</div>`;
+    }).join('');
+  }
+
+  function selecionarSugestao(conta, cliente) {
+    const label = cliente ? `${cliente} — ${conta}` : conta;
+    document.getElementById('movContaInput').value = label;
+    document.getElementById('movSugestoes').style.display = 'none';
+    onMovContaSelecionada(conta);
+  }
+
+  document.addEventListener('click', e => {
+    if (!document.getElementById('movContaInput').contains(e.target))
+      document.getElementById('movSugestoes').style.display = 'none';
+  });
+
+  function onMovContaSelecionada(conta) {
     document.getElementById('btnSolicitar').disabled = !conta;
 
     // Cancela listener anterior

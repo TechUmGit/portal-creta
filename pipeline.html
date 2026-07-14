@@ -424,12 +424,26 @@
 
     <!-- TOOLBAR -->
     <div class="toolbar">
-      <!-- Linha 1: busca + botões -->
       <div class="toolbar-row">
         <div class="search-box">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           <input type="text" id="searchInput" placeholder="Buscar por nome..." oninput="renderTabela()">
         </div>
+        <select class="filter-select" id="filtroPipeSelect" onchange="setFiltroPipe(this.value)" style="min-width:160px">
+          <option value="">Todos os Pipes</option>
+          <option value="Quente">🔴 Quente</option>
+          <option value="Morno">🟠 Morno</option>
+          <option value="Frio">🔵 Frio</option>
+          <option value="LEAD">🟣 Lead</option>
+        </select>
+        <select class="filter-select" id="filtroRankSelect" onchange="setFiltroRank(this.value)" style="min-width:190px">
+          <option value="">Todos os Rankings</option>
+          <option value="Com certeza">✅ Com certeza</option>
+          <option value="Possivelmente">🤔 Possivelmente</option>
+          <option value="Stand By">⏸ Stand By</option>
+          <option value="Desafio">⚡ Desafio</option>
+          <option value="Não Vem">❌ Não Vem</option>
+        </select>
         <div style="display:flex;gap:8px;margin-left:auto">
           <button class="btn-outline" onclick="baixarTemplate()">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -444,29 +458,6 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             Novo Cliente
           </button>
-        </div>
-      </div>
-      <!-- Linha 2: filtro Pipe -->
-      <div class="toolbar-row">
-        <div class="filter-chips">
-          <span class="filter-label">Pipe</span>
-          <button class="chip active" data-pipe="" onclick="setFiltroPipe(this)">Todos</button>
-          <button class="chip quente" data-pipe="Quente" onclick="setFiltroPipe(this)">🔴 Quente</button>
-          <button class="chip morno"  data-pipe="Morno"  onclick="setFiltroPipe(this)">🟠 Morno</button>
-          <button class="chip frio"   data-pipe="Frio"   onclick="setFiltroPipe(this)">🔵 Frio</button>
-          <button class="chip lead"   data-pipe="LEAD"   onclick="setFiltroPipe(this)">🟣 Lead</button>
-        </div>
-      </div>
-      <!-- Linha 3: filtro Ranking -->
-      <div class="toolbar-row">
-        <div class="filter-chips">
-          <span class="filter-label">Ranking</span>
-          <button class="chip active" data-rank="" onclick="setFiltroRank(this)">Todos</button>
-          <button class="chip" data-rank="Com certeza"   onclick="setFiltroRank(this)">✅ Com certeza</button>
-          <button class="chip" data-rank="Possivelmente" onclick="setFiltroRank(this)">🤔 Possivelmente</button>
-          <button class="chip" data-rank="Stand By"      onclick="setFiltroRank(this)">⏸ Stand By</button>
-          <button class="chip" data-rank="Desafio"       onclick="setFiltroRank(this)">⚡ Desafio</button>
-          <button class="chip" data-rank="Não Vem"       onclick="setFiltroRank(this)">❌ Não Vem</button>
         </div>
       </div>
     </div>
@@ -965,17 +956,13 @@
   }
 
   // ── Render tabela ────────────────────────────────────────────────────────
-  function setFiltroPipe(btn) {
-    _filtroPipe = btn.dataset.pipe;
-    document.querySelectorAll('.filter-chips .chip[data-pipe]').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
+  function setFiltroPipe(val) {
+    _filtroPipe = val;
     renderTabela();
   }
 
-  function setFiltroRank(btn) {
-    _filtroRanking = btn.dataset.rank;
-    document.querySelectorAll('.filter-chips .chip[data-rank]').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
+  function setFiltroRank(val) {
+    _filtroRanking = val;
     renderTabela();
   }
 

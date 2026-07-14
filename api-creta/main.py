@@ -3217,7 +3217,10 @@ async def movimentacoes_solicitar(
     try:
         resp = requests.get(
             f"{BTG_MOV_URL}/{conta}",
-            headers={"Authorization": f"Bearer {btg_token}"},
+            headers={
+                "access_token":         btg_token,
+                "x-id-partner-request": str(uuid.uuid4()),
+            },
             timeout=30,
         )
         resp.raise_for_status()

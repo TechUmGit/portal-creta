@@ -850,12 +850,24 @@
         }
 
         if (status === 'aguardando') {
-          document.getElementById('movConteudo').innerHTML = `
-            <div class="mov-empty">
-              <div class="spinner" style="margin:0 auto 12px"></div>
-              <div>Aguardando resposta do BTG…</div>
-              <div style="font-size:12px;margin-top:4px;color:#c4c9d4">Os dados chegam automaticamente</div>
-            </div>`;
+          // Solicitação com mais de 2 min → mostra erro em vez de spinner infinito
+          const solicitadoEm      = d.solicitado_em ? new Date(d.solicitado_em) : null;
+          const segundosEsperando = solicitadoEm ? (Date.now() - solicitadoEm.getTime()) / 1000 : 9999;
+          if (segundosEsperando > 120) {
+            document.getElementById('movConteudo').innerHTML = `
+              <div class="mov-empty">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                <div>BTG não respondeu a tempo</div>
+                <div style="font-size:12px;margin-top:4px;color:#c4c9d4">Clique em <strong>Solicitar dados</strong> para tentar novamente</div>
+              </div>`;
+          } else {
+            document.getElementById('movConteudo').innerHTML = `
+              <div class="mov-empty">
+                <div class="spinner" style="margin:0 auto 12px"></div>
+                <div>Aguardando resposta do BTG…</div>
+                <div style="font-size:12px;margin-top:4px;color:#c4c9d4">Os dados chegam automaticamente</div>
+              </div>`;
+          }
           return;
         }
 

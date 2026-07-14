@@ -3213,7 +3213,7 @@ async def movimentacoes_solicitar(
         log.error(f"Erro ao obter token BTG: {e}")
         raise HTTPException(status_code=502, detail="Erro de autenticação com a BTG. Verifique BTG_CLIENT_ID/SECRET.")
 
-    # Chama API BTG (resposta assíncrona — dados chegam via webhook)
+    # Chama API BTG
     try:
         resp = requests.get(
             f"{BTG_MOV_URL}/{conta}",
@@ -3231,20 +3231,40 @@ async def movimentacoes_solicitar(
         log.error(f"Erro de comunicação BTG: {e}")
         raise HTTPException(status_code=502, detail="Erro de comunicação com a BTG.")
 
-    # Registra solicitação no Firestore (status = aguardando)
+    # Tenta extrair dados da resposta síncrona (BTG às vezes retorna direto no body)
+    agora_iso   = datetime.utcnow().isoformat() + "Z"
+    status_fs   = "aguardando"
+    dados_fs    = None
+    try:
+        body = resp.json()
+        log.info(f"BTG response body keys: {list(body.keys()) if isinstance(body, dict) else type(body)}")
+        dados_sinc = (
+            body.get("operations") or
+            body.get("data")       or
+            body.get("items")      or
+            (body.get("response") or {}).get("operations") or
+            []
+        ) if isinstance(body, dict) else (body if isinstance(body, list) else [])
+        if dados_sinc:
+            status_fs = "disponivel"
+            dados_fs  = dados_sinc
+            log.info(f"Dados BTG síncronos: conta={conta} operações={len(dados_sinc)}")
+    except Exception as ex:
+        log.info(f"BTG response body não é JSON ou está vazio: {ex}")
+
     fs = fb_firestore.client()
     fs.collection("movimentacoes").document(conta).set({
         "conta":            conta,
         "uid_solicitante":  uid,
-        "solicitado_em":    datetime.utcnow().isoformat() + "Z",
-        "status":           "aguardando",
-        "dados":            None,
-        "atualizado_em":    None,
+        "solicitado_em":    agora_iso,
+        "status":           status_fs,
+        "dados":            dados_fs,
+        "atualizado_em":    agora_iso if dados_fs else None,
     }, merge=True)
 
-    log.info(f"Movimentações solicitadas: conta={conta} uid={uid}")
-    return {"ok": True, "conta": conta, "status": "aguardando",
-            "msg": "Solicitação enviada. Os dados chegam em instantes via webhook."}
+    log.info(f"Movimentações solicitadas: conta={conta} uid={uid} status={status_fs}")
+    return {"ok": True, "conta": conta, "status": status_fs,
+            "msg": "Dados disponíveis." if status_fs == "disponivel" else "Solicitação enviada. Os dados chegam em instantes via webhook."}
 
 
 @app.get("/api/movimentacoes/{conta}")

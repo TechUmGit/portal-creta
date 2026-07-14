@@ -1838,6 +1838,11 @@ async def gestao_carteira(
             WHERE DATE(p.Data) = ud.d AND p.Classe != 'Aluguel de Ações'
             GROUP BY TRIM(p.Conta)
         ),
+        primeira_posicao AS (
+            SELECT TRIM(Conta) AS Conta, MIN(DATE(Data)) AS primeira_data
+            FROM {TABLE_POSICAO}
+            GROUP BY TRIM(Conta)
+        ),
         ultima_receita AS (
             SELECT Conta, MAX(DATE(Data_De_Referencia)) AS ultima_data
             FROM {TABLE}
@@ -1853,9 +1858,10 @@ async def gestao_carteira(
             UPPER(COALESCE(ma.Assessor,'')) AS assessor,
             ca.auc_atual,
             ur.ultima_data AS ultima_receita,
-            DATE_DIFF(CURRENT_DATE(), COALESCE(ur.ultima_data, DATE('2020-01-01')), DAY) AS dias_sem_receita
+            DATE_DIFF(CURRENT_DATE(), COALESCE(ur.ultima_data, pp.primeira_data, CURRENT_DATE()), DAY) AS dias_sem_receita
         FROM contas_ativas ca
         LEFT JOIN ultima_receita ur ON SAFE_CAST(ca.Conta AS INT64) = ur.Conta
+        LEFT JOIN primeira_posicao pp ON ca.Conta = pp.Conta
         LEFT JOIN nomes n ON SAFE_CAST(ca.Conta AS INT64) = n.conta_num
         LEFT JOIN {_mapa_assessor_sq()} ma ON SAFE_CAST(ca.Conta AS INT64) = ma.Conta
         WHERE (ur.ultima_data IS NULL OR ur.ultima_data < DATE_SUB(CURRENT_DATE(), INTERVAL 60 DAY))

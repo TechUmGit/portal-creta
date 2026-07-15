@@ -18,19 +18,33 @@ Cole este arquivo no início de uma nova conversa com Claude para continuar o de
 O sistema é vendido pra múltiplos escritórios ("clientes"). Cada cliente tem seu
 **próprio projeto GCP + Firebase isolados** (BigQuery, Firestore, Cloud Run, GCS)
 — zero dados compartilhados entre clientes. O **frontend é um único deploy
-compartilhado** (Firebase Hosting), que serve todos os subdomínios
-(`creta.synciadesk.com.br`, `ewz.synciadesk.com.br`, ...) e detecta em tempo de
-execução (via `location.hostname`, em `app-config.js`/`clients-config.js`) qual
-config de Firebase/API usar. Isso permite 1 commit + 1 deploy de frontend
-atualizar a experiência de todos os clientes ao mesmo tempo, mantendo os dados
-de cada um em infraestrutura totalmente separada.
+compartilhado** (Firebase Hosting, projeto `synciadesk-hosting`), que serve
+todos os subdomínios (`creta.synciadesk.com.br`, `ewz.synciadesk.com.br`, ...)
+com o mesmo conjunto de arquivos estáticos.
+
+A config de cada cliente (Firebase + URL da API) não fica mais commitada no
+repo — cada página carrega `<script src="/config.js"></script>`, que o
+`firebase.json` reescreve pro serviço **`config-api`** (Cloud Run, também no
+projeto `synciadesk-hosting`). Esse serviço lê o header `X-Forwarded-Host`
+(o domínio real que o visitante usou) e devolve a config certa, buscando no
+Firestore desse mesmo projeto (coleção `clients`, um documento por
+subdomínio). Do ponto de vista de cada página HTML nada muda — continua sendo
+um `<script src>` síncrono, só que gerado na hora em vez de estático.
+
+Cadastro de cliente novo (a parte de config) é feito em **`admin.synciadesk.com.br`**
+— login com Firebase Auth do projeto Creta (`creta-btg-bd3a8`), restrito aos
+e-mails em `ADMIN_EMAILS`. Ele chama `GET/POST/DELETE /api/clients` do
+`config-api` (mesmo rewrite de Hosting, `/api/**`). **Provisionar
+infraestrutura nova** (criar projeto GCP/Firebase, BigQuery, Cloud Run)
+continua manual — ver "Como adicionar um cliente novo" abaixo.
 
 | Serviço | Valor |
 |---|---|
 | Frontend (todos os clientes) | Firebase Hosting, projeto `synciadesk-hosting` — múltiplos domínios customizados |
-| Frontend — legado (em migração) | GitHub Pages: `https://techumgit.github.io/portal-creta/` |
-| Config por cliente (frontend) | `clients-config.js` (mapa hostname → firebaseConfig/apiUrl) + `app-config.js` (resolver) |
+| Config por cliente (runtime) | Firestore `clients/{hostname}` no projeto `synciadesk-hosting`, servido via `config-api` (`config-api/main.py`) em `/config.js` |
+| Admin de clientes | `admin.synciadesk.com.br` (`admin.html`) — login com Auth da Creta, CRUD via `/api/clients` |
 | Config por cliente (backend/deploy) | `clients/<slug>.env` — um arquivo por cliente, lido pelo `scripts/deploy-backend.sh` |
+| Faturamento | Todos os projetos GCP (incluindo `synciadesk-hosting`) usam a conta **TechUm** (`01F53C-019FE6-2C4878`) — ela tem cota de poucos projetos linkados, pode precisar desvincular um projeto parado antes de linkar um novo |
 
 ### Cliente: Creta
 
@@ -58,29 +72,40 @@ cd ~/Desktop/Portal\ Escritorio\ AAI && ./scripts/deploy-backend.sh all
 
 ### Como adicionar um cliente novo
 
+**Infraestrutura (manual — ideia é fazer isso num notebook Colab à parte,
+pra manter esse passo sob controle direto em vez de automatizado):**
+
 1. Criar projeto GCP dedicado (`gcloud projects create <slug>-<algo>`) e projeto
    Firebase vinculado a ele (console Firebase → "Adicionar projeto" → usar o
-   projeto GCP criado).
+   projeto GCP criado). Vincular a conta de faturamento TechUm (ver nota de
+   cota acima).
 2. Ativar Firestore e criar o dataset/tabelas necessárias no BigQuery (mesma
    estrutura de `dados_crus` da Creta — ver seção BigQuery Tables).
 3. Criar os secrets no Secret Manager do novo projeto: `newsapi-key`,
-   `btg-client-id`, `btg-client-secret`.
+   `btg-client-id`, `btg-client-secret`, `admin-emails` (lista de e-mails
+   admin do escritório, separados por vírgula — nunca commitar em código).
+   Depois de criar, dar `roles/secretmanager.secretAccessor` pra service
+   account do Cloud Run (`<project-number>-compute@developer.gserviceaccount.com`)
+   em cada secret novo.
 4. Criar `clients/<slug>.env` (copiar `clients/creta.env` e trocar os valores:
    `GCP_PROJECT`, `FIREBASE_PROJECT`, `BQ_DATASET`, `GCS_BUCKET`,
    `ALLOWED_ORIGINS` já incluindo `https://<slug>.synciadesk.com.br`).
 5. Rodar `./scripts/deploy-backend.sh <slug>` para publicar o backend do
    cliente.
-6. Adicionar uma entrada em `clients-config.js` com a chave
-   `<slug>.synciadesk.com.br` apontando pro `firebaseConfig` (Configurações do
-   projeto → Config do SDK, no console Firebase do cliente) e `apiUrl` (URL do
-   Cloud Run gerada no passo 5).
-7. No console Firebase do projeto `synciadesk-hosting` → Hosting → "Adicionar
+6. No console Firebase do projeto `synciadesk-hosting` → Hosting → "Adicionar
    domínio customizado" → `<slug>.synciadesk.com.br`; criar os registros DNS
    indicados no registro.br.
-8. No console Firebase do projeto do cliente → Authentication → Settings →
+7. No console Firebase do projeto do cliente → Authentication → Settings →
    Authorized domains → adicionar `<slug>.synciadesk.com.br`.
-9. `git push` + `firebase deploy --only hosting` para publicar a entrada nova
-   de `clients-config.js`.
+
+**Config (via admin, sem precisar mexer em código):**
+
+8. Login em `admin.synciadesk.com.br` (e-mail precisa estar em `ADMIN_EMAILS`
+   tanto em `api-creta/main.py` quanto em `config-api/main.py`) → "Novo
+   cliente" → preencher subdomínio, URL da API (gerada no passo 5) e a config
+   do Firebase (Configurações do projeto → Config do SDK, no console do
+   cliente). Salvar já deixa o `/config.js` daquele subdomínio no ar,
+   sem precisar de commit nem `firebase deploy`.
 
 ---
 

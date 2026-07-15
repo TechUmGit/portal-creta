@@ -236,7 +236,8 @@ app.add_middleware(
 )
 
 # ── Emails de admin (fallback caso Firestore/claims não estejam configurados) ──
-ADMIN_EMAILS = {"fillipemsousa@gmail.com", "manu.lombardi@cretainvestimentos.com.br"}
+# Configurado via env var (Secret Manager: secret "admin-emails"), lista separada por vírgula.
+ADMIN_EMAILS = {e.strip() for e in os.getenv("ADMIN_EMAILS", "").split(",") if e.strip()}
 
 # ── Roles com acesso privilegiado (admin + backoffice) ───────────────────────
 PRIVILEGED_ROLES = {"admin", "backoffice"}

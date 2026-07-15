@@ -3,6 +3,11 @@ api-creta/venv/
 api-creta/__pycache__/
 api-creta/*.pyc
 api-creta/.env
+config-api/__pycache__/
+config-api/*.pyc
+
+# Cache local de deploy do Firebase
+.firebase/
 
 # Credenciais — NUNCA commitar
 *.json

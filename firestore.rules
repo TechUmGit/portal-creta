@@ -1,0 +1,14 @@
+rules_version = '2';
+
+// Este Firestore (projeto synciadesk-hosting) só existe pra guardar o
+// registro de clientes (subdomínio → config). Toda leitura/escrita passa
+// pelo serviço config-api (Cloud Run), que usa Admin SDK e ignora estas
+// regras — elas ficam aqui só como defesa extra contra acesso direto do
+// navegador, que nunca deveria acontecer neste projeto.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

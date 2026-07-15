@@ -19,12 +19,13 @@ que já existem ou use a flag --update.
 import secrets
 import string
 import sys
+import os
 import firebase_admin
 from firebase_admin import credentials, auth, firestore
 
 # ── Inicialização (usa Application Default Credentials via gcloud) ────────────
 if not firebase_admin._apps:
-    firebase_admin.initialize_app(options={"projectId": "creta-btg-bd3a8"})
+    firebase_admin.initialize_app(options={"projectId": os.getenv("FIREBASE_PROJECT", "creta-btg-bd3a8")})
 
 db = firestore.client()
 

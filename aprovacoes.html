@@ -397,19 +397,14 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+<script src="clients-config.js"></script>
+<script src="app-config.js"></script>
 
 <script>
   // ── Config ──────────────────────────────────────────────────────────────────
-  const API_URL = 'https://api-creta-978599698367.us-central1.run.app';
+  const API_URL = window.APP_CONFIG.apiUrl;
 
-  firebase.initializeApp({
-    apiKey:            "AIzaSyDLJrg7Cmaq6DDlDdcLfe4kH9hUukMVuE0",
-    authDomain:        "creta-btg-bd3a8.firebaseapp.com",
-    projectId:         "creta-btg-bd3a8",
-    storageBucket:     "creta-btg-bd3a8.appspot.com",
-    messagingSenderId: "609636823379",
-    appId:             "1:609636823379:web:fbf9de8c2960d7392c31a6"
-  });
+  firebase.initializeApp(window.APP_CONFIG.firebaseConfig);
   const auth = firebase.auth();
 
   // ── Estado ──────────────────────────────────────────────────────────────────

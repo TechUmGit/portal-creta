@@ -40,7 +40,7 @@ log = logging.getLogger("api-creta")
 # de service account. Em dev local, use: firebase_admin.initialize_app() que
 # detecta o ADC (Application Default Credentials).
 if not firebase_admin._apps:
-    firebase_admin.initialize_app(options={"projectId": "creta-btg-bd3a8"})
+    firebase_admin.initialize_app(options={"projectId": os.getenv("FIREBASE_PROJECT", "creta-btg-bd3a8")})
 
 # ── BigQuery client ───────────────────────────────────────────────────────────
 # Project ID e dataset — configuráveis via variável de ambiente

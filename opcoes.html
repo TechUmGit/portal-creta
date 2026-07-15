@@ -8,6 +8,8 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="clients-config.js"></script>
+  <script src="app-config.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { height: 100%; font-family: 'Inter', -apple-system, sans-serif; -webkit-font-smoothing: antialiased; background: #f0f3f8; }
@@ -381,17 +383,9 @@
 </div><!-- /app -->
 
 <script>
-  const API_URL = 'https://api-creta-978599698367.us-central1.run.app';
+  const API_URL = window.APP_CONFIG.apiUrl;
 
-  const firebaseConfig = {
-    apiKey:            "AIzaSyDLJrg7Cmaq6DDlDdcLfe4kH9hUukMVuE0",
-    authDomain:        "creta-btg-bd3a8.firebaseapp.com",
-    projectId:         "creta-btg-bd3a8",
-    storageBucket:     "creta-btg-bd3a8.firebasestorage.app",
-    messagingSenderId: "609636823379",
-    appId:             "1:609636823379:web:fbf9de8c2960d7392c31a6",
-    measurementId:     "G-WQSQD9CMJF"
-  };
+  const firebaseConfig = window.APP_CONFIG.firebaseConfig;
   if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
   const auth = firebase.auth();
   const db   = firebase.firestore();

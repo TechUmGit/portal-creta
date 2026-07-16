@@ -47,11 +47,16 @@ def mascarar_conta(conta_real, salt: str) -> str:
     return str(n)
 
 
-def mascarar_nome(nome_real, salt: str) -> str:
+def mascarar_nome(nome_real, salt: str, rotulo: str = "Pessoa") -> str:
+    """
+    `rotulo` identifica o tipo de nome (Cliente, Assessor, ...) — sem isso,
+    todo nome mascarado ficava com o mesmo prefixo "Assessor", mesmo quando
+    era na verdade um nome de cliente.
+    """
     if nome_real is None or str(nome_real).strip() == "":
         return nome_real
     n = _hash_int(str(nome_real).strip(), salt, 10_000)
-    return f"Assessor {n:04d}"
+    return f"{rotulo} {n:04d}"
 
 
 def fator_valor(conta_real, salt: str) -> float:

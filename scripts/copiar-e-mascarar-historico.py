@@ -26,32 +26,38 @@ REF_DATASET = "dados_crus"
 DEST_DATASET = "dados_crus"
 
 # Por tabela: quais colunas são conta (pseudônimo numérico), nome (pseudônimo
-# de pessoa) e valor monetário (escalado pelo fator da conta da própria linha).
+# de pessoa, com rótulo pra não confundir Cliente com Assessor) e valor
+# monetário (escalado pelo fator da conta da própria linha).
 TABELAS_CONFIG = {
     "posicao_das_contas": {
         "colunas_conta": ["Conta"],
-        "colunas_nome": [],
+        "colunas_nome": {},
         "colunas_valor": ["ValorBruto", "ValorLiquido", "Preco"],
     },
     "conta_assessor_base": {
         "colunas_conta": ["Conta"],
-        "colunas_nome": ["Assessor"],
+        "colunas_nome": {"Assessor": "Assessor"},
         "colunas_valor": [],
     },
     "conta_assessor_excecoes": {
         "colunas_conta": ["Conta"],
-        "colunas_nome": ["Assessor", "CriadoPor"],
+        "colunas_nome": {"Assessor": "Assessor", "CriadoPor": "Assessor"},
         "colunas_valor": [],
     },
     "receitas_para_repasse": {
         "colunas_conta": ["Conta"],
-        "colunas_nome": ["Cliente", "Codigo_Assessor", "Assessor_Principal", "Assessor_Manual"],
+        "colunas_nome": {
+            "Cliente": "Cliente",
+            "Codigo_Assessor": "Assessor",
+            "Assessor_Principal": "Assessor",
+            "Assessor_Manual": "Assessor",
+        },
         "colunas_valor": ["Receita_Bruta", "Receita_Liquida", "Comissao",
                            "Comissao_Liquida", "Repasse_Total_liquido"],
     },
     "suitability_contas": {
         "colunas_conta": ["Conta"],
-        "colunas_nome": [],
+        "colunas_nome": {},
         "colunas_valor": [],
     },
 }
@@ -66,8 +72,8 @@ def mascarar_tabela(df, config, salt):
                 lambda r: mascarar_valor(r[col], r[conta_col], salt), axis=1
             )
 
-    for col in config["colunas_nome"]:
-        df[col] = df[col].apply(lambda v: mascarar_nome(v, salt))
+    for col, rotulo in config["colunas_nome"].items():
+        df[col] = df[col].apply(lambda v: mascarar_nome(v, salt, rotulo))
 
     for col in config["colunas_conta"]:
         tipo_original = df[col].dtype
@@ -82,10 +88,11 @@ def mascarar_tabela(df, config, salt):
 
 
 def main():
-    if len(sys.argv) != 2:
-        print("Uso: copiar-e-mascarar-historico.py <projeto-destino>", file=sys.stderr)
+    if len(sys.argv) not in (2, 3):
+        print("Uso: copiar-e-mascarar-historico.py <projeto-destino> [tabela]", file=sys.stderr)
         sys.exit(1)
     dest_project = sys.argv[1]
+    tabela_filtro = sys.argv[2] if len(sys.argv) == 3 else None
 
     salt = os.environ.get("ANON_SALT")
     if not salt:
@@ -95,7 +102,9 @@ def main():
     client_origem = bigquery.Client(project=REF_PROJECT)
     client_destino = bigquery.Client(project=dest_project)
 
-    for tabela, config in TABELAS_CONFIG.items():
+    tabelas = {tabela_filtro: TABELAS_CONFIG[tabela_filtro]} if tabela_filtro else TABELAS_CONFIG
+
+    for tabela, config in tabelas.items():
         origem = f"{REF_PROJECT}.{REF_DATASET}.{tabela}"
         destino = f"{dest_project}.{DEST_DATASET}.{tabela}"
 

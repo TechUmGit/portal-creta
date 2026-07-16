@@ -47,14 +47,18 @@ gcloud services enable \
   firestore.googleapis.com identitytoolkit.googleapis.com \
   run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com \
   bigquery.googleapis.com storage.googleapis.com secretmanager.googleapis.com \
+  cloudscheduler.googleapis.com \
   --project="$GCP_PROJECT"
 
-echo "── 3. Permissão do Cloud Build ──"
+echo "── 3. Permissões (Cloud Build + acionar Cloud Run Jobs via Scheduler) ──"
 PROJECT_NUMBER="$(gcloud projects describe "$GCP_PROJECT" --format='value(projectNumber)')"
 COMPUTE_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
 gcloud projects add-iam-policy-binding "$GCP_PROJECT" \
   --member="serviceAccount:${COMPUTE_SA}" \
   --role="roles/cloudbuild.builds.builder" >/dev/null
+gcloud projects add-iam-policy-binding "$GCP_PROJECT" \
+  --member="serviceAccount:${COMPUTE_SA}" \
+  --role="roles/run.developer" >/dev/null
 echo "Service account: $COMPUTE_SA"
 
 echo "── 4. Projeto Firebase + Firestore ──"
@@ -132,7 +136,37 @@ gcloud run deploy api-creta \
 
 API_URL="$(gcloud run services describe api-creta --project="$GCP_PROJECT" --region="$REGION" --format='value(status.url)')"
 
-echo "── 9. Config web do Firebase ──"
+echo "── 9. Deploy dos jobs automatizados (posições, suitability, carteira recomendada) ──"
+for job in job-posicoes job-suitability job-carteira-recomendada; do
+  gcloud run jobs deploy "$job" \
+    --source "${REPO_ROOT}/${job}" \
+    --region "$REGION" \
+    --project "$GCP_PROJECT" \
+    --set-env-vars "GCP_PROJECT=${GCP_PROJECT},BQ_DATASET=${BQ_DATASET}" \
+    --set-secrets "BTG_CLIENT_ID=btg-client-id:latest,BTG_CLIENT_SECRET=btg-client-secret:latest" \
+    --quiet
+done
+
+echo "── 10. Agendamento diário (Cloud Scheduler) ──"
+criar_scheduler() {
+  local nome="$1"
+  local job="$2"
+  local cron="$3"
+  gcloud scheduler jobs create http "$nome" \
+    --project="$GCP_PROJECT" \
+    --location="$REGION" \
+    --schedule="$cron" \
+    --time-zone="America/Sao_Paulo" \
+    --uri="https://${REGION}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${GCP_PROJECT}/jobs/${job}:run" \
+    --http-method=POST \
+    --oauth-service-account-email="$COMPUTE_SA" \
+    --quiet 2>/dev/null || echo "  ($nome já existe — pulei)"
+}
+criar_scheduler "scheduler-posicoes" "job-posicoes" "0 8 * * 1-5"
+criar_scheduler "scheduler-suitability" "job-suitability" "0 8 * * 1"
+criar_scheduler "scheduler-carteira-recomendada" "job-carteira-recomendada" "0 8 * * 1"
+
+echo "── 11. Config web do Firebase ──"
 if ! firebase apps:sdkconfig web --project "$GCP_PROJECT" 2>/tmp/sdkconfig_err; then
   echo "Ainda não existe um app Web nesse projeto Firebase. Rodando 'firebase apps:create web'..."
   firebase apps:create web "$CLIENT_SLUG" --project "$GCP_PROJECT"
@@ -152,7 +186,7 @@ Falta fazer, manualmente:
 1. Ir em admin.synciadesk.com.br → "Novo cliente" → preencher:
    - Subdomínio: $DOMAIN
    - URL da API: $API_URL
-   - Firebase config: usar a saída da etapa 9 acima
+   - Firebase config: usar a saída da etapa 11 acima
 2. No Firebase Console do projeto $GCP_PROJECT → Authentication →
    Sign-in method → ativar Email/Senha.
 3. No Firebase Console do projeto $GCP_PROJECT → Authentication →

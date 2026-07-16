@@ -75,37 +75,56 @@ cd ~/Desktop/Portal\ Escritorio\ AAI && ./scripts/deploy-backend.sh all
 **Infraestrutura (manual — ideia é fazer isso num notebook Colab à parte,
 pra manter esse passo sob controle direto em vez de automatizado):**
 
-1. Criar projeto GCP dedicado (`gcloud projects create <slug>-<algo>`) e projeto
-   Firebase vinculado a ele (console Firebase → "Adicionar projeto" → usar o
-   projeto GCP criado). Vincular a conta de faturamento TechUm (ver nota de
-   cota acima).
-2. Ativar Firestore e criar o dataset/tabelas necessárias no BigQuery (mesma
-   estrutura de `dados_crus` da Creta — ver seção BigQuery Tables).
-3. Criar os secrets no Secret Manager do novo projeto: `btg-client-id`,
-   `btg-client-secret`, `admin-emails` (lista de e-mails
-   admin do escritório, separados por vírgula — nunca commitar em código).
-   Depois de criar, dar `roles/secretmanager.secretAccessor` pra service
-   account do Cloud Run (`<project-number>-compute@developer.gserviceaccount.com`)
-   em cada secret novo.
-4. Criar `clients/<slug>.env` (copiar `clients/creta.env` e trocar os valores:
-   `GCP_PROJECT`, `FIREBASE_PROJECT`, `BQ_DATASET`, `GCS_BUCKET`,
-   `ALLOWED_ORIGINS` já incluindo `https://<slug>.synciadesk.com.br`).
-5. Rodar `./scripts/deploy-backend.sh <slug>` para publicar o backend do
-   cliente.
-6. No console Firebase do projeto `synciadesk-hosting` → Hosting → "Adicionar
-   domínio customizado" → `<slug>.synciadesk.com.br`; criar os registros DNS
-   indicados no registro.br.
-7. No console Firebase do projeto do cliente → Authentication → Settings →
-   Authorized domains → adicionar `<slug>.synciadesk.com.br`.
+**Automatizado — `./scripts/provisionar-cliente.sh <slug>`:**
 
-**Config (via admin, sem precisar mexer em código):**
+Roda direto no terminal (usa a autenticação local do `gcloud`/`firebase`, sem
+login interativo). Faz tudo isso, em ordem, e é seguro rodar de novo se
+travar no meio (pula o que já existe):
 
-8. Login em `admin.synciadesk.com.br` (e-mail precisa estar em `ADMIN_EMAILS`
-   tanto em `api-creta/main.py` quanto em `config-api/main.py`) → "Novo
-   cliente" → preencher subdomínio, URL da API (gerada no passo 5) e a config
-   do Firebase (Configurações do projeto → Config do SDK, no console do
-   cliente). Salvar já deixa o `/config.js` daquele subdomínio no ar,
-   sem precisar de commit nem `firebase deploy`.
+1. Cria o projeto GCP e vincula a conta de faturamento TechUm.
+2. Ativa as APIs necessárias (Firestore, Cloud Run, Cloud Build, BigQuery,
+   Cloud Scheduler, etc.).
+3. Concede as permissões do service account padrão (Cloud Build + acionar
+   Cloud Run Jobs).
+4. Cria o projeto Firebase (vinculado ao GCP) + Firestore.
+5. Cria o bucket GCS do pipeline.
+6. Cria o dataset BigQuery e copia o **schema** (não os dados) das tabelas
+   da Creta.
+7. Pede os secrets (`btg-client-id`, `btg-client-secret`, `admin-emails`) via
+   prompt escondido no terminal.
+8. Deploy do backend (`api-creta`, Cloud Run service).
+9. Deploy dos jobs automatizados (`job-posicoes`, `job-suitability`,
+   `job-carteira-recomendada`, Cloud Run Jobs).
+10. Cria os 3 gatilhos do Cloud Scheduler (posições: 8h dias úteis;
+    suitability e carteira recomendada: 8h segunda) — mesmo padrão da Creta.
+11. Pega a config web do Firebase (cria o app Web se não existir).
+
+**Manual, o que sobra (contas/DNS que o script não controla):**
+
+- No console Firebase do projeto `synciadesk-hosting` → Hosting → "Adicionar
+  domínio customizado" → `<slug>.synciadesk.com.br`; criar os registros DNS
+  indicados no registro.br.
+- No console Firebase do projeto do cliente → Authentication → Sign-in
+  method → ativar Email/Senha.
+- No console Firebase do projeto do cliente → Authentication → Settings →
+  Authorized domains → adicionar `<slug>.synciadesk.com.br`.
+- Criar o primeiro usuário admin do cliente: cria o usuário no Firebase Auth
+  do projeto dele + grava `users/{uid}` no Firestore com `role: admin` +
+  define os custom claims (`{"role": "admin"}`) — mesmo padrão usado em
+  `api-creta/criar_usuarios.py`. Depois desse primeiro login, o resto dos
+  usuários pode ser criado pela própria tela de gestão de usuários dentro do
+  portal (`configuracoes.html`).
+- Login em `admin.synciadesk.com.br` (e-mail precisa estar em `ADMIN_EMAILS`
+  tanto em `api-creta/main.py` quanto em `config-api/main.py`) → "Novo
+  cliente" → preencher subdomínio, URL da API (impressa no resumo final do
+  script) e a config do Firebase (etapa 11). Salvar já deixa o `/config.js`
+  daquele subdomínio no ar, sem precisar de commit nem `firebase deploy`.
+
+Nota: o cliente `interno` (`interno-portal`) é uma exceção deliberada — ele
+roda com `ANONYMIZE=true` e **sem** os gatilhos do Cloud Scheduler (dados
+atualizados sob demanda antes de demonstrações, rodando
+`scripts/copiar-e-mascarar-historico.py` manualmente). Não é o padrão pra
+clientes de verdade.
 
 ---
 

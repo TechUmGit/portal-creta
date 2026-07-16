@@ -18,6 +18,8 @@ import pandas as pd
 import requests
 from google.cloud import bigquery
 
+from anonimizar import mascarar_conta, mascarar_valor
+
 # ── Logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
 log = logging.getLogger("job-posicoes")
@@ -263,6 +265,20 @@ def parse_posicao(dados: dict) -> pd.DataFrame:
 
     return pd.DataFrame(linhas, columns=COLUNAS)
 
+# ── Máscara (só quando ANONYMIZE=true, ex: cliente interno de testes) ─────────
+
+def aplicar_mascara(df: pd.DataFrame) -> pd.DataFrame:
+    if os.getenv("ANONYMIZE", "").lower() != "true":
+        return df
+    if df.empty:
+        return df
+    salt = os.environ["ANON_SALT"]
+    df = df.copy()
+    for col in ("ValorBruto", "ValorLiquido", "Preco"):
+        df[col] = df.apply(lambda r: mascarar_valor(r[col], r["Conta"], salt), axis=1)
+    df["Conta"] = df["Conta"].apply(lambda c: mascarar_conta(c, salt))
+    return df
+
 # ── BigQuery ──────────────────────────────────────────────────────────────────
 
 def datas_ja_salvas() -> set:
@@ -351,7 +367,8 @@ def consolidar_historico(token, lista_contas: list):
                 erros_data.append((data_ref, conta))
 
         if partes:
-            salvar_particao(pd.concat(partes, ignore_index=True), data_ref)
+            df_dia = aplicar_mascara(pd.concat(partes, ignore_index=True))
+            salvar_particao(df_dia, data_ref)
         else:
             log.warning(f"Nenhuma posição para {data_ref}")
 

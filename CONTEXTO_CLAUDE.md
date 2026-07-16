@@ -109,6 +109,32 @@ pra manter esse passo sob controle direto em vez de automatizado):**
 
 ---
 
+## Cliente `interno` (interno-portal) — ambiente de testes/demo
+
+Projeto GCP/Firebase separado (`interno-portal`), alimentado com **dados
+reais do BTG da Creta** (mesmas credenciais, copiadas via Secret Manager),
+mas com **anonimização automática** — não é bug se os números não baterem
+com os da Creta, é proposital.
+
+- `job-posicoes` roda lá com `ANONYMIZE=true` + secret `ANON_SALT` (só
+  existe nesse projeto). A máscara (`job-posicoes/anonimizar.py`) troca
+  número de conta e nome de assessor por um pseudônimo estável (hash
+  determinístico com o salt), e escala valores monetários por um fator fixo
+  por conta (0.6–1.4x) — mantém o padrão dos dados sem expor o real.
+- Histórico já carregado foi copiado da Creta com
+  `scripts/copiar-e-mascarar-historico.py <projeto-destino>` (lê
+  `creta-btg.dados_crus`, aplica a mesma máscara, grava no destino,
+  `WRITE_TRUNCATE`). Precisa do `ANON_SALT` do projeto destino como env var
+  pra rodar (mesmo valor do secret `anon-salt`, senão os pseudônimos não
+  batem com os que o job-posicoes vai gerar dali pra frente).
+- Importante: `Conta` tem formatos diferentes entre tabelas (STRING com
+  espaço/zero à esquerda em `posicao_das_contas`, INTEGER limpo em
+  `conta_assessor_base`/`receitas_para_repasse`) — a máscara normaliza antes
+  de gerar o hash (`_normalizar_conta`), senão a mesma conta vira pseudônimos
+  diferentes em tabelas diferentes e quebra o JOIN entre elas.
+
+---
+
 ## Arquitetura
 
 - **Auth**: Firebase Auth com JWT claims (`role`, `assessor_name`, `uid`)

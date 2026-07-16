@@ -1,10 +1,8 @@
 # Python
 api-creta/venv/
-api-creta/__pycache__/
-api-creta/*.pyc
 api-creta/.env
-config-api/__pycache__/
-config-api/*.pyc
+**/__pycache__/
+*.pyc
 
 # Cache local de deploy do Firebase
 .firebase/

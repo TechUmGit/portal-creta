@@ -80,6 +80,8 @@ def verificar_admin(authorization: Optional[str] = Header(None)) -> str:
 class ClienteIn(BaseModel):
     apiUrl: str
     firebaseConfig: dict
+    displayName: str = ""
+    logoUrl: str = ""
 
 
 def _client_doc_to_response(hostname: str, data: dict) -> dict:
@@ -87,6 +89,8 @@ def _client_doc_to_response(hostname: str, data: dict) -> dict:
         "hostname": hostname,
         "apiUrl": data.get("apiUrl", ""),
         "firebaseConfig": data.get("firebaseConfig", {}),
+        "displayName": data.get("displayName", ""),
+        "logoUrl": data.get("logoUrl", ""),
     }
 
 
@@ -103,8 +107,32 @@ async def config_js(request: Request):
     payload = {
         "firebaseConfig": data.get("firebaseConfig", {}),
         "apiUrl": data.get("apiUrl", ""),
+        "displayName": data.get("displayName", ""),
+        "logoUrl": data.get("logoUrl", ""),
     }
-    body = f"window.APP_CONFIG = {json.dumps(payload)};"
+    # Troca o título da aba e a logo (que os 13 HTML têm hardcoded pra
+    # "Creta Capital" / logo-creta.svg) por dado do cliente, sem precisar
+    # editar cada página — só entra em vigor se displayName/logoUrl estiverem
+    # configurados; senão a logo padrão simplesmente some (nunca mostra a
+    # logo da Creta pra outro cliente).
+    patch_js = """
+(function () {
+  var cfg = window.APP_CONFIG;
+  var nome = cfg.displayName;
+  if (nome) { document.title = document.title.replace('Creta Capital', nome); }
+  document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('img[src="logo-creta.svg"]').forEach(function (img) {
+      if (cfg.logoUrl) {
+        img.src = cfg.logoUrl;
+        img.alt = nome || img.alt;
+      } else if (nome) {
+        img.style.display = 'none';
+      }
+    });
+  });
+})();
+"""
+    body = f"window.APP_CONFIG = {json.dumps(payload)};\n{patch_js}"
     return Response(
         content=body,
         media_type="application/javascript",
@@ -120,9 +148,12 @@ async def listar_clientes(email: str = Depends(verificar_admin)):
 
 @app.post("/api/clients/{hostname}")
 async def salvar_cliente(hostname: str, body: ClienteIn, email: str = Depends(verificar_admin)):
-    db.collection("clients").document(hostname).set(
-        {"apiUrl": body.apiUrl, "firebaseConfig": body.firebaseConfig}
-    )
+    db.collection("clients").document(hostname).set({
+        "apiUrl": body.apiUrl,
+        "firebaseConfig": body.firebaseConfig,
+        "displayName": body.displayName,
+        "logoUrl": body.logoUrl,
+    })
     return _client_doc_to_response(hostname, body.dict())
 
 

@@ -115,6 +115,7 @@
           <thead>
             <tr>
               <th>Subdomínio</th>
+              <th>Nome</th>
               <th>API</th>
               <th></th>
             </tr>
@@ -138,6 +139,12 @@
       <div class="form-group">
         <label class="form-label">URL da API (Cloud Run)</label>
         <input class="form-control" id="fApiUrl" placeholder="https://api-ewz-xxxxx.us-central1.run.app">
+      </div>
+
+      <div class="section-label">Identidade visual</div>
+      <div class="form-grid-2">
+        <div class="form-group"><label class="form-label">Nome de exibição</label><input class="form-control" id="fDisplayName" placeholder="EWZ Capital"></div>
+        <div class="form-group"><label class="form-label">URL do logo</label><input class="form-control" id="fLogoUrl" placeholder="https://synciadesk-hosting.web.app/logos/ewz.svg"></div>
       </div>
 
       <div class="section-label">Firebase — config do SDK</div>
@@ -238,6 +245,7 @@
           const tr = document.createElement('tr');
           tr.innerHTML = `
             <td class="hostname-cell">${esc(c.hostname)}</td>
+            <td>${esc(c.displayName) || '<span style="color:#c4c9d4">—</span>'}</td>
             <td class="apiurl-cell" title="${esc(c.apiUrl)}">${esc(c.apiUrl)}</td>
             <td>
               <div class="row-actions">
@@ -248,7 +256,7 @@
           tbody.appendChild(tr);
         });
     } catch (e) {
-      tbody.innerHTML = `<tr><td colspan="3" class="empty-state">${esc(e.message)}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="4" class="empty-state">${esc(e.message)}</td></tr>`;
     }
   }
 
@@ -265,6 +273,8 @@
     document.getElementById('fHostname').value = cliente ? cliente.hostname : '';
     document.getElementById('fHostname').disabled = !!cliente;
     document.getElementById('fApiUrl').value = cliente ? cliente.apiUrl : '';
+    document.getElementById('fDisplayName').value = (cliente && cliente.displayName) || '';
+    document.getElementById('fLogoUrl').value = (cliente && cliente.logoUrl) || '';
     document.getElementById('fApiKey').value = fc.apiKey || '';
     document.getElementById('fAuthDomain').value = fc.authDomain || '';
     document.getElementById('fProjectId').value = fc.projectId || '';
@@ -283,11 +293,17 @@
   async function salvarCliente() {
     const hostname = document.getElementById('fHostname').value.trim();
     const apiUrl = document.getElementById('fApiUrl').value.trim();
+    const displayName = document.getElementById('fDisplayName').value.trim();
+    const logoUrl = document.getElementById('fLogoUrl').value.trim();
     const msg = document.getElementById('modalMsg');
     const btn = document.getElementById('modalSaveBtn');
 
     if (!hostname || !apiUrl) {
       msg.textContent = 'Preencha subdomínio e URL da API.';
+      return;
+    }
+    if (!displayName) {
+      msg.textContent = 'Preencha o nome de exibição — sem isso a página fica com o nome/logo da Creta.';
       return;
     }
 
@@ -306,7 +322,7 @@
     try {
       await apiFetch(`/api/clients/${encodeURIComponent(hostname)}`, {
         method: 'POST',
-        body: JSON.stringify({ apiUrl, firebaseConfig: firebaseConfigCliente }),
+        body: JSON.stringify({ apiUrl, firebaseConfig: firebaseConfigCliente, displayName, logoUrl }),
       });
       fecharModal();
       carregarClientes();

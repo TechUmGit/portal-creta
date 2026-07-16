@@ -114,11 +114,18 @@ travar no meio (pula o que já existe):
   `api-creta/criar_usuarios.py`. Depois desse primeiro login, o resto dos
   usuários pode ser criado pela própria tela de gestão de usuários dentro do
   portal (`configuracoes.html`).
+- Colocar o logo do cliente em `logos/<slug>.svg` (ou `.png`), commitar e
+  rodar `firebase deploy --only hosting` — fica acessível em
+  `https://synciadesk-hosting.web.app/logos/<arquivo>` (ver `logos/README.md`).
 - Login em `admin.synciadesk.com.br` (e-mail precisa estar em `ADMIN_EMAILS`
   tanto em `api-creta/main.py` quanto em `config-api/main.py`) → "Novo
   cliente" → preencher subdomínio, URL da API (impressa no resumo final do
-  script) e a config do Firebase (etapa 11). Salvar já deixa o `/config.js`
-  daquele subdomínio no ar, sem precisar de commit nem `firebase deploy`.
+  script), nome de exibição, URL do logo (passo acima) e a config do
+  Firebase (etapa 11). Salvar já deixa o `/config.js` daquele subdomínio no
+  ar — sem `displayName`/`logoUrl`, a página ficaria com a marca da Creta,
+  então esses dois campos são obrigatórios no formulário. Não precisa de
+  commit nem `firebase deploy` pra essa parte (só pro logo em si, que é
+  arquivo estático).
 
 Nota: o cliente `interno` (`interno-portal`) é uma exceção deliberada — ele
 roda com `ANONYMIZE=true` e **sem** os gatilhos do Cloud Scheduler (dados

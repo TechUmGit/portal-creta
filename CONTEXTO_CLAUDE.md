@@ -81,8 +81,8 @@ pra manter esse passo sob controle direto em vez de automatizado):**
    cota acima).
 2. Ativar Firestore e criar o dataset/tabelas necessárias no BigQuery (mesma
    estrutura de `dados_crus` da Creta — ver seção BigQuery Tables).
-3. Criar os secrets no Secret Manager do novo projeto: `newsapi-key`,
-   `btg-client-id`, `btg-client-secret`, `admin-emails` (lista de e-mails
+3. Criar os secrets no Secret Manager do novo projeto: `btg-client-id`,
+   `btg-client-secret`, `admin-emails` (lista de e-mails
    admin do escritório, separados por vírgula — nunca commitar em código).
    Depois de criar, dar `roles/secretmanager.secretAccessor` pra service
    account do Cloud Run (`<project-number>-compute@developer.gserviceaccount.com`)

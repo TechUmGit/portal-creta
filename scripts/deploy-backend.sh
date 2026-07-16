@@ -5,9 +5,8 @@
 #   ./scripts/deploy-backend.sh creta      # um cliente específico
 #   ./scripts/deploy-backend.sh all        # todos os clientes em clients/*.env
 #
-# Cada cliente precisa ter os secrets newsapi-key, btg-client-id,
-# btg-client-secret e admin-emails já criados no Secret Manager do
-# próprio projeto GCP dele.
+# Cada cliente precisa ter os secrets btg-client-id, btg-client-secret e
+# admin-emails já criados no Secret Manager do próprio projeto GCP dele.
 
 set -euo pipefail
 
@@ -27,7 +26,8 @@ deploy_one() {
     --region "$REGION" \
     --project "$GCP_PROJECT" \
     --set-env-vars "^@^GCP_PROJECT=${GCP_PROJECT}@BQ_DATASET=${BQ_DATASET}@GCS_BUCKET=${GCS_BUCKET}@FIREBASE_PROJECT=${FIREBASE_PROJECT}@ALLOWED_ORIGINS=${ALLOWED_ORIGINS}" \
-    --set-secrets NEWSAPI_KEY=newsapi-key:latest,BTG_CLIENT_ID=btg-client-id:latest,BTG_CLIENT_SECRET=btg-client-secret:latest,ADMIN_EMAILS=admin-emails:latest \
+    --set-secrets BTG_CLIENT_ID=btg-client-id:latest,BTG_CLIENT_SECRET=btg-client-secret:latest,ADMIN_EMAILS=admin-emails:latest \
+    --allow-unauthenticated \
     --quiet
 
   echo "── OK: ${CLIENT_SLUG} ──"

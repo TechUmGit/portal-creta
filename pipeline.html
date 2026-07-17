@@ -1390,7 +1390,10 @@
   // ── Kanban de FUPs ───────────────────────────────────────────────────────
   function renderKanban() {
     const hoje   = new Date(); hoje.setHours(0,0,0,0);
-    const fim7   = new Date(hoje); fim7.setDate(hoje.getDate() + 7);
+    // "Esta semana" = até o domingo da semana atual (não uma janela de 7 dias
+    // corridos) — se hoje é domingo, a semana já termina hoje.
+    const diasAteDomingo = (7 - hoje.getDay()) % 7;
+    const fimSemana = new Date(hoje); fimSemana.setDate(hoje.getDate() + diasAteDomingo + 1);
     const fim30  = new Date(hoje); fim30.setDate(hoje.getDate() + 30);
 
     const buckets = { vencido: [], hoje: [], semana: [], embreve: [], futuro: [], concluido: [] };
@@ -1418,7 +1421,7 @@
       const fup = new Date(c.proximo_fup + 'T00:00:00');
       if      (fup < hoje)   buckets.vencido.push(c);
       else if (+fup === +hoje) buckets.hoje.push(c);
-      else if (fup < fim7)   buckets.semana.push(c);
+      else if (fup < fimSemana) buckets.semana.push(c);
       else if (fup < fim30)  buckets.embreve.push(c);
       else                   buckets.futuro.push(c);
     });

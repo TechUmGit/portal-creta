@@ -359,11 +359,12 @@
               <th class="sortable num" data-col="pm"    onclick="sortBy('pm')">PM<i class="sort-icon">↕</i></th>
               <th class="sortable num" data-col="Preco" onclick="sortBy('Preco')">Cotação<i class="sort-icon">↕</i></th>
               <th class="sortable num" data-col="valor" onclick="sortBy('valor')">Valor (R$)<i class="sort-icon">↕</i></th>
+              <th class="sortable num" data-col="plpct" onclick="sortBy('plpct')">P&amp;L %<i class="sort-icon">↕</i></th>
               <th class="sortable num" data-col="pl"    onclick="sortBy('pl')">P&amp;L (R$)<i class="sort-icon">↕</i></th>
             </tr>
           </thead>
           <tbody id="tabelaOpcoes">
-            <tr><td colspan="15" class="empty-state"><div style="display:flex;flex-direction:column;align-items:center;gap:12px;padding:40px 0;"><div class="spinner"></div><div style="font-size:13px;color:#9ca3af;font-weight:500;">Carregando...</div></div></td></tr>
+            <tr><td colspan="16" class="empty-state"><div style="display:flex;flex-direction:column;align-items:center;gap:12px;padding:40px 0;"><div class="spinner"></div><div style="font-size:13px;color:#9ca3af;font-weight:500;">Carregando...</div></div></td></tr>
           </tbody>
         </table>
       </div>
@@ -455,7 +456,7 @@
 
   function showErro(msg) {
     document.getElementById('tabelaOpcoes').innerHTML =
-      `<tr><td colspan="15" style="text-align:center;padding:40px;color:#dc2626">${msg}</td></tr>`;
+      `<tr><td colspan="16" style="text-align:center;padding:40px;color:#dc2626">${msg}</td></tr>`;
   }
 
   // ── Parsing InfoExtra ─────────────────────────────────────────────────────
@@ -475,6 +476,15 @@
     const { pm } = parseInfoExtra(row.InfoExtra);
     if (pm === null || row.Quantidade == null || row.ValorBruto == null) return null;
     return row.ValorBruto - pm * row.Quantidade;
+  }
+
+  function calcPLPercent(row) {
+    const { pm } = parseInfoExtra(row.InfoExtra);
+    const pl = calcPL(row);
+    if (pl === null || pm === null || !row.Quantidade) return null;
+    const custoBase = Math.abs(pm * row.Quantidade);
+    if (!custoBase) return null;
+    return (pl / custoBase) * 100;
   }
 
   function diasAteVencimento(venc) {
@@ -599,6 +609,7 @@
       case 'Preco':      return row.Preco ?? -Infinity;
       case 'valor':      return Math.abs(row.ValorBruto || 0);
       case 'pl':         return calcPL(row) ?? -Infinity;
+      case 'plpct':      return calcPLPercent(row) ?? -Infinity;
       default:           return '';
     }
   }
@@ -642,7 +653,7 @@
     const tbody = document.getElementById('tabelaOpcoes');
 
     if (!dados.length) {
-      tbody.innerHTML = `<tr><td colspan="15">
+      tbody.innerHTML = `<tr><td colspan="16">
         <div class="empty-state">
           <div class="empty-state-icon">🔍</div>
           <div class="empty-state-title">Nenhuma posição encontrada</div>
@@ -675,6 +686,14 @@
         totalPL += pl;
         plStr   = (pl >= 0 ? '+R$ ' : '-R$ ') + fmtNum(Math.abs(pl));
         plClass = pl >= 0 ? 'pl-pos' : 'pl-neg';
+      }
+
+      // P&L %
+      const plPct = calcPLPercent(row);
+      let plPctStr = '—', plPctClass = '';
+      if (plPct !== null) {
+        plPctStr   = (plPct >= 0 ? '+' : '') + plPct.toFixed(1) + '%';
+        plPctClass = plPct >= 0 ? 'pl-pos' : 'pl-neg';
       }
 
       // Exposição
@@ -712,6 +731,7 @@
         <td class="num" style="color:#6b7280">${pm !== null ? fmtNum4(pm) : '—'}</td>
         <td class="num" style="color:#374151">${row.Preco != null ? fmtNum4(row.Preco) : '—'}</td>
         <td class="num">${valorStr}</td>
+        <td class="num ${plPctClass}">${plPctStr}</td>
         <td class="num ${plClass}">${plStr}</td>
       </tr>`;
     });

@@ -673,8 +673,9 @@
           </div>
           <div class="form-group" id="fAssessorGroup" style="display:none">
             <label class="form-label">Responsável (assessor)</label>
-            <input class="form-control" id="fAssessor" list="assessorOptions" placeholder="Nome do assessor responsável">
-            <datalist id="assessorOptions"></datalist>
+            <select class="form-control" id="fAssessor">
+              <option value="">— Selecione —</option>
+            </select>
           </div>
         </div>
       </div>
@@ -929,6 +930,7 @@
 
     _token = await user.getIdToken();
     await carregarPipeline();
+    if (_isAdmin) carregarUsuariosParaAssessor();
   });
 
   // ── Popular filtro de assessor a partir dos clientes carregados ──────────
@@ -946,10 +948,46 @@
     });
     // Restaura seleção anterior se ainda existir
     if (valorAtual) sel.value = valorAtual;
+  }
 
-    // Sugestões do campo "Responsável" no modal (admin) — mesma lista de nomes.
-    const datalist = document.getElementById('assessorOptions');
-    datalist.innerHTML = nomes.map(a => `<option value="${esc(a)}">`).join('');
+  // ── Usuários (pra "Responsável" no modal — precisa de uid, não só nome) ──
+  let _usuarios = [];
+  async function carregarUsuariosParaAssessor() {
+    try {
+      const res = await fetch(`${API_URL}/api/usuarios`, { headers: { Authorization: `Bearer ${_token}` } });
+      if (!res.ok) return;
+      const json = await res.json();
+      _usuarios = json.usuarios || [];
+      const sel = document.getElementById('fAssessor');
+      sel.innerHTML = '<option value="">— Selecione —</option>' + _usuarios.map(u =>
+        `<option value="${esc(u.uid)}">${esc(u.assessor_name || u.nome || u.email)}</option>`
+      ).join('');
+    } catch (e) {
+      console.warn('Não consegui carregar usuários para o campo Responsável:', e);
+    }
+  }
+
+  // Seleciona o assessor certo no dropdown; se o uid salvo não bater com
+  // nenhum usuário atual (ex: usuário removido), mostra o nome antigo mesmo
+  // assim pra não parecer que o campo está vazio.
+  function setAssessorSelect(uid, nome) {
+    const sel = document.getElementById('fAssessor');
+    if (!sel) return;
+    if (uid && [...sel.options].some(o => o.value === uid)) {
+      sel.value = uid;
+    } else if (nome) {
+      let opt = [...sel.options].find(o => o.dataset.legado === '1');
+      if (!opt) {
+        opt = document.createElement('option');
+        opt.dataset.legado = '1';
+        sel.appendChild(opt);
+      }
+      opt.value = '__legado__';
+      opt.textContent = `${nome} (sem usuário vinculado)`;
+      sel.value = '__legado__';
+    } else {
+      sel.value = '';
+    }
   }
 
   function aplicarFiltroAssessor() {
@@ -1259,7 +1297,7 @@
     set('fAucBTG',         c.auc_btg);
     set('fPlanoAcao',      c.plano_acao);
     set('fClienteRevertido', c.cliente_revertido);
-    set('fAssessor',       c.assessor_name);
+    setAssessorSelect(c.assessor_uid, c.assessor_name);
     const prods = c.produtos || [];
     ['fProd1','fProd2','fProd3','fProd4','fProd5'].forEach((id, i) => set(id, prods[i] || ''));
     set('fUltimoContato',  c.ultimo_contato);
@@ -1273,6 +1311,18 @@
     const b = parseMonetary('fAucBTG')    || 0;
     const pot = g - b;
     document.getElementById('aucPotLabel').textContent = pot >= 0 ? fmtMoedaFull(pot) : '—';
+  }
+
+  // Traduz a seleção do dropdown "Responsável" em {uid, nome} pra enviar à API.
+  // Se nada foi mudado (segue no valor "legado" ou vazio), devolve null nos
+  // dois — o backend preserva o valor atual quando recebe null.
+  function coletarAssessor() {
+    if (!_isAdmin) return { assessor_uid: null, assessor_name: null };
+    const val = document.getElementById('fAssessor')?.value;
+    if (!val || val === '__legado__') return { assessor_uid: null, assessor_name: null };
+    const u = _usuarios.find(x => x.uid === val);
+    if (!u) return { assessor_uid: null, assessor_name: null };
+    return { assessor_uid: u.uid, assessor_name: u.assessor_name || u.nome || u.email };
   }
 
   function coletarForm() {
@@ -1299,7 +1349,7 @@
       ultimo_contato:    get('fUltimoContato'),
       proximo_fup:       get('fProximoFup'),
       observacoes:       get('fObs'),
-      assessor_name:     _isAdmin ? get('fAssessor') : null,
+      ...coletarAssessor(),
     };
   }
 

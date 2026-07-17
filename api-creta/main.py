@@ -2382,6 +2382,7 @@ class PipelineCliente(BaseModel):
     proximo_fup:        Optional[str]  = None   # ISO date
     observacoes:        Optional[str]  = None
     assessor_name:      Optional[str]  = None   # só admin/backoffice pode alterar (ver pipeline_atualizar)
+    assessor_uid:       Optional[str]  = None   # idem — controla o filtro "meus clientes" do assessor
 
 
 def _pipeline_col():
@@ -2470,9 +2471,10 @@ async def pipeline_atualizar(
             raise HTTPException(status_code=403, detail="Sem permissão.")
 
         dados = {k: v for k, v in body.dict().items() if v is not None}
-        # Responsável pelo cliente só pode ser alterado por admin/backoffice.
-        if "assessor_name" in dados and role not in PRIVILEGED_ROLES:
-            dados.pop("assessor_name")
+        # Responsável pelo cliente (nome + uid) só pode ser alterado por admin/backoffice.
+        if role not in PRIVILEGED_ROLES:
+            dados.pop("assessor_name", None)
+            dados.pop("assessor_uid", None)
         dados["updated_at"] = datetime.utcnow().isoformat()
 
         auc_global = body.auc_global or doc.to_dict().get("auc_global") or 0

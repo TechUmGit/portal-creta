@@ -16,8 +16,18 @@ Estrutura de cada item:
 
 from __future__ import annotations
 
+from datetime import date
+
+# Vencimentos abaixo desse valor não contam como prioridade (ruído).
+VALOR_MINIMO_VENCIMENTO = 3_000
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _dias_ate_fim_da_semana() -> int:
+    """Quantos dias faltam até domingo da semana atual (0 se hoje já é domingo)."""
+    hoje = date.today()
+    return (6 - hoje.weekday()) % 7  # weekday(): segunda=0 ... domingo=6
 
 def _fmt(valor: float) -> str:
     """Formata valor em R$ com separadores brasileiros (sem centavos)."""
@@ -82,13 +92,20 @@ def regra_vencimentos(dados: list[dict]) -> list[dict]:
     """
     dados: linhas com Conta, cliente, assessor, dias_para_vencer, valor
 
-    Gera até 2 itens: um para vencimentos em 7d (alta) e um para 8-30d (media).
+    Gera até 2 itens: um para vencimentos "esta semana" (até domingo da
+    semana atual — não uma janela de 7 dias corridos) e um para 8-30 dias.
+    Vencimentos abaixo de VALOR_MINIMO_VENCIMENTO são ignorados (ruído).
     """
     if not dados:
         return []
 
-    itens_7  = [r for r in dados if (r["dias_para_vencer"] or 999) <= 7]
-    itens_30 = [r for r in dados if 7 < (r["dias_para_vencer"] or 999) <= 30]
+    dados = [r for r in dados if (r.get("valor") or 0) >= VALOR_MINIMO_VENCIMENTO]
+    if not dados:
+        return []
+
+    fim_semana = _dias_ate_fim_da_semana()
+    itens_7  = [r for r in dados if (r["dias_para_vencer"] or 999) <= fim_semana]
+    itens_30 = [r for r in dados if fim_semana < (r["dias_para_vencer"] or 999) <= 30]
 
     resultado = []
 
@@ -97,7 +114,7 @@ def regra_vencimentos(dados: list[dict]) -> list[dict]:
         mais_proximo = min(itens_7, key=lambda r: r["dias_para_vencer"] or 999)
         n = len(itens_7)
         descricao = (
-            f"{n} título(s) vence(m) em até 7 dias, totalizando {_fmt(total)}. "
+            f"{n} título(s) vence(m) esta semana, totalizando {_fmt(total)}. "
             f"Mais próximo: {mais_proximo['cliente'] or mais_proximo['Conta']} "
             f"em {mais_proximo['dias_para_vencer']}d."
         )

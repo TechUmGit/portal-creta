@@ -958,6 +958,7 @@
       if (_isAdmin) popularFiltroAssessor();
       atualizarKPIs();
       renderTabela();
+      renderKanban();
       // Abre modal automaticamente se vier de ?conta= na URL
       const paramConta = new URLSearchParams(window.location.search).get('conta');
       if (paramConta) {

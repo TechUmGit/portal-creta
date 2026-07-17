@@ -235,7 +235,7 @@
   <div class="topbar-divider"></div>
   <div class="search-bar">
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-    <input type="text" placeholder="Busque por conta, produto, assessor...">
+    <input type="text" id="topbarSearch" placeholder="Busque por conta, cliente ou assessor...">
   </div>
   <div class="topbar-actions">
     <div class="topbar-divider"></div>
@@ -535,6 +535,12 @@
       if (!resp.ok) throw new Error('Status ' + resp.status);
       dadosRaw = await resp.json();
       processarDados();
+      // Chegou de outra página com ?busca= (ex: topo do dashboard)?
+      const buscaUrl = new URLSearchParams(window.location.search).get('busca');
+      if (buscaUrl) {
+        document.getElementById('searchInput').value = buscaUrl;
+        document.getElementById('topbarSearch').value = buscaUrl;
+      }
       renderizar();
       hideOverlay();
     } catch(e) {
@@ -604,7 +610,10 @@
     const classe   = document.getElementById('filtroClasse').value;
 
     return Object.values(contasMap).filter(c => {
-      if (search   && !c.conta.toLowerCase().includes(search) && !c.cliente.toLowerCase().includes(search)) return false;
+      if (search &&
+          !c.conta.toLowerCase().includes(search) &&
+          !c.cliente.toLowerCase().includes(search) &&
+          !(c.assessor || '').toLowerCase().includes(search)) return false;
       if (assessor && c.assessor !== assessor) return false;
       if (perfil   && c.perfil   !== perfil)   return false;
       if (classe   && !c.classes[classe])       return false;
@@ -765,6 +774,12 @@
   document.getElementById('searchInput').addEventListener('input', renderizar);
   ['filtroAssessor','filtroPerfil','filtroClasse'].forEach(id =>
     document.getElementById(id).addEventListener('change', renderizar));
+
+  // Busca do topbar (mesma página) → espelha na busca real e filtra na hora.
+  document.getElementById('topbarSearch').addEventListener('input', function() {
+    document.getElementById('searchInput').value = this.value;
+    renderizar();
+  });
 
   function logout()         { auth.signOut().then(() => window.location.replace('index.html')); }
   function toggleSidebar()  { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('overlay').classList.toggle('open'); }

@@ -227,7 +227,7 @@
 
   <div class="search-bar">
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-    <input type="text" placeholder="Busque por conta, produto, assessor...">
+    <input type="text" id="topbarSearch" placeholder="Busque por conta, cliente ou assessor...">
   </div>
 
   <div class="topbar-actions">
@@ -711,6 +711,14 @@
   function toggleDropdown() {
     document.getElementById('userChip').classList.toggle('open');
   }
+
+  // ── Busca do topbar → leva pro Meu Portfólio já filtrado ──────────────────
+  document.getElementById('topbarSearch').addEventListener('keydown', function(e) {
+    if (e.key !== 'Enter') return;
+    const termo = this.value.trim();
+    if (!termo) return;
+    window.location.href = 'posicoes.html?busca=' + encodeURIComponent(termo);
+  });
   document.addEventListener('click', function(e) {
     const chip = document.getElementById('userChip');
     if (chip && !chip.contains(e.target)) chip.classList.remove('open');

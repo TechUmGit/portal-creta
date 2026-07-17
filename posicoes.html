@@ -202,6 +202,10 @@
     .prod-detail-row { display: none; }
     .prod-detail-row.visible { display: table-row; }
     .prod-loading { text-align: center; padding: 60px; color: #9ca3af; }
+    .dias-badge { display: inline-block; font-size: 10px; font-weight: 600; padding: 1px 5px; border-radius: 3px; margin-left: 4px; }
+    .dias-danger { background: #fef2f2; color: #dc2626; }
+    .dias-warn   { background: #fef3c7; color: #92400e; }
+    .dias-ok     { background: #f0fdf4; color: #15803d; }
     tbody tr.clickable { cursor: pointer; }
     tbody tr.clickable:hover td { background: #f0f9ff; }
   </style>
@@ -697,7 +701,7 @@
     document.getElementById('classeList').innerHTML = classes.map((cl, i) => {
       const auc = totals[cl]||0;
       const pct = total ? ((auc/total)*100).toFixed(1) : '0.0';
-      return `<div class="classe-row">
+      return `<div class="classe-row" style="cursor:pointer" onclick="abrirModalClasse('${cl.replace(/'/g, "\\'")}')">
         <span class="classe-dot" style="background:${CORES[i%CORES.length]}"></span>
         <span class="classe-nome">${cl}</span>
         <span class="classe-auc">${fmtM(auc)}</span>
@@ -1121,9 +1125,92 @@
     });
   }
 
+  // ── Modal Detalhe por Classe ─────────────────────────────────────────────
+  async function abrirModalClasse(classe) {
+    const overlay = document.getElementById('classeOverlay');
+    document.getElementById('classeTitle').textContent = classe;
+    document.getElementById('classeSub').textContent   = 'Carregando…';
+    document.getElementById('classeBody').innerHTML    =
+      '<div class="prod-loading"><div class="spinner" style="margin:0 auto 12px"></div>Carregando…</div>';
+    overlay.classList.add('open');
+
+    try {
+      const token = await getIdToken();
+      const resp  = await fetch(`${API_URL}/api/posicoes/classe/${encodeURIComponent(classe)}`, {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const { itens } = await resp.json();
+      renderClasseModal(classe, itens);
+    } catch(e) {
+      document.getElementById('classeBody').innerHTML =
+        `<div class="prod-loading" style="color:#dc2626">Erro ao carregar: ${e.message}</div>`;
+    }
+  }
+
+  function fecharModalClasse() {
+    document.getElementById('classeOverlay').classList.remove('open');
+  }
+
+  function diasAte(iso) {
+    if (!iso) return null;
+    const hoje = new Date(); hoje.setHours(0,0,0,0);
+    const d = new Date(iso + 'T00:00:00');
+    return Math.round((d - hoje) / 86400000);
+  }
+
+  function renderClasseModal(classe, itens) {
+    const fmtM = v => (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const fmtD = s => { if (!s) return '—'; const [y,m,d] = s.split('-'); return `${d}/${m}/${y}`; };
+
+    const total = itens.reduce((s, i) => s + (i.ValorBruto || 0), 0);
+    document.getElementById('classeSub').textContent =
+      `${itens.length} posiç${itens.length !== 1 ? 'ões' : 'ão'} · Total ${fmtM(total)}`;
+
+    if (!itens.length) {
+      document.getElementById('classeBody').innerHTML =
+        '<div class="prod-loading">Nenhuma posição encontrada nesta classe.</div>';
+      return;
+    }
+
+    // itens já vem ordenado do maior pro menor valor (feito no backend)
+    const temVencimento = itens.some(i => i.Vencimento);
+
+    const rows = itens.map(i => {
+      const dias = diasAte(i.Vencimento);
+      let diasCel = '<span style="color:#d1d5db">—</span>';
+      if (dias !== null) {
+        const cls = dias <= 7 ? 'dias-danger' : dias <= 30 ? 'dias-warn' : 'dias-ok';
+        diasCel = `<span class="dias-badge ${cls}">${dias >= 0 ? dias + 'd' : 'vencido'}</span>`;
+      }
+      return `<tr>
+        <td style="font-family:monospace;font-size:11px">${i.Conta || '—'}</td>
+        <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${i.cliente || ''}">${i.cliente || '—'}</td>
+        <td style="max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${i.Nome || ''}">${i.Nome || '—'}</td>
+        ${temVencimento ? `<td style="font-size:11px">${fmtD(i.Vencimento)} ${diasCel}</td>` : ''}
+        <td class="num">${fmtM(i.ValorBruto)}</td>
+      </tr>`;
+    }).join('');
+
+    document.getElementById('classeBody').innerHTML = `
+      <table class="prod-table">
+        <thead><tr>
+          <th>Conta</th>
+          <th>Cliente</th>
+          <th>Produto</th>
+          ${temVencimento ? '<th>Vencimento / dias até cair</th>' : ''}
+          <th class="num">Valor</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  }
+
   // Fecha ao clicar fora do modal
   document.getElementById('prodOverlay').addEventListener('click', function(e) {
     if (e.target === this) fecharProdutos();
+  });
+  document.getElementById('classeOverlay').addEventListener('click', function(e) {
+    if (e.target === this) fecharModalClasse();
   });
 </script>
 
@@ -1138,6 +1225,22 @@
       <button class="prod-close" onclick="fecharProdutos()">✕</button>
     </div>
     <div class="prod-body" id="prodBody">
+      <div class="prod-loading">Carregando…</div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DETALHE POR CLASSE -->
+<div class="prod-overlay" id="classeOverlay">
+  <div class="prod-modal">
+    <div class="prod-header">
+      <div>
+        <div class="prod-title" id="classeTitle">—</div>
+        <div class="prod-sub"  id="classeSub"></div>
+      </div>
+      <button class="prod-close" onclick="fecharModalClasse()">✕</button>
+    </div>
+    <div class="prod-body" id="classeBody">
       <div class="prod-loading">Carregando…</div>
     </div>
   </div>

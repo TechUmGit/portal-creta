@@ -833,6 +833,63 @@ async def posicao_produtos(
     return {"conta": conta, "produtos": produtos}
 
 
+@app.get("/api/posicoes/classe/{classe}")
+async def posicoes_por_classe(
+    classe: str,
+    authorization: Optional[str] = Header(default=None),
+):
+    """
+    Detalha as posições de uma classe específica (ex: "Provento a Receber"),
+    linha a linha (sem agregar por conta), ordenadas do maior para o menor
+    valor. Traz Vencimento quando a posição tiver (recebíveis, RF, COE) —
+    o frontend usa isso pra calcular "dias até cair".
+    Admin vê todas as contas; assessor só as suas.
+    """
+    token_data    = await verificar_token(authorization)
+    role          = token_data.get("role", "assessor")
+    assessor_name = token_data.get("assessor_name")
+    is_admin      = role in PRIVILEGED_ROLES
+    forced_assessor = None if is_admin else assessor_name
+
+    qp = [ScalarQueryParameter("classe", "STRING", classe)]
+    if forced_assessor:
+        qp.append(ScalarQueryParameter("assessor", "STRING", forced_assessor.strip()))
+        ma_join = f"INNER JOIN {_mapa_assessor_sq()} ma ON SAFE_CAST(TRIM(p.Conta) AS INT64) = ma.Conta AND UPPER(ma.Assessor) = UPPER(@assessor)"
+    else:
+        ma_join = f"LEFT JOIN {_mapa_assessor_sq()} ma ON SAFE_CAST(TRIM(p.Conta) AS INT64) = ma.Conta"
+
+    sql = f"""
+        WITH ultima_data AS (
+            SELECT MAX(DATE(Data)) AS max_data
+            FROM {TABLE_POSICAO}
+        ),
+        nomes AS (
+            SELECT Conta AS conta_num, MAX(Cliente) AS cliente
+            FROM {TABLE}
+            WHERE Cliente IS NOT NULL AND Cliente != ''
+            GROUP BY Conta
+        )
+        SELECT
+            TRIM(p.Conta) AS Conta,
+            COALESCE(n.cliente, '')                                    AS cliente,
+            UPPER(COALESCE(ma.Assessor, ''))                           AS assessor,
+            COALESCE(p.Nome, '')                                       AS Nome,
+            COALESCE(FORMAT_DATE('%Y-%m-%d', DATE(p.Vencimento)), '')  AS Vencimento,
+            ROUND(COALESCE(p.ValorBruto, 0), 2)                       AS ValorBruto
+        FROM {TABLE_POSICAO} p
+        JOIN ultima_data ON DATE(p.Data) = ultima_data.max_data
+        {ma_join}
+        LEFT JOIN nomes n ON SAFE_CAST(TRIM(p.Conta) AS INT64) = n.conta_num
+        WHERE p.Classe = @classe
+        ORDER BY p.ValorBruto DESC
+    """
+
+    rows_raw = list(bq.query(sql, job_config=QueryJobConfig(query_parameters=qp)).result())
+    itens = [dict(r) for r in rows_raw]
+    log.info(f"Posições classe={classe}: {len(itens)} itens")
+    return {"classe": classe, "itens": itens}
+
+
 @app.get("/api/opcoes")
 async def opcoes_endpoint(
     authorization: Optional[str] = Header(default=None),

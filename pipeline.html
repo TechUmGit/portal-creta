@@ -671,6 +671,11 @@
               <option value="Concluido">✅ Concluído — cliente convertido</option>
             </select>
           </div>
+          <div class="form-group" id="fAssessorGroup" style="display:none">
+            <label class="form-label">Responsável (assessor)</label>
+            <input class="form-control" id="fAssessor" list="assessorOptions" placeholder="Nome do assessor responsável">
+            <datalist id="assessorOptions"></datalist>
+          </div>
         </div>
       </div>
 
@@ -916,6 +921,7 @@
         document.getElementById('sidebarSistema').style.display = 'block';
         document.getElementById('adminFilter').classList.add('visible');
         document.getElementById('thAssessor').style.display = '';
+        document.getElementById('fAssessorGroup').style.display = '';
       }
     } catch(e) {
       document.getElementById('userNameEl').textContent = email.split('@')[0];
@@ -940,6 +946,10 @@
     });
     // Restaura seleção anterior se ainda existir
     if (valorAtual) sel.value = valorAtual;
+
+    // Sugestões do campo "Responsável" no modal (admin) — mesma lista de nomes.
+    const datalist = document.getElementById('assessorOptions');
+    datalist.innerHTML = nomes.map(a => `<option value="${esc(a)}">`).join('');
   }
 
   function aplicarFiltroAssessor() {
@@ -1209,7 +1219,7 @@
   function limparForm() {
     ['fNome','fContaAntiga','fOrigem','fTelefone','fEmail',
      'fAucGlobal','fNNM','fRF','fRV','fFundos','fPrev','fCOE',
-     'fRanking','fPipe',
+     'fRanking','fPipe','fAssessor',
      'fPrimeiroContato','fRetornoPositivo','fStatus','fContaBTG','fPipeQuente','fAucBTG',
      'fPlanoAcao','fClienteRevertido',
      'fProd1','fProd2','fProd3','fProd4','fProd5',
@@ -1249,6 +1259,7 @@
     set('fAucBTG',         c.auc_btg);
     set('fPlanoAcao',      c.plano_acao);
     set('fClienteRevertido', c.cliente_revertido);
+    set('fAssessor',       c.assessor_name);
     const prods = c.produtos || [];
     ['fProd1','fProd2','fProd3','fProd4','fProd5'].forEach((id, i) => set(id, prods[i] || ''));
     set('fUltimoContato',  c.ultimo_contato);
@@ -1288,6 +1299,7 @@
       ultimo_contato:    get('fUltimoContato'),
       proximo_fup:       get('fProximoFup'),
       observacoes:       get('fObs'),
+      assessor_name:     _isAdmin ? get('fAssessor') : null,
     };
   }
 

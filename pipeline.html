@@ -255,6 +255,9 @@
     .col-futuro   .kanban-col-header { background: #f1f5f9; }
     .col-futuro   .kanban-col-title  { color: #475569; }
     .col-futuro   .kanban-col-count  { background: #e2e8f0; color: #475569; }
+    .col-concluido .kanban-col-header { background: #d1fae5; }
+    .col-concluido .kanban-col-title  { color: #065f46; }
+    .col-concluido .kanban-col-count  { background: #a7f3d0; color: #065f46; }
 
     .fup-card { background: #fff; border-radius: 10px; border: 1px solid #e8ebf2; padding: 14px; cursor: pointer; transition: all 0.15s; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
     .fup-card:hover { border-color: #0bb5d5; box-shadow: 0 4px 12px rgba(11,181,213,0.12); transform: translateY(-1px); }
@@ -454,11 +457,13 @@
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
           </button>
           <div class="ms-panel">
-            <label class="ms-item"><input type="checkbox" value="Quente"    onchange="onMsChange('pipe')"> 🔴 Quente</label>
-            <label class="ms-item"><input type="checkbox" value="Morno"     onchange="onMsChange('pipe')"> 🟠 Morno</label>
-            <label class="ms-item"><input type="checkbox" value="Frio"      onchange="onMsChange('pipe')"> 🔵 Frio</label>
-            <label class="ms-item"><input type="checkbox" value="LEAD"      onchange="onMsChange('pipe')"> 🟣 Lead</label>
-            <label class="ms-item"><input type="checkbox" value="Concluido" onchange="onMsChange('pipe')"> ✅ Concluído</label>
+            <label class="ms-item ms-item-all"><input type="checkbox" id="msPipeAll" onchange="toggleMsAll('pipe', this.checked)" checked> <strong>Marcar todos</strong></label>
+            <div class="ms-sep"></div>
+            <label class="ms-item"><input type="checkbox" value="Quente"    onchange="onMsChange('pipe')" checked> 🔴 Quente</label>
+            <label class="ms-item"><input type="checkbox" value="Morno"     onchange="onMsChange('pipe')" checked> 🟠 Morno</label>
+            <label class="ms-item"><input type="checkbox" value="Frio"      onchange="onMsChange('pipe')" checked> 🔵 Frio</label>
+            <label class="ms-item"><input type="checkbox" value="LEAD"      onchange="onMsChange('pipe')" checked> 🟣 Lead</label>
+            <label class="ms-item"><input type="checkbox" value="Concluido" onchange="onMsChange('pipe')" checked> ✅ Concluído</label>
           </div>
         </div>
 
@@ -470,11 +475,14 @@
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
           </button>
           <div class="ms-panel">
-            <label class="ms-item"><input type="checkbox" value="Com certeza"   onchange="onMsChange('rank')"> ✅ Com certeza</label>
-            <label class="ms-item"><input type="checkbox" value="Possivelmente" onchange="onMsChange('rank')"> 🤔 Possivelmente</label>
-            <label class="ms-item"><input type="checkbox" value="Stand By"      onchange="onMsChange('rank')"> ⏸ Stand By</label>
-            <label class="ms-item"><input type="checkbox" value="Desafio"       onchange="onMsChange('rank')"> ⚡ Desafio</label>
-            <label class="ms-item"><input type="checkbox" value="Não Vem"       onchange="onMsChange('rank')"> ❌ Não Vem</label>
+            <label class="ms-item ms-item-all"><input type="checkbox" id="msRankAll" onchange="toggleMsAll('rank', this.checked)" checked> <strong>Marcar todos</strong></label>
+            <div class="ms-sep"></div>
+            <label class="ms-item"><input type="checkbox" value="Com certeza"   onchange="onMsChange('rank')" checked> ✅ Com certeza</label>
+            <label class="ms-item"><input type="checkbox" value="Possivelmente" onchange="onMsChange('rank')" checked> 🤔 Possivelmente</label>
+            <label class="ms-item"><input type="checkbox" value="Stand By"      onchange="onMsChange('rank')" checked> ⏸ Stand By</label>
+            <label class="ms-item"><input type="checkbox" value="Desafio"       onchange="onMsChange('rank')" checked> ⚡ Desafio</label>
+            <label class="ms-item"><input type="checkbox" value="Não Vem"       onchange="onMsChange('rank')" checked> ❌ Não Vem</label>
+            <label class="ms-item"><input type="checkbox" value=""              onchange="onMsChange('rank')" checked> — Sem ranking</label>
           </div>
         </div>
         <div style="display:flex;gap:8px;margin-left:auto">
@@ -565,6 +573,14 @@
             <span class="kanban-col-count" id="cnt-futuro">0</span>
           </div>
           <div class="kanban-col-body" id="col-futuro"><div class="kanban-empty">Nenhum</div></div>
+        </div>
+
+        <div class="kanban-col col-concluido">
+          <div class="kanban-col-header">
+            <span class="kanban-col-title">✅ Concluídos</span>
+            <span class="kanban-col-count" id="cnt-concluido">0</span>
+          </div>
+          <div class="kanban-col-body" id="col-concluido"><div class="kanban-empty">Nenhum</div></div>
         </div>
 
       </div>
@@ -866,8 +882,12 @@
   let _isAdmin   = false;
   let _clientes  = [];
   let _filtroAssessor = '';
-  let _filtroPipe     = [];   // array de valores selecionados
-  let _filtroRanking  = [];   // array de valores selecionados
+  // Começam com tudo marcado (mesmo estado inicial dos checkboxes no HTML) —
+  // desmarcar um item no dropdown tira ele da lista.
+  const PIPE_VALORES = ['Quente', 'Morno', 'Frio', 'LEAD', 'Concluido'];
+  const RANK_VALORES = ['Com certeza', 'Possivelmente', 'Stand By', 'Desafio', 'Não Vem', ''];
+  let _filtroPipe     = [...PIPE_VALORES];
+  let _filtroRanking  = [...RANK_VALORES];
   let _sortCol        = null;
   let _sortDir        = 'asc';
   let _editId    = null;
@@ -925,6 +945,7 @@
   function aplicarFiltroAssessor() {
     _filtroAssessor = document.getElementById('assessorFilter').value;
     renderTabela();
+    renderKanban();
   }
 
   // ── Carregar pipeline ────────────────────────────────────────────────────
@@ -990,38 +1011,57 @@
     }
   });
 
+  // Marca/desmarca todos os itens do dropdown de uma vez.
+  function toggleMsAll(tipo, marcarTudo) {
+    const wrapId = tipo === 'pipe' ? 'msPipe' : 'msRank';
+    document.querySelectorAll(`#${wrapId} input:not(#${wrapId}All)`).forEach(i => { i.checked = marcarTudo; });
+    onMsChange(tipo);
+  }
+
   function onMsChange(tipo) {
     if (tipo === 'pipe') {
-      const vals = [...document.querySelectorAll('#msPipe input:checked')].map(i => i.value);
+      const todos = [...document.querySelectorAll('#msPipe input:not(#msPipeAll)')];
+      const vals  = todos.filter(i => i.checked).map(i => i.value);
       _filtroPipe = vals;
+      document.getElementById('msPipeAll').checked = vals.length === todos.length;
+      document.getElementById('msPipeAll').indeterminate = vals.length > 0 && vals.length < todos.length;
       const badge = document.getElementById('msPipeBadge');
       const label = document.getElementById('msPipeLabel');
-      if (vals.length) {
-        badge.textContent = vals.length; badge.style.display = '';
-        label.textContent = vals.join(', ');
-      } else {
+      if (vals.length === todos.length) {
         badge.style.display = 'none';
         label.textContent = 'Todos os Pipes';
-      }
-    } else {
-      const vals = [...document.querySelectorAll('#msRank input:checked')].map(i => i.value);
-      _filtroRanking = vals;
-      const badge = document.getElementById('msRankBadge');
-      const label = document.getElementById('msRankLabel');
-      if (vals.length) {
+      } else if (vals.length === 0) {
+        badge.style.display = 'none';
+        label.textContent = 'Nenhum selecionado';
+      } else {
         badge.textContent = vals.length; badge.style.display = '';
         label.textContent = vals.join(', ');
-      } else {
+      }
+    } else {
+      const todos = [...document.querySelectorAll('#msRank input:not(#msRankAll)')];
+      const vals  = todos.filter(i => i.checked).map(i => i.value);
+      _filtroRanking = vals;
+      document.getElementById('msRankAll').checked = vals.length === todos.length;
+      document.getElementById('msRankAll').indeterminate = vals.length > 0 && vals.length < todos.length;
+      const badge = document.getElementById('msRankBadge');
+      const label = document.getElementById('msRankLabel');
+      if (vals.length === todos.length) {
         badge.style.display = 'none';
         label.textContent = 'Todos os Rankings';
+      } else if (vals.length === 0) {
+        badge.style.display = 'none';
+        label.textContent = 'Nenhum selecionado';
+      } else {
+        badge.textContent = vals.length; badge.style.display = '';
+        label.textContent = vals.join(', ');
       }
     }
     renderTabela();
   }
 
   // ── Render tabela ────────────────────────────────────────────────────────
-  function setFiltroPipe(val) { _filtroPipe = val ? [val] : []; renderTabela(); }
-  function setFiltroRank(val) { _filtroRanking = val ? [val] : []; renderTabela(); }
+  function setFiltroPipe(val) { _filtroPipe = val ? [val] : [...PIPE_VALORES]; renderTabela(); }
+  function setFiltroRank(val) { _filtroRanking = val ? [val] : [...RANK_VALORES]; renderTabela(); }
 
   const SORT_KEYS = {
     'Nome': 'nome',
@@ -1051,8 +1091,8 @@
   function renderTabela() {
     const busca = (document.getElementById('searchInput').value || '').toLowerCase();
     let dados = _clientes.filter(c => {
-      if (_filtroPipe.length    && !_filtroPipe.includes(c.pipe))       return false;
-      if (_filtroRanking.length && !_filtroRanking.includes(c.ranking)) return false;
+      if (!_filtroPipe.includes(c.pipe || 'LEAD'))   return false;
+      if (!_filtroRanking.includes(c.ranking || '')) return false;
       if (_filtroAssessor && (c.assessor_name || '').toUpperCase() !== _filtroAssessor.toUpperCase()) return false;
       if (busca && !(c.nome || '').toLowerCase().includes(busca)) return false;
       return true;
@@ -1352,17 +1392,26 @@
     const fim7   = new Date(hoje); fim7.setDate(hoje.getDate() + 7);
     const fim30  = new Date(hoje); fim30.setDate(hoje.getDate() + 30);
 
-    const buckets = { vencido: [], hoje: [], semana: [], embreve: [], futuro: [] };
+    const buckets = { vencido: [], hoje: [], semana: [], embreve: [], futuro: [], concluido: [] };
 
-    // Filtra pelo assessor selecionado (admin)
+    // Filtra pelo assessor selecionado (admin) — clientes concluídos entram
+    // direto no bucket deles, com ou sem próximo FUP; os demais só entram
+    // no kanban se tiverem um FUP marcado.
+    const comAssessor = c =>
+      !_filtroAssessor || (c.assessor_name || '').toUpperCase() === _filtroAssessor.toUpperCase();
+
+    _clientes.filter(comAssessor).forEach(c => {
+      if (c.pipe === 'Concluido') buckets.concluido.push(c);
+    });
+
     const lista = _clientes.filter(c => {
+      if (c.pipe === 'Concluido') return false;
       if (!c.proximo_fup) return false;
-      if (_filtroAssessor && (c.assessor_name || '').toUpperCase() !== _filtroAssessor.toUpperCase()) return false;
-      return true;
+      return comAssessor(c);
     });
 
     // Clientes sem FUP vão para uma lista separada (não aparecem no kanban)
-    let semFup = _clientes.filter(c => !c.proximo_fup).length;
+    let semFup = _clientes.filter(c => c.pipe !== 'Concluido' && !c.proximo_fup).length;
 
     lista.forEach(c => {
       const fup = new Date(c.proximo_fup + 'T00:00:00');
@@ -1373,9 +1422,10 @@
       else                   buckets.futuro.push(c);
     });
 
-    // Ordena cada bucket por data
-    Object.values(buckets).forEach(b => b.sort((a, b) =>
-      new Date(a.proximo_fup) - new Date(b.proximo_fup)));
+    // Ordena cada bucket por data (concluídos, por nome — nem todos têm FUP)
+    ['vencido', 'hoje', 'semana', 'embreve', 'futuro'].forEach(k =>
+      buckets[k].sort((a, b) => new Date(a.proximo_fup) - new Date(b.proximo_fup)));
+    buckets.concluido.sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
 
     // Atualiza badge de vencidos na aba
     const nVenc = buckets.vencido.length + buckets.hoje.length;
@@ -1384,11 +1434,12 @@
     badge.style.display = nVenc > 0 ? '' : 'none';
 
     const cols = {
-      vencido: { id: 'col-vencido', cntId: 'cnt-vencido', dateCls: 'date-vencido' },
-      hoje:    { id: 'col-hoje',    cntId: 'cnt-hoje',    dateCls: 'date-hoje'    },
-      semana:  { id: 'col-semana',  cntId: 'cnt-semana',  dateCls: 'date-semana'  },
-      embreve: { id: 'col-embreve', cntId: 'cnt-embreve', dateCls: 'date-ok'      },
-      futuro:  { id: 'col-futuro',  cntId: 'cnt-futuro',  dateCls: 'date-ok'      },
+      vencido:   { id: 'col-vencido',   cntId: 'cnt-vencido',   dateCls: 'date-vencido' },
+      hoje:      { id: 'col-hoje',      cntId: 'cnt-hoje',      dateCls: 'date-hoje'    },
+      semana:    { id: 'col-semana',    cntId: 'cnt-semana',    dateCls: 'date-semana'  },
+      embreve:   { id: 'col-embreve',   cntId: 'cnt-embreve',   dateCls: 'date-ok'      },
+      futuro:    { id: 'col-futuro',    cntId: 'cnt-futuro',    dateCls: 'date-ok'      },
+      concluido: { id: 'col-concluido', cntId: 'cnt-concluido', dateCls: 'date-ok'      },
     };
 
     Object.entries(cols).forEach(([key, cfg]) => {
@@ -1400,9 +1451,10 @@
         return;
       }
       el.innerHTML = items.map(c => {
-        const fupFmt = new Date(c.proximo_fup + 'T00:00:00').toLocaleDateString('pt-BR');
-        const diff   = Math.round((new Date(c.proximo_fup + 'T00:00:00') - hoje) / 86400000);
-        const diffLabel = diff === 0 ? 'Hoje' : diff < 0 ? `${Math.abs(diff)}d atraso` : `em ${diff}d`;
+        const temFup = key !== 'concluido' || c.proximo_fup;
+        const fupFmt = temFup ? new Date(c.proximo_fup + 'T00:00:00').toLocaleDateString('pt-BR') : '';
+        const diff   = temFup ? Math.round((new Date(c.proximo_fup + 'T00:00:00') - hoje) / 86400000) : null;
+        const diffLabel = diff === null ? '' : diff === 0 ? 'Hoje' : diff < 0 ? `${Math.abs(diff)}d atraso` : `em ${diff}d`;
         const pipeCls   = 'pipe-' + (c.pipe || 'LEAD');
         const rankCls   = rankClass(c.ranking);
         return `<div class="fup-card" onclick="abrirModal('${c.id}')">
@@ -1411,10 +1463,10 @@
             <span class="pipe-badge ${pipeCls}">${c.pipe || 'LEAD'}</span>
             ${c.ranking ? `<span class="rank-badge ${rankCls}">${c.ranking}</span>` : ''}
           </div>
-          <div class="fup-card-date ${cfg.dateCls}">
+          ${temFup ? `<div class="fup-card-date ${cfg.dateCls}">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
             ${fupFmt} · ${diffLabel}
-          </div>
+          </div>` : ''}
           ${c.status ? `<div class="fup-card-obs">${esc(c.status)}</div>` : ''}
         </div>`;
       }).join('');

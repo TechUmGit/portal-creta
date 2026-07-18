@@ -1487,7 +1487,7 @@
 </script>
 
 <!-- Modal de confirmação customizado -->
-<div id="confirmOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;align-items:center;justify-content:center">
+<div id="confirmOverlay" onclick="if(event.target===this)_confirmResolve(false)" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;align-items:center;justify-content:center">
   <div style="background:#fff;border-radius:16px;padding:28px 32px;max-width:360px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
     <div style="font-size:14px;font-weight:700;color:#0c1a35;margin-bottom:8px">Aviso</div>
     <div id="confirmMsg" style="font-size:13px;color:#374151;margin-bottom:24px"></div>

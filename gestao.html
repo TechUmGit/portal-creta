@@ -808,7 +808,7 @@ function abrirAlertas(conta, label) {
 }
 </script>
 <!-- Modal Carteira (produtos) -->
-<div class="g-overlay" id="gProdOverlay">
+<div class="g-overlay" id="gProdOverlay" onclick="if(event.target===this)fecharGModal('gProdOverlay')">
   <div class="g-modal">
     <div class="g-header">
       <div>
@@ -822,7 +822,7 @@ function abrirAlertas(conta, label) {
 </div>
 
 <!-- Modal Alertas -->
-<div class="g-overlay" id="gAlertOverlay">
+<div class="g-overlay" id="gAlertOverlay" onclick="if(event.target===this)fecharGModal('gAlertOverlay')">
   <div class="g-modal g-modal-sm">
     <div class="g-header">
       <div>

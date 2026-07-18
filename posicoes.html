@@ -1086,13 +1086,19 @@
         </td>
       </tr>`;
       itens.forEach(p => {
+        const dias = diasAte(p.Vencimento);
+        let vencCel = fmtD(p.Vencimento);
+        if (dias !== null) {
+          const cls = dias <= 7 ? 'dias-danger' : dias <= 30 ? 'dias-warn' : 'dias-ok';
+          vencCel = `${fmtD(p.Vencimento)} <span class="dias-badge ${cls}">${dias >= 0 ? dias + 'd' : 'vencido'}</span>`;
+        }
         rows += `<tr class="prod-detail-row" data-group="${gid}">
           <td style="max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${p.Nome || ''}">${p.Nome || '—'}</td>
           <td style="color:#6b7280;font-size:11px">${p.Subclasse || '—'}</td>
           <td style="font-size:11px">${p.Ticker || p.ISIN || '—'}</td>
           <td style="font-size:11px;color:#6b7280">${p.Emissor || '—'}</td>
           <td style="font-size:11px">${p.Indexador || '—'}</td>
-          <td style="font-size:11px">${fmtD(p.Vencimento)}</td>
+          <td style="font-size:11px;white-space:nowrap">${vencCel}</td>
           <td class="num" style="font-size:11px">${fmtQ(p.Quantidade)}</td>
           <td class="num">${fmtM(p.ValorBruto)}</td>
           <td class="num" style="color:#6b7280">${fmtM(p.ValorLiquido)}</td>

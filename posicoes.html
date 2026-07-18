@@ -1186,6 +1186,7 @@
       return `<tr>
         <td style="font-family:monospace;font-size:11px">${i.Conta || '—'}</td>
         <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${i.cliente || ''}">${i.cliente || '—'}</td>
+        ${ehAdmin ? `<td style="font-size:11px;color:#6b7280">${i.assessor || '—'}</td>` : ''}
         <td style="max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${i.Nome || ''}">${i.Nome || '—'}</td>
         ${temVencimento ? `<td style="font-size:11px">${fmtD(i.Vencimento)} ${diasCel}</td>` : ''}
         <td class="num">${fmtM(i.ValorBruto)}</td>
@@ -1197,6 +1198,7 @@
         <thead><tr>
           <th>Conta</th>
           <th>Cliente</th>
+          ${ehAdmin ? '<th>Assessor</th>' : ''}
           <th>Produto</th>
           ${temVencimento ? '<th>Vencimento / dias até cair</th>' : ''}
           <th class="num">Valor</th>
